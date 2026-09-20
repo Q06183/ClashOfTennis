@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#173e40" />
+  <meta name="description" content="Rally Club 好友网球。点按跑位，滑动击球，邀请朋友来一场。" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <title>Rally Club · 好友网球</title>
+  <style>html,body{margin:0;background:#f2efdf;color:#183d3e;font-family:system-ui}#boot{position:fixed;inset:0;display:grid;place-content:center;text-align:center;z-index:99;background:#f2efdf}#boot strong{font:italic 48px Georgia}#boot p{font-size:13px;letter-spacing:2px}</style>
+</head>
+<body>
+  <div id="boot"><strong>Rally Club</strong><p>正在准备球场…</p><small>第一次进入需要加载 3D 球场</small></div>
+  <div id="court"></div><div id="ui"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="shot-feedback" aria-hidden="true"><span></span><i></i></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

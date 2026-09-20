@@ -1,0 +1,12 @@
+{
+  "verifiedAt": "2026-09-20T13:03:08.385Z",
+  "transport": "two independent WebSocket clients on this computer",
+  "fullMatchScore": [
+    7,
+    5
+  ],
+  "maxRally": 20,
+  "rematchReset": true,
+  "wallSeconds": 111,
+  "scope": "Protocol and authoritative simulation only. Not real phone or cross-network verification."
+}
