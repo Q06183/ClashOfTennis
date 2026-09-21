@@ -28,8 +28,10 @@ test('real sockets create/join/ready, reject third seat, share state and resume 
     const sa=await a.wait('state');const sb=await b.wait('state',m=>m.seq===sa.seq);
     assert.deepEqual(sa.state,sb.state);
     assert.equal(JSON.stringify((await a.wait('room')).room).includes(first.token),false);
-    a.send({type:'input',command:{type:'shot',aim:0,depth:.5,power:.5,lob:false}});
-    await b.wait('state',m=>m.state.phase==='rally');
+    a.send({type:'input',command:{type:'shot',aim:0,depth:.5,power:.5,lob:false,directionX:0}});
+    const hit=await b.wait('state',m=>m.state.phase==='rally');
+    assert.ok(Math.abs(hit.state.ball.vx)<1e-6,'direction must survive WebSocket input');
+    assert.ok(hit.state.players[0].contact,'both clients need the actual animation contact point');
     a.ws.close();await b.wait('room',m=>m.room.paused);
     const frozen=await b.wait('state',m=>m.paused);
     const frozen2=await b.wait('state',m=>m.paused&&m.seq>frozen.seq+2);

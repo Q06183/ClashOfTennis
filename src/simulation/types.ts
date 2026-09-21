@@ -1,11 +1,12 @@
 export type Seat = 0 | 1;
 export type Vec = { x: number; y: number; z: number };
-export type Shot = { type: 'shot'; aim: number; depth: number; power: number; lob: boolean };
+export type Shot = { type: 'shot'; aim: number; depth: number; power: number; lob: boolean; directionX?: number };
 export type Input = Shot | { type: 'move'; x: number; z: number };
 export type PlayerState = {
   x: number; z: number; tx: number; tz: number; stamina: number;
   swing: number; stroke: 'forehand' | 'backhand' | 'serve' | 'volley' | 'lob';
   moving: boolean;
+  contact?: Vec;
 };
 export type BallState = Vec & { vx: number; vy: number; vz: number; bounces: number; hitter: Seat; targetX: number; targetZ: number };
 export type MatchState = {

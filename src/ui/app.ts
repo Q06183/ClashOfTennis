@@ -47,7 +47,8 @@ export class App {
       if(lost)this.toast('图形连接中断，正在恢复球场…');
       else this.toast('球场画面已恢复');
     });
-    this.controls=new Controls(this.view.renderer.domElement,(x,y)=>this.view.courtPoint(x,y),i=>this.input(i),(s,x,y,end)=>this.feedback(s,x,y,end),()=>this.audio.unlock());
+    this.controls=new Controls(this.view.renderer.domElement,(x,y)=>this.view.courtPoint(x,y),i=>this.input(i),(s,x,y,end)=>this.feedback(s,x,y,end),()=>this.audio.unlock(),
+      (shot,dx,dy)=>this.view.aimShot(shot,(this.drawState??this.remote??this.local.state).ball,dx,dy));
     this.ui.addEventListener('click',e=>{
       const button=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-action]');
       if(button&&!button.disabled){this.audio.unlock();void this.action(button.dataset.action!);}
@@ -179,10 +180,10 @@ export class App {
   private playing(){return `<div class="match-top"><button class="icon-button" data-action="quit" aria-label="退出比赛">‹</button><div class="match-label">GARDEN COURT <span class="connection" id="connection"></span></div><button class="icon-button" data-action="mute" aria-label="${this.audio.muted?'开启声音':'关闭声音'}">${this.audio.muted?'♪̸':'♪'}</button></div>
     <div class="scoreboard"><div class="score-player"><div class="score-name" id="name-me"></div><div class="score-value" id="score-me">0</div><div class="stamina"><i id="stamina-me"></i></div></div><div class="score-divider">vs</div><div class="score-player"><div class="score-name" id="name-them"></div><div class="score-value" id="score-them">0</div><div class="stamina"><i id="stamina-them"></i></div></div></div>
     <div class="rally-count" id="rally-count">FIRST TO 7</div><div id="point-slot"></div><div id="reconnect-slot"></div>
-    <div class="match-bottom"><div class="hint"><strong id="match-hint">向上滑动，发出第一球</strong><small id="match-subhint">快滑打强球 · 长滑打深球 · 轻点地面跑位</small></div><button class="help-button" data-action="help" aria-label="查看操作帮助">?</button></div>`;}
+    <div class="match-bottom"><div class="hint"><strong id="match-hint">斜向滑动，发进对角发球区</strong><small id="match-subhint">快滑打强球 · 长滑打深球 · 轻点地面跑位</small></div><button class="help-button" data-action="help" aria-label="查看操作帮助">?</button></div>`;}
   private helpPanel(){return this.panel(`<div class="panel-top"><span>JUST THREE MOVES</span><button class="icon-button" data-action="close-help" aria-label="关闭帮助">×</button></div><h2>好球，从这一拍开始。</h2><p>${this.net?'线上对局仍在进行，请尽快回到球场。':'先记住三个动作，马上就能打出回合。'}</p>
     <div class="tutorial-steps"><div class="tutorial-step"><b>1</b><div><strong>轻点球场，移动到位</strong><span>人物会辅助追球。回球后，点地面选择你的下一个站位。</span></div></div>
-    <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>从屏幕下方向上滑。左右方向决定落点，滑得越长，打得越深；滑得越快，力量越大。可在来球接近时提前滑动。</span></div></div>
+    <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>从屏幕下方向上滑。球从触球点沿滑动方向飞出。发球请斜向对角发球区。滑得越长，打得越深；滑得越快，力量越大。可在来球接近时提前滑动。</span></div></div>
     <div class="tutorial-step"><b>3</b><div><strong>变换节奏，调动对手</strong><span>短滑放短球；按住约半秒再滑打高吊。靠近球网可截击，接发球必须等球落地。</span></div></div></div>
     <button class="primary" data-action="close-help">知道了，上场 →</button><p class="small-note">先到 7 分且领先 2 分获胜 · 发球限时 12 秒</p>`);}
   private result(){
@@ -215,7 +216,7 @@ export class App {
     document.getElementById('stamina-them')!.style.width=`${s.players[them].stamina*100}%`;
     text('connection',this.net?`${this.latency||'—'} ms`:'单人练习');
     text('rally-count',s.rally>1?`${s.rally} 拍回合  /  RALLY`:'FIRST TO 7 · 领先两分');
-    text('match-hint',s.phase==='serve'?(s.server===me?(s.fault?'二发 · 轻一点，滑进对角发球区':'向上滑动，发出第一球'):'对手发球 · 准备接球'):s.phase==='point'?`${s.event} · ${s.lastPoint===me?'你得分':'下一分加油'}`:s.ball.hitter===me?'好球！轻点球场，调整下一拍站位':'来球了，向上滑动回击');
+    text('match-hint',s.phase==='serve'?(s.server===me?(s.fault?'二发 · 轻一点，滑进对角发球区':'斜向滑动，发进对角发球区'):'对手发球 · 准备接球'):s.phase==='point'?`${s.event} · ${s.lastPoint===me?'你得分':'下一分加油'}`:s.ball.hitter===me?'好球！轻点球场，调整下一拍站位':'来球了，向上滑动回击');
     text('match-subhint',s.phase==='rally'?'快滑更有力 · 长滑更深 · 按住半秒再滑打高吊':'快滑打强球 · 长滑打深球 · 轻点地面跑位');
     const phaseKey=`${s.phase}-${s.eventId}`;
     if(this.lastPhase!==phaseKey){
@@ -257,7 +258,7 @@ export class App {
       const x=draw.ball.x+(state.ball.x-draw.ball.x)*alpha,y=draw.ball.y+(state.ball.y-draw.ball.y)*alpha,z=draw.ball.z+(state.ball.z-draw.ball.z)*alpha;
       Object.assign(draw.ball,state.ball,{x,y,z});Object.assign(draw,{time:state.time,phase:state.phase});state=draw;
     }
-    this.view.render(state,dt);
+    this.view.render(state,dt,this.remote??this.local.state);
     const actual=this.remote??this.local.state;
     if(this.lastEvent!==actual.eventId&&active){
       this.lastEvent=actual.eventId;

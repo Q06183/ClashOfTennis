@@ -1,0 +1,20 @@
+{
+  "1": {
+    "endpoint": {
+      "method": "POST",
+      "path": "/lux3d/v1/generate/text-to-3d/task/create"
+    },
+    "parameters": {
+      "body": {
+        "version": "G1",
+        "style": "cartoon",
+        "faceCount": 12000,
+        "outputFormat": [
+          "glb"
+        ],
+        "customSize": 1900,
+        "prompt": "One full-body adult male tennis athlete, original stylized premium mobile sports game character. Athletic believable anatomy, expressive mature face, short dark brown hair, warm medium skin, ivory short sleeve polo shirt, dark teal tennis shorts above knee, white crew socks and detailed white court shoes. Subtle fabric seams and folds, clean PBR materials, readable forms and rounded muscular volumes, no tiny decorative detail. Neutral symmetrical A pose, arms 40 degrees away from torso, elbows straight, hands relaxed, legs slightly apart with visible gaps. Front facing, upright, feet on same ground plane. Single person only, no racket, no ball, no cap, no accessories, no pedestal, no background, no text or logos. Clean continuous humanoid geometry suitable for skeletal rigging and tennis animation."
+      }
+    }
+  }
+}

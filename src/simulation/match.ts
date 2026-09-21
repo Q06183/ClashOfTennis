@@ -45,7 +45,9 @@ export class Match {
       this.manualUntil[seat]=s.time+.8; return;
     }
     if(cmd.type!=='shot'||![cmd.aim,cmd.depth,cmd.power].every(Number.isFinite)||typeof cmd.lob!=='boolean') return;
+    if(cmd.directionX!==undefined&&!Number.isFinite(cmd.directionX))return;
     const shot:Shot={type:'shot',aim:clamp(cmd.aim,-1.2,1.2),depth:clamp(cmd.depth,0,1),power:clamp(cmd.power,0,1),lob:cmd.lob};
+    if(cmd.directionX!==undefined)shot.directionX=clamp(cmd.directionX,-.8,.8);
     if(s.phase==='serve') { if(seat===s.server) this.hit(seat,shot,true); return; }
     if(s.ball.hitter===seat) return;
     this.pending[seat]={shot,until:s.time+1.25};
@@ -63,6 +65,7 @@ export class Match {
       targetX+=Math.sign(targetX||1)*stretch*.25;
     }
     const start={x:b.x,y:serve?2.65:Math.max(.42,b.y),z:b.z};
+    if(shot.directionX!==undefined)targetX=start.x+shot.directionX*Math.abs(targetZ-start.z)*sign;
     const distance=Math.hypot(targetX-start.x,targetZ-start.z);
     const power=shot.power*(.65+.35*p.stamina)*(1-.2*stretch);
     let flight=clamp(distance/(11+power*12),.48,1.85)+(shot.lob?.85:0);
@@ -79,6 +82,7 @@ export class Match {
     Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ});
     s.phase='rally';s.rally++;s.maxRally=Math.max(s.maxRally,s.rally);
     p.swing=.44;p.stroke=serve?'serve':shot.lob?'lob':b.y>1.4&&Math.abs(p.z)<6?'volley':((b.x-p.x)*sign>0?'forehand':'backhand');
+    p.contact={...start};
     p.stamina=clamp(p.stamina-.022-.028*power,0,1);
     this.sinceHit=0;this.serviceFlight=serve;this.pending[seat]=null;this.impact=null;
     this.announce(serve?'发球':p.stroke==='lob'?'高吊球':p.stroke==='volley'?'截击':power>.7?'强力回球':'回球');
@@ -152,7 +156,8 @@ export class Match {
       const pending=this.pending[seat];
       if(pending&&pending.until<s.time) this.pending[seat]=null;
       if(pending&&pending.until>=s.time&&seat===receiver&&this.sinceHit>.16&&b.z*ownSide>.35&&b.y>.25&&b.y<3.1&&
-         (!this.serviceFlight||b.bounces>0)&&Math.hypot(p.x-b.x,p.z-b.z)<1.65) {
+         (!this.serviceFlight||b.bounces>0)&&
+         Math.hypot(b.x-(p.x+.31*ownSide),b.y-1.39,b.z-(p.z-.08*ownSide))<1.28) {
         this.hit(seat,pending.shot);break;
       }
     }
