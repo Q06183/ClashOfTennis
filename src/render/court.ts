@@ -1,10 +1,13 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 export function makeCourt(scene:T.Scene){
-  const batches=new Map<number,T.BufferGeometry[]>();
+  const ends=[new T.Group(),new T.Group()];ends.forEach((g,i)=>{g.name=`stadium-end-${i}`;scene.add(g);});
+  let end=-1;
+  const batches=new Map<string,{color:number;end:number;parts:T.BufferGeometry[]}>();
   function box(color:number,x:number,y:number,z:number,w:number,h:number,d:number){
     const geometry=new T.BoxGeometry(w,h,d);geometry.translate(x,y,z);
-    if(!batches.has(color))batches.set(color,[]);batches.get(color)!.push(geometry);
+    const key=`${color}/${end}`;
+    if(!batches.has(key))batches.set(key,{color,end,parts:[]});batches.get(key)!.parts.push(geometry);
   }
   const surface=(c:number,x:number,z:number,w:number,d:number,y=.006)=>box(c,x,y,z,w,.012,d);
   surface(0x397c69,0,0,34,47,-.035);
@@ -26,6 +29,7 @@ export function makeCourt(scene:T.Scene){
   }
   // Low stadium walls, seating, and courtside furniture.
   for(const z of [-18,18]){
+    end=z>0?0:1;
     box(0x163e42,0,1,z,28,2,.35);
     box(0xc4d6aa,0,2.04,z,28,.13,.5);
     for(let row=0;row<3;row++){
@@ -36,6 +40,7 @@ export function makeCourt(scene:T.Scene){
       }
     }
   }
+  end=-1;
   for(const x of [-12.8,12.8]){
     box(0x194847,x,.65,0,.25,1.3,36);
     for(let z=-17;z<18;z+=3)box(0x214f49,x,1.8,z,.08,2.4,.08);
@@ -50,9 +55,9 @@ export function makeCourt(scene:T.Scene){
   for(const x of [-13,13])for(const z of [-16,16]){
     box(0x335851,x,4,z,.14,8,.14);box(0xe9dfbf,x,8.1,z,1.65,.55,.32);
   }
-  for(const [color,parts] of batches){
+  for(const {color,end,parts} of batches.values()){
     const geometry=mergeGeometries(parts);for(const p of parts)p.dispose();
-    const mesh=new T.Mesh(geometry,new T.MeshStandardMaterial({color,roughness:1}));mesh.receiveShadow=true;scene.add(mesh);
+    const mesh=new T.Mesh(geometry,new T.MeshStandardMaterial({color,roughness:1}));mesh.receiveShadow=true;(end<0?scene:ends[end]).add(mesh);
   }
   const treeMat=new T.MeshStandardMaterial({color:0x528565,roughness:1});
   for(let i=0;i<24;i++){
@@ -64,7 +69,8 @@ export function makeCourt(scene:T.Scene){
     const ctx=canvas.getContext('2d')!;ctx.fillStyle='#ecebc9';ctx.font='bold 58px sans-serif';ctx.textAlign='center';ctx.fillText(text,512,84);
     const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
     const mesh=new T.Mesh(new T.PlaneGeometry(12,1.5),new T.MeshBasicMaterial({map:texture,transparent:true,side:T.DoubleSide}));
-    mesh.position.set(0,1.1,z);mesh.rotation.y=rotation;scene.add(mesh);
+    mesh.position.set(0,1.1,z);mesh.rotation.y=rotation;ends[z>0?0:1].add(mesh);
   };
   label('R A L L Y   C L U B',-17.78,0);label('M E E T   O N   C O U R T',17.78,Math.PI);
+  return ends;
 }

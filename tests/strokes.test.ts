@@ -17,6 +17,36 @@ test('backhand uses both hands on the handle and the strings face forward at con
  const a=new Athlete(1);a.update({...base,stroke:'backhand',swing:.44,contact:{x:.7,y:1.1,z:.65}},1);a.root.updateMatrixWorld(true);
  const sweet=a.root.getObjectByName('racket-sweet-spot')!,racket=sweet.parent!;
  const z=new Vector3(0,0,1).transformDirection(racket.matrixWorld);assert.ok(z.z>.8);
- const right=(a as any).racket.getWorldPosition(new Vector3()),left=(a as any).leftHand.getWorldPosition(new Vector3());
+ const right=racket.getWorldPosition(new Vector3()),left=a.root.getObjectByName('left-hand-grip')!.getWorldPosition(new Vector3());
  assert.ok(left.distanceTo(right)<.16);assert.ok(left.distanceTo(right)>.08);
+});
+test('racket shaft stays outside the torso through both groundstroke preparation paths',()=>{
+ for(const stroke of ['forehand','backhand'] as const)for(const z of [-.5,.65]){const a=new Athlete(1),contact={x:(stroke==='forehand'?-1:1)*(z<0?.65:.8),y:1.1,z};
+  for(let i=0;i<=40;i++){
+   a.update({...base,preparation:{stroke,progress:i/40,contact}},i/60);
+   const racket=a.root.getObjectByName('racket-grip')!,torso=a.root.getObjectByName('athlete-torso')!;
+   for(let j=1;j<=12;j++){
+    const v=torso.worldToLocal(racket.localToWorld(new Vector3(0,-j*.069,0)));
+    const outside=(v.x/.29)**2+((v.y-1.2)/.36)**2+(v.z/.2)**2;
+    assert.ok(outside>1,`${stroke} ${i}/40: shaft intersected torso`);
+   }
+  }
+ }
+});
+test('chasing a contact behind the body keeps the racket in front until the player gets set',()=>{
+ for(const stroke of ['forehand','backhand'] as const)for(const progress of [.35,.6,.85,1]){
+  const contact=new Vector3(stroke==='forehand'?-1.6:1.6,1.1,-1.6);
+  const pose=strokePose({...base,moving:true,preparation:{stroke,progress,contact:{x:contact.x,y:contact.y,z:contact.z}}},contact);
+  assert.ok(pose.tip.z>.45,`${stroke} ${progress}: racket went behind the torso`);
+  assert.ok(Math.abs(pose.turn)<.2,'running back must not force a full hitting turn');assert.equal(pose.twoHands,true);
+ }
+});
+test('a reachable late contact stays continuous from preparation into impact',()=>{
+ for(const stroke of ['forehand','backhand'] as const){
+  const contact=new Vector3(stroke==='forehand'?-.65:.65,1.1,-.5);
+  const p={...base,moving:true,stroke};
+  const impact=strokePose({...p,swing:.44},contact);
+  const before=strokePose({...p,preparation:{stroke,progress:1,contact:{x:contact.x,y:contact.y,z:contact.z}}},contact);
+  assert.ok(before.tip.distanceTo(impact.tip)<.01,'reachable late ball must not snap from ready to behind the body');
+ }
 });

@@ -18,6 +18,7 @@ export class Athlete {
   private generated?:AthleteSkin;
   private skin=material(0xd5a07d);
   constructor(readonly seat:Seat){
+    this.torso.name='athlete-torso';this.leftHand.name='left-hand-grip';this.racket.name='racket-grip';
     const shirt=material(seat===0?0xf2efdf:0xe57141),shorts=material(seat===0?0x173944:0x263543),white=material(0xf9f6e9),hair=material(0x302a25);
     const mesh=(g:T.BufferGeometry,m:T.Material,parent:T.Object3D,x:number,y:number,z:number)=>{
       const o=new T.Mesh(g,m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;o.userData.fallbackBody=true;parent.add(o);return o;
@@ -124,10 +125,12 @@ export class Athlete {
     const actual=p.preparation?.contact??p.contact;
     const contact=actual?this.root.worldToLocal(new T.Vector3(actual.x,actual.y,actual.z)):new T.Vector3(-.85,1.1,.65);
     const pose=strokePose(p,contact),active=!!p.preparation||p.swing>0;
+    const movement=new T.Vector3(p.tx-p.x,0,p.tz-p.z).applyQuaternion(this.root.quaternion.clone().invert()).normalize();
     const stride=p.moving?Math.sin(time*12):0,hipDrop=.74*(1-Math.cos(pose.knee/2));
     for(let i=0;i<2;i++){
       const phase=i?stride:-stride;
-      this.legs[i].position.y=.85-hipDrop;this.legs[i].rotation.set(phase*.5-pose.knee/2,0,(i?-1:1)*.15);
+      this.legs[i].position.y=.85-hipDrop;
+      this.legs[i].rotation.set(phase*.38*movement.z-pose.knee/2,0,(i?-1:1)*.15+phase*.2*movement.x);
       this.knees[i].rotation.x=Math.max(0,-phase)*.65+pose.knee;
     }
     this.torso.position.y=-hipDrop+(p.moving?Math.abs(stride)*.02:0);

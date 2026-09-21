@@ -3,10 +3,11 @@ import { makeCourt } from './court.js';
 import { Athlete } from './player.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {clone} from 'three/addons/utils/SkeletonUtils.js';
-import { side, type MatchState, type Seat, type Shot, type Vec } from '../simulation/types.js';
+import { clamp, side, type MatchState, type Seat, type Shot, type Vec } from '../simulation/types.js';
 import { swipeDirection } from '../input/aim.js';
 import { FlightGuide } from './trajectory.js';
 import {disposeTree} from './dispose.js';
+import {frameMatch} from './camera.js';
 export class CourtView {
   readonly renderer:T.WebGLRenderer;
   readonly camera=new T.PerspectiveCamera(43,1,.1,130);
@@ -23,6 +24,8 @@ export class CourtView {
   private disposed=false;
   private mode:'home'|'match'='home';
   private seat:Seat=0;
+  private focus={x:0,depth:11};
+  private stadiumEnds:T.Group[];
   private size={w:0,h:0};
   private resizeObserver:ResizeObserver;
   constructor(private container:HTMLElement,onContext:(lost:boolean)=>void){
@@ -37,7 +40,7 @@ export class CourtView {
     this.scene.add(new T.HemisphereLight(0xfff8df,0x405e64,1.8));
     const sun=new T.DirectionalLight(0xffe3b0,3.5);sun.position.set(-10,24,8);sun.castShadow=true;
     sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-16;sun.shadow.camera.right=16;sun.shadow.camera.top=18;sun.shadow.camera.bottom=-18;sun.shadow.bias=-.001;
-    this.scene.add(sun,this.flight.root);makeCourt(this.scene);
+    this.scene.add(sun,this.flight.root);this.stadiumEnds=makeCourt(this.scene);
     for(const a of this.athletes)this.scene.add(a.root);
     new GLTFLoader().load('/models/athlete.glb?v=1',gltf=>{
       if(this.disposed){disposeTree(gltf.scene);return;}
@@ -72,15 +75,16 @@ export class CourtView {
     }
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(container);this.resize();
   }
-  setMode(mode:'home'|'match',seat:Seat=0){this.mode=mode;this.seat=seat;this.resize();}
+  setMode(mode:'home'|'match',seat:Seat=0){
+    this.mode=mode;this.seat=seat;this.focus={x:0,depth:11};
+    this.stadiumEnds.forEach((end,i)=>{end.visible=mode==='home'||i!==seat;});this.resize();
+  }
   private resize(){
     const w=this.container.clientWidth,h=this.container.clientHeight;this.size={w,h};this.renderer.setSize(w,h,false);this.camera.aspect=w/h;
-    const sign=side(this.seat);
     if(this.mode==='home'){
       this.camera.fov=w>h?39:49;this.camera.position.set(19,23,25);this.camera.lookAt(w>h?-4:0,0,0);
     } else {
-      this.camera.fov=h<690?62:w/h<.6?52:43;
-      this.camera.position.set(0,15,28*sign);this.camera.lookAt(0,.7,2*sign);
+      frameMatch(this.camera,w,h,this.seat,this.focus.x,this.focus.depth);
     }
     this.camera.updateProjectionMatrix();this.camera.updateMatrixWorld();
   }
@@ -93,6 +97,15 @@ export class CourtView {
     const v=new T.Vector3();return this.ray.ray.intersectPlane(this.plane,v)?{x:v.x,z:v.z}:null;
   }
   render(state:MatchState,dt:number,authoritative:MatchState=state){
+    if(this.mode==='match'){
+      const p=state.players[this.seat],alpha=1-Math.exp(-Math.min(dt,.08)*7);
+      this.focus.x+=(p.x-this.focus.x)*alpha;
+      this.focus.depth+=(p.z*side(this.seat)-this.focus.depth)*alpha;
+      // Limit camera lag after point resets and at the edge of the close view.
+      this.focus.x=clamp(this.focus.x,p.x-.6,p.x+.6);
+      this.focus.depth=clamp(this.focus.depth,p.z*side(this.seat)-.6,p.z*side(this.seat)+.6);
+      frameMatch(this.camera,this.size.w,this.size.h,this.seat,this.focus.x,this.focus.depth);
+    }
     for(const seat of [0,1] as Seat[])this.athletes[seat].update(state.players[seat],state.time);
     const b=state.ball;
     this.flight.update(state,this.seat,this.mode==='match',authoritative);
