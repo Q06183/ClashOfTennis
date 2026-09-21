@@ -11,3 +11,16 @@
 #shot-feedback.critical{background:#71391deF;color:#fff2c6;box-shadow:0 0 18px #ffbc4a66}#shot-feedback.critical i{background:#ffbb45}
 
 #shot-feedback[data-tier]{border:1px solid var(--shot-color);color:var(--shot-color)}#shot-feedback[data-tier] i{background:var(--shot-color)}#shot-feedback[data-tier="critical"]{background:#5f1935ef;box-shadow:0 0 18px #ff517966}
+
+/* Keep match scores at the safe top edge, clear of the far player. */
+#ui{--match-hud-top:max(6px,calc(env(safe-area-inset-top) + 4px));--match-hud-left:max(10px,env(safe-area-inset-left));--match-hud-right:max(10px,env(safe-area-inset-right))}
+.match-top{top:calc(var(--match-hud-top) + 5px);left:var(--match-hud-left);right:var(--match-hud-right)}
+.match-label{position:absolute;top:46px;left:0;font-size:8px;letter-spacing:1px;gap:6px}
+.scoreboard{top:var(--match-hud-top);width:min(330px,calc(100% - var(--match-hud-left) - var(--match-hud-right) - 84px));padding:6px 10px;gap:8px;border-radius:10px}
+.score-player{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:5px;row-gap:4px;text-align:left}
+.score-player:last-child{text-align:left}
+.score-name{font-size:10px}
+.score-value{font-size:26px;line-height:1}
+.score-divider{font-size:13px}
+.scoreboard .stamina{grid-column:1/-1;height:3px;margin-top:0}
+.rally-count{top:calc(var(--match-hud-top) + 51px);left:auto;right:var(--match-hud-right);transform:none;font-size:8px;letter-spacing:.7px}
