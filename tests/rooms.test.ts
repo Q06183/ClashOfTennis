@@ -118,3 +118,20 @@ test('authoritative rescue animation, slow ball and scatter arrive identically a
   assert.deepEqual(hit.state,hitB.state);assert.equal(hit.state.ball.critical,false);assert.ok(Math.hypot(hit.state.ball.vx,hit.state.ball.vz)<14);assert.equal(hit.state.event,'极限救球');
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
+
+test('smash, volley, topspin and irregular slice bounce are identical on two real sockets',async()=>{
+ const {Match}=await import('../src/simulation/match.js');
+ const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{
+  a.send({type:'create',name:'技能A'});const first=await a.wait('welcome');b.send({type:'join',code:first.code,name:'技能B'});await b.wait('welcome');a.send({type:'ready'});b.send({type:'ready'});await a.wait('state');
+  const room=server.rooms.rooms.get(first.code)!;
+  for(const skill of ['smash','volley','topspin','slice'] as const)for(const seat of [0,1] as const){
+   room.match!.dispose();const m=room.match=new Match(['lin','lin'],()=>.65),sign=seat===0?1:-1;m.state.phase='rally';m.state.rally=2;const depth=skill==='smash'||skill==='volley'?3:10;
+   Object.assign(m.state.players[seat],{x:0,z:depth*sign,tx:0,tz:depth*sign});m.input(seat,{type:'move',x:0,z:depth*sign});m.physics.place({x:(skill==='smash'?.25:.6)*sign,y:skill==='smash'?2.55:1.3,z:(depth-.25)*sign},{x:0,y:skill==='smash'?-.5:0,z:4*sign});Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:skill==='smash'||skill==='volley'?0:1});a.messages.length=0;b.messages.length=0;
+   (seat===0?a:b).send({type:'input',command:{type:'shot',aim:0,depth:.55,power:.7,lob:false,topspin:skill==='topspin'?1:0,slice:skill==='slice'}});
+   const hit=await a.wait('state',v=>v.state.rally===3),peer=await b.wait('state',v=>v.seq===hit.seq);assert.deepEqual(hit.state,peer.state);
+   if(skill==='topspin')assert.equal(hit.state.ball.topspin,1);else assert.equal(hit.state.ball.skill,skill);
+   if(skill==='slice'){const bounce=await a.wait('state',v=>v.state.ball.slice&&v.state.ball.bounces===1),same=await b.wait('state',v=>v.seq===bounce.seq);assert.deepEqual(bounce.state,same.state);assert.equal(bounce.state.event,'切削弹跳');}
+  }
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
+});

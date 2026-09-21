@@ -1,3 +1,4 @@
+import {flightGravity} from './flight.js';
 import {canReachContact,contactCrouch} from './athlete.js';
 import {clamp,side,type BallState,type PlayerState,type Seat} from './types.js';
 export const RESCUE={chance:.35,travel:.16,duration:.65,reach:1.8,slowdown:1.7};
@@ -7,7 +8,7 @@ export function rescueTarget(b:BallState,p:PlayerState,seat:Seat){
  if(speed2<9||p.stamina<.12)return null;
  const closest=((p.x-b.x)*b.vx+(p.z-b.z)*b.vz)/speed2;
  if(closest<-.03||closest>.18)return null;
- const t=RESCUE.travel,contact={x:b.x+b.vx*t,y:b.y+b.vy*t-4.905*t*t,z:b.z+b.vz*t};
+ const t=RESCUE.travel,contact={x:b.x+b.vx*t,y:b.y+b.vy*t-flightGravity(b)*t*t/2,z:b.z+b.vz*t};
  if(contact.y<.5||contact.y>1.65||contact.z*sign<1)return null;
  const usualX=p.x+(p.vx??0)*t,usualZ=p.z+(p.vz??0)*t;
  if(canReachContact(-(contact.x-usualX)*sign,contact.y,-(contact.z-usualZ)*sign,(contact.x-usualX)*sign<0))return null;

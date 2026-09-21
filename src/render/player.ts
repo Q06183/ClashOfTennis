@@ -190,7 +190,7 @@ export class Athlete {
       pose.shaft.set(-.8,.15,.3).normalize();pose.twoHands=false;pose.turn=0;pose.knee=.38;pose.toss=0;
     }
     const dt=deltaTime??Math.max(1/60,Math.min(.08,time-this.lastTime));this.lastTime=time;
-    const serve=p.preparation?.stroke==='serve'||!p.preparation&&p.stroke==='serve'&&p.swing>0;
+    const serve=p.preparation?.stroke==='serve'||p.preparation?.stroke==='smash'||!p.preparation&&(p.stroke==='serve'||p.stroke==='smash')&&p.swing>0;
     const lift=serve?.2*(p.preparation?T.MathUtils.smoothstep(p.preparation.progress,.65,1):T.MathUtils.smoothstep(p.swing,.12,.44)):0;
     const gait=this.footwork.update(this.root.position,this.root.quaternion,dt),movement=gait.localDirection;
     const striking=Math.max(Math.min(1,p.swing/.15),p.shotQueued&&p.preparation?T.MathUtils.clamp((p.preparation.progress-.8)/.2,0,1):0);

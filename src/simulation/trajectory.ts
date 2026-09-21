@@ -1,9 +1,10 @@
+import {flightGravity} from './flight.js';
 import {COURT} from './rules.js';
 import type {Vec} from './types.js';
-type FlyingBall=Vec & {vx:number;vy:number;vz:number};
+type FlyingBall=Vec & {vx:number;vy:number;vz:number;topspin?:number};
 /** First flight only; the net truncates the prediction exactly like the match. */
 export function predictFlight(b:FlyingBall){
-  const gravity=9.81;
+  const gravity=flightGravity(b);
   let duration=Math.max(0,(b.vy+Math.sqrt(b.vy*b.vy+2*gravity*Math.max(0,b.y-COURT.ballRadius)))/gravity);
   const at=(t:number):Vec=>({x:b.x+b.vx*t,y:b.y+b.vy*t-gravity*t*t/2,z:b.z+b.vz*t});
   const netTime=b.vz===0?-1:-b.z/b.vz;

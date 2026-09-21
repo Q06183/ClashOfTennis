@@ -58,7 +58,7 @@ export class App {
       else this.toast('球场画面已恢复');
     });
     this.controls=new Controls(this.view.renderer.domElement,(x,y)=>this.view.courtPoint(x,y),i=>this.input(i),(s,x,y,end)=>this.feedback(s,x,y,end),()=>this.audio.unlock(),
-      (shot,dx,dy)=>this.view.aimShot(shot,(this.drawState??this.remote??this.local.state),dx,dy));
+      (shot,dx,dy)=>this.view.aimShot(shot,(this.drawState??this.remote??this.local.state),dx,dy),(amount,x,y)=>this.chargeFeedback(amount,x,y));
     this.ui.addEventListener('click',e=>{
       const button=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-action]');
       if(button&&!button.disabled){this.audio.unlock();void this.action(button.dataset.action!);}
@@ -97,11 +97,16 @@ export class App {
     el.style.display='block';el.style.left=`${Math.max(65,Math.min(innerWidth-65,x))}px`;el.style.top=`${Math.max(160,y-30)}px`;
     const tier=shotTier(shot),profile=SHOT_PROFILES[tier];
     el.dataset.tier=tier;el.style.setProperty('--shot-color',`#${profile.color.toString(16).padStart(6,'0')}`);
-    el.querySelector('span')!.textContent=profile.label;
+    el.querySelector('span')!.textContent=shot.slice&&(this.remote??this.local.state).phase==='serve'?'反向发球':profile.label;
     (el.querySelector('i') as HTMLElement).style.transform=`scaleX(${Math.max(.1,shot.power)})`;
     if(end)this.feedbackTimer=setTimeout(()=>el.style.display='none',550);
   }
+  private chargeFeedback(amount:number,x:number,y:number){
+    this.feedback({type:'shot',aim:0,depth:0,power:amount,lob:false,topspin:1},x,y,false);
+    document.querySelector('#shot-feedback span')!.textContent=`蓄力上旋 ${Math.round(amount*100)}% · 滑动释放`;
+  }
   private async action(action:string){
+    if(action==='lob'){this.controls.lobMode=!this.controls.lobMode;this.updateHud();return;}
     if(action==='characters'||action==='opponent-characters'){
       if(!['home','setup','room','join'].includes(this.screen))return;
       this.characterReturn=this.screen;this.choosingOpponent=action==='opponent-characters';this.screen='characters';this.renderScreen();
@@ -212,11 +217,11 @@ export class App {
   private playing(){return `<div class="match-top"><button class="icon-button" data-action="quit" aria-label="退出比赛">‹</button><div class="match-label">GARDEN COURT <span class="connection" id="connection"></span></div><button class="icon-button" data-action="mute" aria-label="${this.audio.muted?'开启声音':'关闭声音'}">${this.audio.muted?'♪̸':'♪'}</button></div>
     <div class="scoreboard"><div class="score-player"><div class="score-name" id="name-me"></div><div class="score-value" id="score-me">0</div><div class="stamina"><i id="stamina-me"></i></div></div><div class="score-divider">vs</div><div class="score-player"><div class="score-name" id="name-them"></div><div class="score-value" id="score-them">0</div><div class="stamina"><i id="stamina-them"></i></div></div></div>
     <div class="rally-count" id="rally-count">FIRST TO 7</div><div id="point-slot"></div><div id="reconnect-slot"></div>
-    <div class="match-bottom"><div class="serve-notice" id="serve-notice" role="status" aria-live="polite" hidden><strong id="serve-title"></strong><span id="serve-detail"></span></div><div class="hint" id="rally-hint"><strong id="match-hint">斜向滑动，发进对角发球区</strong><small id="match-subhint">绿普通 · 蓝快速 · 橙强力 · 玫红暴击</small></div><button class="help-button" data-action="help" aria-label="查看操作帮助">?</button></div>`;}
+    <div class="match-bottom"><div class="serve-notice" id="serve-notice" role="status" aria-live="polite" hidden><strong id="serve-title"></strong><span id="serve-detail"></span></div><div class="hint" id="rally-hint"><strong id="match-hint">斜向滑动，发进对角发球区</strong><small id="match-subhint">绿普通 · 蓝快速 · 橙强力 · 玫红暴击</small></div><div class="court-actions"><button class="lob-button" id="lob-mode" data-action="lob" aria-label="选择下一拍高吊球" aria-pressed="false">高吊</button><button class="help-button" data-action="help" aria-label="查看操作帮助">?</button></div></div>`;}
   private helpPanel(){return this.panel(`<div class="panel-top"><span>JUST THREE MOVES</span><button class="icon-button" data-action="close-help" aria-label="关闭帮助">×</button></div><h2>好球，从这一拍开始。</h2><p>${this.net?'线上对局仍在进行，请尽快回到球场。':'先记住三个动作，马上就能打出回合。'}</p>
     <div class="tutorial-steps"><div class="tutorial-step"><b>1</b><div><strong>轻点球场，移动到位</strong><span>人物会辅助追球。回球后，点地面选择你的下一个站位。</span></div></div>
     <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>从屏幕下方向上滑。球从触球点沿滑动方向飞出。发球请斜向对角发球区。滑得越长、越快，落点越深，也更容易出界。极快且较长的甩动才会触发暴击，同样距离比强力球更深。可在来球接近时提前滑动。</span></div></div>
-    <div class="tutorial-step"><b>3</b><div><strong>认颜色，控制速度与深度</strong><span>绿：普通；蓝：快速；橙：强力；玫红：暴击；紫：高吊。短滑放短球；按住约半秒再滑打高吊。靠近球网可截击，接发球必须等球落地。已滑动却差一点够不到时，有35%概率跳步救球；救回的球明显变慢，落点会随机偏移，也可能出界。</span></div></div></div>
+    <div class="tutorial-step"><b>3</b><div><strong>认颜色，控制速度与深度</strong><span>绿普通、蓝快速、橙强力、玫红暴击、青绿上旋、金色高压、冰白切削、紫色高吊。按住350毫秒开始蓄力上旋，约900毫秒充满，再向上滑动释放；弧线更明显、落地前冲。高吊请先点“高吊”按钮，再滑动，下一拍生效。上网迎击未落地球自动截击；头顶可达的下降高球自动高压。接发球仍须先落地。回球时向下划是切削，球向手势反方向飞出；按来球侧自动选正手或反手，落点更难控制，落地后有低弹跳和随机侧偏。发球向下划只改变瞄准方向。已滑动却差一点够不到时，有35%概率跳步救球；救回的球明显变慢，落点会随机偏移，也可能出界。</span></div></div></div>
     <p id="performance-stats" class="small-note"></p><p id="performance-sync" class="small-note"></p><button class="primary" data-action="close-help">知道了，上场 →</button><p class="small-note">先到 7 分且领先 2 分获胜 · 发球限时 12 秒</p>`);}
   private result(){
     const s=this.remote??this.local.state,won=s.winner===this.seat;
@@ -253,13 +258,15 @@ export class App {
     text('score-me',String(s.score[me]));text('score-them',String(s.score[them]));
     document.getElementById('stamina-me')!.style.width=`${s.players[me].stamina*100}%`;
     document.getElementById('stamina-them')!.style.width=`${s.players[them].stamina*100}%`;
+    text('lob-mode',this.controls.lobMode?'取消高吊':'高吊');
+    document.getElementById('lob-mode')!.setAttribute('aria-pressed',String(this.controls.lobMode));
     const sync=this.playback.stats(performance.now());
     text('performance-sync',this.net?`同步 ${sync.hz||'—'} 次/秒 · 抖动 ${sync.jitterMs} ms · 最近一包 ${sync.gapMs} ms前`:'');
     text('performance-stats',`画面 ${this.view.fps||'测量中'} FPS · 自动${this.view.qualityLabel}${this.net?` · 网络 ${this.latency||'—'} ms`:''}`);
     text('connection',this.net?`${this.latency||'—'} ms`:'单人练习');
     text('rally-count',s.rally>1?`${s.rally} 拍回合  /  RALLY`:'FIRST TO 7 · 领先两分');
-    text('match-hint',s.phase==='serve'?(s.server===me?(s.fault?'二发 · 轻一点，滑进对角发球区':s.players[me].preparation?.stroke==='serve'?'抛球、举拍，准备发出':'轮到你发球 · 向上斜划'):'对手发球 · 准备接球'):s.phase==='point'?`${s.event} · ${s.lastPoint===me?'你得分':'下一分加油'}`:s.ball.rescue?(s.ball.hitter===me?'极限救球！回球变慢，尽快恢复站位':'对手极限救球 · 注意偏移后的落点'):s.players[me].rescue?'跳步救球中…':s.ball.hitter===me?(s.ball.critical?'暴击球！准备下一拍':'好球！轻点球场，调整下一拍站位'):s.ball.critical?'对手暴击球！提前滑动准备回击':s.players[me].shotQueued?'滑动已收到 · 到触球位置自动回击':'来球了，可以提前向上滑动');
-    text('match-subhint',s.phase==='rally'?'越快越深，注意出界 · 极快长甩触发暴击':'绿普通 · 蓝快速 · 橙强力 · 玫红暴击');
+    text('match-hint',s.phase==='serve'?(s.server===me?(s.fault?'二发 · 轻一点，滑进对角发球区':s.players[me].preparation?.stroke==='serve'?'抛球、举拍，准备发出':'轮到你发球 · 向上斜划'):'对手发球 · 准备接球'):s.phase==='point'?`${s.event} · ${s.lastPoint===me?'你得分':'下一分加油'}`:s.ball.skill==='slice'?(s.ball.hitter===me?'切削球 · 注意下一拍':'对手切削 · 小心低弹跳和侧偏'):s.ball.skill==='smash'?(s.ball.hitter===me?'高压球！准备下一拍':'对手高压球 · 提前滑动接球'):s.ball.skill==='volley'?(s.ball.hitter===me?'截击成功 · 注意下一拍':'对手截击 · 提前滑动接球'):s.ball.rescue?(s.ball.hitter===me?'极限救球！回球变慢，尽快恢复站位':'对手极限救球 · 注意偏移后的落点'):s.players[me].rescue?'跳步救球中…':s.ball.hitter===me?(s.ball.critical?'暴击球！准备下一拍':'好球！轻点球场，调整下一拍站位'):s.ball.critical?'对手暴击球！提前滑动准备回击':s.players[me].shotQueued?'滑动已收到 · 到触球位置自动回击':'来球了，可以提前向上滑动');
+    text('match-subhint',this.controls.lobMode?'下一拍：高吊球 · 再点按钮可取消':s.ball.topspin?'上旋球 · 注意落地前冲':'长按上旋 · 下划切削 · 右侧选高吊');
     const phaseKey=`${s.phase}-${s.eventId}`;
     if(this.lastPhase!==phaseKey){
       this.lastPhase=phaseKey;document.getElementById('point-slot')!.innerHTML=s.phase==='point'?`<div class="point-banner"><strong>${s.fault?'Second serve':s.lastPoint===me?'Your point':'Good try'}</strong><span>${escape(s.event)}</span></div>`:'';
@@ -298,7 +305,7 @@ export class App {
     const actual=state;
     if(this.lastEvent!==actual.eventId&&active){
       this.lastEvent=actual.eventId;
-      if(actual.event==='落地')this.audio.play('bounce');
+      if((actual.event==='落地'||actual.event==='切削弹跳'))this.audio.play('bounce');
       else if(actual.phase==='point'||actual.phase==='over')this.audio.play('point');
       else if(actual.phase==='rally')this.audio.play('hit');
     }

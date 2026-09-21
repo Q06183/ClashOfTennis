@@ -1,4 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-compat';
+import {flightGravity} from './flight.js';
 import type { Vec } from './types.js';
 let initialized: Promise<void> | undefined;
 export function initPhysics() { return initialized ??= RAPIER.init(); }
@@ -11,10 +12,12 @@ export class BallPhysics {
     this.body = this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(0,1,10).setCcdEnabled(true).setCanSleep(false));
     this.world.createCollider(RAPIER.ColliderDesc.ball(.12).setMass(.058).setFriction(0).setRestitution(.72), this.body);
   }
-  place(position: Vec, velocity: Vec = {x:0,y:0,z:0}) {
+  place(position: Vec, velocity: Vec = {x:0,y:0,z:0},topspin=0) {
+    this.setTopspin(topspin);
     this.body.setTranslation(position,true); this.body.setLinvel(velocity,true);
     this.body.setAngvel({x:0,y:0,z:0},true);
   }
+  setTopspin(topspin:number){this.body.setGravityScale(flightGravity({topspin})/9.81,true);}
   step(dt: number) { this.world.timestep=dt; this.world.step(); }
   read() { const p=this.body.translation(), v=this.body.linvel(); return {x:p.x,y:p.y,z:p.z,vx:v.x,vy:v.y,vz:v.z}; }
   dispose() { this.world.free(); }

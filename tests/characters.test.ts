@@ -31,7 +31,7 @@ test('actual forehand, backhand and volley launches use their own attribute and 
   for(const id of ['lin',specialist]){
    const m=new Match([id,id]),p=m.state.players[seat],sign=seat===0?1:-1;p.x=0;p.z=sign*(kind==='volley'?4:10);p.stamina=1;
    // Controlled legal-height contact isolates stroke stats from run-up timing.
-   const start={x:(kind==='backhand'?-.6:.6)*sign,y:1.8,z:p.z-.3*sign};m.physics.place(start);Object.assign(m.state.ball,m.physics.read());
+   const start={x:(kind==='backhand'?-.6:.6)*sign,y:1.8,z:p.z-.3*sign};m.physics.place(start);Object.assign(m.state.ball,m.physics.read(),{bounces:kind==='volley'?0:1});
    const internal=m as unknown as {bouncePoint:unknown;hit:(seat:Seat,shot:{type:'shot';aim:number;depth:number;power:number;lob:boolean})=>void};internal.bouncePoint=kind==='volley'?null:{x:start.x,z:start.z+sign*2};
    internal.hit(seat,{type:'shot',aim:0,depth:.55,power:.4,lob:false});assert.equal(p.stroke,kind);assert.equal(predictFlight(m.state.ball).hitNet,false);assert.equal(m.state.ball.targetZ,-sign*(2.8+.55*8.6+.35*(.5+.55)));speeds.push(Math.hypot(m.state.ball.vx,m.state.ball.vz));m.dispose();
   }

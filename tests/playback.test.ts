@@ -40,3 +40,9 @@ test('serialized snapshots clear completed rescue motion instead of retaining a 
  playback.push(JSON.parse(JSON.stringify(a)),1000);assert.ok(playback.sample(1000)!.players[0].rescue);
  playback.push(JSON.parse(JSON.stringify(b)),1800);assert.equal(playback.sample(1900)!.players[0].rescue,undefined);
 });
+
+test('a new serialized flight clears the previous skill and spin',()=>{
+ const p=new SnapshotPlayback(),a=state(1),b=state(1.8);a.ball.slice=true;a.ball.skill='smash';a.ball.tier='smash';a.ball.topspin=1;b.rally++;
+ p.push(JSON.parse(JSON.stringify(a)),1000);assert.equal(p.sample(1000)!.ball.skill,'smash');
+ p.push(JSON.parse(JSON.stringify(b)),1800);const out=p.sample(1900)!;assert.equal(out.ball.slice,undefined);assert.equal(out.ball.skill,undefined);assert.equal(out.ball.tier,undefined);assert.equal(out.ball.topspin,undefined);
+});

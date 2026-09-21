@@ -14,8 +14,9 @@ function interpolate(keys:Key[],t:number){
 /** Body-local key poses: +Z faces the net, -X is the athlete's right side. */
 export function strokePose(p:PlayerState,contact:Vector3):StrokePose{
  const preparing=p.preparation,stroke=preparing?.stroke??p.stroke;
- const bh=stroke==='backhand'||((stroke==='volley'||stroke==='lob')&&!!p.backhand),dir=bh?1:-1;
- const volley=stroke==='volley',serve=stroke==='serve';
+ const slice=stroke==='slice-forehand'||stroke==='slice-backhand';
+ const bh=stroke==='backhand'||stroke==='slice-backhand'||((stroke==='volley'||stroke==='lob')&&!!p.backhand),dir=bh?1:-1;
+ const volley=stroke==='volley',smash=stroke==='smash',serve=stroke==='serve'||smash;
  const impact:Key={t:1,tip:contact.toArray(),shaft:serve?[0,1,0]:volley?[dir*.4,.85,.1]:[dir*.96,.2,.08],turn:serve?0:contactTurn(contact.x,contact.z,bh),knee:serve?.05:.22};
  if(!serve&&!volley){
   const late=ease(Math.max(0,Math.min(1,-contact.z/.5)));
@@ -32,14 +33,16 @@ export function strokePose(p:PlayerState,contact:Vector3):StrokePose{
    {t:.26,tip:[.58,1.62,.35],shaft:[.45,.86,-.12],turn:.65,knee:.3},
    {t:.52,tip:[.72,1.22,-.20],shaft:[.85,.05,-.5],turn:1.10,knee:.38},
    {t:.78,tip:[.78,.86,.28],shaft:[.97,-.18,.05],turn:.85,knee:.34},impact];
-  const keys=serve?[ready,{t:.32,tip:[-.65,2.13,-.25],shaft:[-.1,.95,-.1],turn:-.65,knee:.52},{t:.64,tip:[-.4,1.25,-.66],shaft:[.1,-1,0],turn:-.65,knee:.5},{t:.84,tip:[-.28,2.2,-.2],shaft:[0,.95,.1],turn:-.25,knee:.2},impact]:volley?[ready,back,impact]:bh?bhKeys:[ready,outside,back,forward,impact];
+  const sliceKeys:Key[]=[ready,{t:.48,tip:[dir*.7,1.85,.12],shaft:[dir*.6,.75,-.05],turn:dir*.7,knee:.3},{t:.78,tip:[contact.x,contact.y+.25,contact.z-.12],shaft:impact.shaft,turn:dir*.4,knee:.25},impact];
+  const keys=slice?sliceKeys:serve?[ready,{t:.32,tip:[-.65,2.13,-.25],shaft:[-.1,.95,-.1],turn:-.65,knee:.52},{t:.64,tip:[-.4,1.25,-.66],shaft:[.1,-1,0],turn:-.65,knee:.5},{t:.84,tip:[-.28,2.2,-.2],shaft:[0,.95,.1],turn:-.25,knee:.2},impact]:volley?[ready,back,impact]:bh?bhKeys:[ready,outside,back,forward,impact];
   pose=interpolate(keys,serve?t:p.shotQueued?t:Math.min(t,.6));
  }else if(p.swing>0){
   const t=Math.max(0,Math.min(1,1-p.swing/.44));
   const finish:Key={t:.7,tip:serve?[.45,.85,.5]:volley?contact.clone().add(new Vector3(0,.07,.3)).toArray():[-dir*.5,1.92,.2],shaft:serve?[.7,-.6,.2]:volley?impact.shaft:[-dir*.75,.6,-.12],turn:serve?.38:volley?-dir*.15:-dir*.6,knee:.18};
   const extension:Key={t:.23,tip:[contact.x-.10,Math.min(1.85,contact.y+.18),contact.z+.20],shaft:[.85,.42,.08],turn:.35,knee:.2};
   const bhFinish:Key={t:.7,tip:[-.43,2.02,.22],shaft:[-.35,.9,-.2],turn:-.7,knee:.18};
-  pose=interpolate(bh&&!volley?[{...impact,t:0},extension,bhFinish,{...ready,t:1}]:[{...impact,t:0},finish,{...ready,t:1}],t);
+  const sliceFinish:Key={t:.7,tip:[dir*.95,.65,.65],shaft:[dir*.8,-.35,.2],turn:dir*.18,knee:.28};
+  pose=interpolate(slice?[{...impact,t:0},sliceFinish,{...ready,t:1}]:bh&&!volley?[{...impact,t:0},extension,bhFinish,{...ready,t:1}]:[{...impact,t:0},finish,{...ready,t:1}],t);
  }else pose=interpolate([ready,{...ready,t:1}],0);
  // A predicted contact can still be behind a retreating player. Do not drag
  // the racket toward it until the player has caught up and can set the feet.
@@ -50,6 +53,6 @@ export function strokePose(p:PlayerState,contact:Vector3):StrokePose{
   set=Math.max(set,reachable*ease(Math.max(0,Math.min(1,(preparing.progress-.55)/.45))));
  }
  if(set<1){pose.tip.lerp(v(ready.tip),1-set);pose.shaft.lerp(v(ready.shaft).normalize(),1-set).normalize();pose.turn*=set;pose.knee=.3+(pose.knee-.3)*set;}
- const toss=serve&&preparing?ease(Math.max(0,Math.min(1,preparing.progress/.32,(1-preparing.progress)/.4))):0;
- return {...pose,twoHands:set<.5||bh&&!volley||(!preparing&&!p.swing),toss};
+ const toss=serve&&!smash&&preparing?ease(Math.max(0,Math.min(1,preparing.progress/.32,(1-preparing.progress)/.4))):0;
+ return {...pose,twoHands:set<.5||bh&&!volley&&!slice||(!preparing&&!p.swing),toss};
 }

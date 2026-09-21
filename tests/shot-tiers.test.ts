@@ -21,7 +21,7 @@ test('overhead swipe mapping survives authoritative serve launch for every tier,
 });
 test('flight path always uses the authoritative tier colour while an invalid serve landing is marked separately',()=>{
  const guide=new FlightGuide(),m=new Match();
- assert.equal(new Set(Object.values(SHOT_PROFILES).map(p=>p.color)).size,5);
+ assert.equal(new Set(Object.values(SHOT_PROFILES).map(p=>p.color)).size,Object.keys(SHOT_PROFILES).length);
  for(const shot of shots){m.state.phase='serve';m.input(0,shot);for(let i=0;i<60&&m.state.rally===0;i++)m.step(1/60);
   for(const seat of [0,1] as const){guide.update(m.state,seat,true);assert.ok(guide.root.visible);const line=guide.root.children[0] as Line;assert.equal((line.material as LineDashedMaterial).color.getHex(),SHOT_PROFILES[shotTier(shot)].color);}
   if(shot.critical)assert.equal(((guide.root.children[1] as Mesh).material as MeshBasicMaterial).color.getHex(),0xff453a);
@@ -38,5 +38,14 @@ test('the real swipe pipeline still has an in-bounds critical serve window on bo
   const directionX=swipeDirection(c,{...m.state.ball,y:2.65},dx,dy,w,h,sign,-sign*shotDepth(shot,true));m.input(seat,{...shot,directionX});
   for(let i=0;i<60&&m.state.rally===0;i++)m.step(1/60);
   const landing=predictFlight(m.state.ball).landing;assert.equal(isInServiceBox(landing.x,landing.z,seat,total),true,`${w}x${h} ${total}: ${JSON.stringify(landing)}`);m.dispose();
+ }
+});
+
+test('downward serve swipes reverse heading while using the actual overhead-serve depth at every pace',async()=>{
+ const {shotDirection}=await import('../src/input/aim.js');
+ for(const total of [0,1,2,3])for(const source of shots)for(const ratio of [-.3,.3]){
+  const m=new Match();m.state.score=[total,0];m.state.phase='point';m.state.pointTimer=0;m.step(1/60);const seat=m.state.server,sign=seat===0?1:-1,p=m.state.players[seat],contact={...m.state.ball,y:2.65},camera=new PerspectiveCamera();frameMatch(camera,390,844,seat,p.x,12.4);
+  const shot={...source,slice:true,critical:false};const directionX=shotDirection(camera,contact,shot,-ratio*100,100,390,844,sign,-sign*shotDepth(shot,true));m.input(seat,{...shot,directionX});for(let i=0;i<60&&m.state.rally===0;i++)m.step(1/60);
+  const to=predictFlight(m.state.ball).landing,fromScreen=new Vector3(contact.x,contact.y,contact.z).project(camera),toScreen=new Vector3(to.x,to.y,to.z).project(camera);assert.ok(Math.abs((toScreen.x-fromScreen.x)*390/((toScreen.y-fromScreen.y)*844)-ratio)<.00001);assert.equal(m.state.ball.slice,false);m.dispose();
  }
 });

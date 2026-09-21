@@ -1,4 +1,5 @@
 import {clamp,type MatchState,type PlayerState} from '../simulation/types.js';
+import {flightGravity} from '../simulation/flight.js';
 import {COURT} from '../simulation/rules.js';
 type Snapshot={state:MatchState;at:number};
 const mix=(a:number,b:number,t:number)=>a+(b-a)*t;
@@ -33,6 +34,7 @@ export class SnapshotPlayback {
   if(!this.draw)this.draw=structuredClone(state);
   const out=this.draw,players=out.players,ball=out.ball;
   Object.assign(out,state,{players,ball});Object.assign(ball,state.ball);
+  for(const key of ['tier','skill','topspin','slice'] as const)if(!(key in state.ball))delete ball[key];
   for(let i=0;i<2;i++)Object.assign(players[i],state.players[i],{preparation:state.players[i].preparation,contact:state.players[i].contact,rescue:state.players[i].rescue});
   return out;
  }
@@ -72,11 +74,11 @@ export class SnapshotPlayback {
  }
  private advanceBall(out:MatchState,dt:number){
   if(out.phase!=='rally')return;
-  const b=out.ball;
+  const b=out.ball,g=flightGravity(b);
   // At most 50ms of dead reckoning; stop at ground/net instead of inventing a bounce/hit.
-  const ground=(b.vy+Math.sqrt(b.vy*b.vy+2*9.81*Math.max(0,b.y-COURT.ballRadius)))/9.81;
+  const ground=(b.vy+Math.sqrt(b.vy*b.vy+2*g*Math.max(0,b.y-COURT.ballRadius)))/g;
   let t=Math.min(dt,Math.max(0,ground));const net=b.vz===0?-1:-b.z/b.vz;
-  if(net>0&&net<t&&b.y+b.vy*net-4.905*net*net<COURT.net+COURT.ballRadius)t=net;
-  b.x+=b.vx*t;b.y=Math.max(COURT.ballRadius,b.y+b.vy*t-4.905*t*t);b.z+=b.vz*t;
+  if(net>0&&net<t&&b.y+b.vy*net-g/2*net*net<COURT.net+COURT.ballRadius)t=net;
+  b.x+=b.vx*t;b.y=Math.max(COURT.ballRadius,b.y+b.vy*t-g/2*t*t);b.z+=b.vz*t;
  }
 }
