@@ -4,6 +4,7 @@ export type Vec = { x: number; y: number; z: number };
 export type Shot = { type: 'shot'; aim: number; depth: number; power: number; lob: boolean; critical?: boolean; directionX?: number };
 export type Input = Shot | { type: 'move'; x: number; z: number };
 export type PlayerState = {
+  characterId?: string;
   x: number; z: number; tx: number; tz: number; stamina: number;
   swing: number; stroke: 'forehand' | 'backhand' | 'serve' | 'volley' | 'lob';
   moving: boolean;
@@ -21,7 +22,7 @@ export type MatchState = {
   winner: Seat | null; event: string; eventId: number; lastPoint: Seat | null;
 };
 export type RoomView = {
-  code: string; seats: ({name: string; connected: boolean; ready: boolean} | null)[];
+  code: string; seats: ({name: string; characterId?: string; connected: boolean; ready: boolean} | null)[];
   playing: boolean; paused: boolean; expiresAt: number | null;
 };
 export const side = (seat: Seat) => seat === 0 ? 1 : -1;

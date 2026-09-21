@@ -1,0 +1,92 @@
+{
+  "1": {
+    "endpoint": {
+      "method": "POST",
+      "path": "/lux3d/v1/generate/text-to-3d/task/create"
+    },
+    "parameters": {
+      "body": {
+        "version": "G1",
+        "style": "cartoon",
+        "faceCount": 12000,
+        "outputFormat": [
+          "glb"
+        ],
+        "customSize": 1900,
+        "prompt": "One full-body adult tennis athlete, original premium stylized 3D mobile sports game character. Believable athletic proportions, mature expressive face, rounded clean forms and PBR fabric. Adult East Asian woman with light warm skin, black hair in a tight short bun, teal sleeveless tennis top, navy fitted tennis shorts, mint wristbands, white socks and teal white court shoes. Lean agile athletic build. Neutral symmetrical low A pose, arms only 30 degrees away from torso, straight elbows, hands beside hips and clearly separated from thighs, legs slightly apart with visible gaps. Facing front, upright, level feet. Full body head to shoes, single person. No racket, no ball, no pedestal, no scene, no text, no logos, no jewelry. Clean continuous humanoid geometry for skeletal rigging. Short hair or tightly secured hair, no loose hanging accessories."
+      }
+    }
+  },
+  "2": {
+    "endpoint": {
+      "method": "POST",
+      "path": "/lux3d/v1/generate/text-to-3d/task/create"
+    },
+    "parameters": {
+      "body": {
+        "version": "G1",
+        "style": "cartoon",
+        "faceCount": 12000,
+        "outputFormat": [
+          "glb"
+        ],
+        "customSize": 1900,
+        "prompt": "One full-body adult tennis athlete, original premium stylized 3D mobile sports game character. Believable athletic proportions, mature expressive face, rounded clean forms and PBR fabric. Adult Mediterranean man with tanned olive skin, wavy short dark hair, angular face, terracotta red sleeveless tennis shirt, cream shorts, white socks, burnt orange white court shoes. Strong shoulders and athletic build. Neutral symmetrical low A pose, arms only 30 degrees away from torso, straight elbows, hands beside hips and clearly separated from thighs, legs slightly apart with visible gaps. Facing front, upright, level feet. Full body head to shoes, single person. No racket, no ball, no pedestal, no scene, no text, no logos, no jewelry. Clean continuous humanoid geometry for skeletal rigging. Short hair or tightly secured hair, no loose hanging accessories."
+      }
+    }
+  },
+  "3": {
+    "endpoint": {
+      "method": "POST",
+      "path": "/lux3d/v1/generate/text-to-3d/task/create"
+    },
+    "parameters": {
+      "body": {
+        "version": "G1",
+        "style": "cartoon",
+        "faceCount": 12000,
+        "outputFormat": [
+          "glb"
+        ],
+        "customSize": 1900,
+        "prompt": "One full-body adult tennis athlete, original premium stylized 3D mobile sports game character. Believable athletic proportions, mature expressive face, rounded clean forms and PBR fabric. Adult East Asian man with light skin, straight short navy-black hair and clean-shaven youthful adult face, cobalt blue short sleeve tennis shirt, pale gray shorts, blue wristbands, white socks and blue white court shoes. Slim balanced athletic build. Neutral symmetrical low A pose, arms only 30 degrees away from torso, straight elbows, hands beside hips and clearly separated from thighs, legs slightly apart with visible gaps. Facing front, upright, level feet. Full body head to shoes, single person. No racket, no ball, no pedestal, no scene, no text, no logos, no jewelry. Clean continuous humanoid geometry for skeletal rigging. Short hair or tightly secured hair, no loose hanging accessories."
+      }
+    }
+  },
+  "4": {
+    "endpoint": {
+      "method": "POST",
+      "path": "/lux3d/v1/generate/text-to-3d/task/create"
+    },
+    "parameters": {
+      "body": {
+        "version": "G1",
+        "style": "cartoon",
+        "faceCount": 12000,
+        "outputFormat": [
+          "glb"
+        ],
+        "customSize": 1900,
+        "prompt": "One full-body adult tennis athlete, original premium stylized 3D mobile sports game character. Believable athletic proportions, mature expressive face, rounded clean forms and PBR fabric. Adult Black woman with deep brown skin, very short natural curly hair, violet fitted short sleeve tennis shirt, dark plum fitted tennis shorts, lilac wristbands, white socks and purple white court shoes. Compact muscular athletic build. Neutral symmetrical low A pose, arms only 30 degrees away from torso, straight elbows, hands beside hips and clearly separated from thighs, legs slightly apart with visible gaps. Facing front, upright, level feet. Full body head to shoes, single person. No racket, no ball, no pedestal, no scene, no text, no logos, no jewelry. Clean continuous humanoid geometry for skeletal rigging. Short hair or tightly secured hair, no loose hanging accessories."
+      }
+    }
+  },
+  "5": {
+    "endpoint": {
+      "method": "POST",
+      "path": "/lux3d/v1/generate/text-to-3d/task/create"
+    },
+    "parameters": {
+      "body": {
+        "version": "G1",
+        "style": "cartoon",
+        "faceCount": 12000,
+        "outputFormat": [
+          "glb"
+        ],
+        "customSize": 1900,
+        "prompt": "One full-body adult tennis athlete, original premium stylized 3D mobile sports game character. Believable athletic proportions, mature expressive face, rounded clean forms and PBR fabric. Adult Northern European man with fair skin, close-cropped blond hair and subtle stubble, forest green short sleeve tennis polo, gold yellow shorts, white socks and green white court shoes. Broad athletic shoulders, long limbs. Neutral symmetrical low A pose, arms only 30 degrees away from torso, straight elbows, hands beside hips and clearly separated from thighs, legs slightly apart with visible gaps. Facing front, upright, level feet. Full body head to shoes, single person. No racket, no ball, no pedestal, no scene, no text, no logos, no jewelry. Clean continuous humanoid geometry for skeletal rigging. Short hair or tightly secured hair, no loose hanging accessories."
+      }
+    }
+  }
+}

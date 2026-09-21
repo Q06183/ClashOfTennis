@@ -1,3 +1,5 @@
+import {getCharacter,isCharacterId} from '../simulation/characters.js';
+import {characterPicker} from './characters.js';
 import {shotTier,SHOT_PROFILES} from '../simulation/shot-profile.js';
 import { Match } from '../simulation/match.js';
 import { driveAI } from '../simulation/ai.js';
@@ -9,7 +11,7 @@ import {invitationLink} from '../network/invite.js';
 import { CourtAudio } from './audio.js';
 
 const escape=(value:string)=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
-type Screen='home'|'join'|'setup'|'room'|'playing'|'result';
+type Screen='home'|'join'|'setup'|'room'|'playing'|'result'|'characters';
 const brand='<div class="brand"><img src="/icon.svg" alt=""/><div>Rally Club<small>好友网球俱乐部</small></div></div>';
 const close='<button class="icon-button" data-action="back" aria-label="返回">×</button>';
 
@@ -19,6 +21,10 @@ export class App {
   private controls:Controls;
   private audio=new CourtAudio();
   private screen:Screen='home';
+  private characterId=getCharacter(localStorage.getItem('rally-character')??undefined).id;
+  private opponentId=getCharacter(localStorage.getItem('rally-opponent')??undefined).id;
+  private characterReturn:Screen='home';
+  private choosingOpponent=false;
   private local=new Match();
   private net:NetworkClient|null=null;
   private remote:MatchState|null=null;
@@ -91,18 +97,29 @@ export class App {
     if(end)this.feedbackTimer=setTimeout(()=>el.style.display='none',550);
   }
   private async action(action:string){
-    if(action==='practice'){this.screen='setup';this.renderScreen();}
+    if(action==='characters'||action==='opponent-characters'){
+      if(!['home','setup','room','join'].includes(this.screen))return;
+      this.characterReturn=this.screen;this.choosingOpponent=action==='opponent-characters';this.screen='characters';this.renderScreen();
+    }
+    else if(action.startsWith('pick-character-')){
+      if(this.screen!=='characters')return;const id=action.slice('pick-character-'.length);if(!isCharacterId(id))return;
+      if(this.choosingOpponent){this.opponentId=id;localStorage.setItem('rally-opponent',id);}
+      else{this.characterId=id;localStorage.setItem('rally-character',id);if(this.net&&this.room)this.net.send({type:'select-character',characterId:id});}
+      this.renderScreen();
+    }
+    else if(action==='close-characters'){this.screen=this.characterReturn;this.renderScreen();}
+    else if(action==='practice'){this.screen='setup';this.renderScreen();}
     else if(action==='start-practice'){
-      this.net?.close();this.net=null;this.remote=null;this.room=null;this.local.dispose();this.local=new Match();
+      this.net?.close();this.net=null;this.remote=null;this.room=null;this.local.dispose();this.local=new Match([this.characterId,this.opponentId]);
       this.networkError='';
       this.seat=0;this.paused=false;this.connected=true;this.screen='playing';this.lastEvent=-1;this.accumulator=0;
       this.help=!localStorage.getItem('rally-tutorial');this.renderScreen();
     }
-    else if(action==='create'&&!this.busy)this.connect({type:'create',name:this.name});
+    else if(action==='create'&&!this.busy)this.connect({type:'create',name:this.name,characterId:this.characterId});
     else if(action==='join'){this.screen='join';this.renderScreen();}
     else if(action==='join-submit'&&!this.busy){
       if(!/^\d{6}$/.test(this.code)){this.toast('请输入朋友的 6 位房间号');return;}
-      this.connect({type:'join',code:this.code,name:this.name});
+      this.connect({type:'join',code:this.code,name:this.name,characterId:this.characterId});
     }
     else if(action==='ready')this.net?.send({type:'ready'});
     else if(action==='copy-code')await this.copy(this.room?.code??'','已复制房间号，请朋友打开同一游戏地址后加入');
@@ -141,6 +158,7 @@ export class App {
       welcome:c=>{this.seat=c.seat;this.busy=false;this.connected=true;this.screen='room';this.lastEvent=-1;this.renderScreen();},
       room:r=>{
         this.room=r;this.paused=r.paused;
+        if(r.seats[this.seat]?.characterId)this.characterId=getCharacter(r.seats[this.seat]!.characterId).id;
         if(this.screen==='room'||this.screen==='result')this.renderScreen();
       },
       state:(s,paused)=>{
@@ -171,6 +189,7 @@ export class App {
     <div class="menu"><label class="name-label" for="nickname">你的昵称<input id="nickname" maxlength="16" value="${escape(this.name)}" autocomplete="nickname"/></label>
     <button class="primary" data-action="create" ${this.busy?'disabled':''}>${this.busy?'连接中…':'邀请好友'} <span>↗</span></button>
     <button class="secondary" data-action="join">加入房间 <span>＋</span></button>
+    <button class="character-choice" data-action="characters">球员：${getCharacter(this.characterId).name} · ${getCharacter(this.characterId).role} <span>更换 →</span></button>
     <button class="practice" data-action="practice">先热热身 · 单人练习 <span>→</span></button>${this.networkError?`<div class="error-inline" role="alert" style="grid-column:1/-1">${escape(this.networkError)}</div>`:''}</div></main>
     <aside class="court-tag"><strong>01</strong><span>THE GARDEN COURT<br/>花园球场 · 硬地</span></aside>
     <footer class="home-footer"><b>点按跑位 / 滑动击球 / 好友对战</b><span>NO PRESSURE. JUST PLAY.</span></footer></div>`;}
@@ -181,9 +200,9 @@ export class App {
     return this.panel(`<div class="panel-top"><span>FRIENDS ON COURT</span>${close}</div><h2>球场已为你留好。</h2><p>${shareable?'把邀请链接发给朋友，准备好就开打。':'当前地址只能在这台设备打开。手机请先打开电脑的 Wi-Fi 地址，再用房间号加入。'}</p>
       <div class="room-code" aria-label="房间号">${r.code}</div><div class="room-caption">私人球场 · 6 位房间号</div>
       <div class="copy-row"><button class="secondary" data-action="copy-code">复制房间号</button><button class="secondary" data-action="copy-link" ${shareable?'':'disabled'}>复制邀请链接 ↗</button></div>
-      <div class="seats">${r.seats.map((p,i)=>`<div class="seat"><div class="avatar ${i?'orange':''}">${p?escape(p.name.slice(0,1)):'＋'}</div><div class="seat-name">${p?escape(p.name):'等待朋友加入'}${i===this.seat?' · 你':''}</div><span class="seat-status">${p?p.connected?p.ready?'已准备':'已就位':'重连中':'空位'}</span></div>`).join('')}</div>
-      <button class="primary" data-action="ready" ${!both||me?.ready?'disabled':''}>${!both?'等朋友一起上场':me?.ready?'已准备，等待朋友…':'准备开赛 →'}</button>
-      <p class="small-note">7 分制 · 领先 2 分获胜 · 双方能力相同</p><div class="status-line">${escape(this.status)}</div>`);
+      <div class="seats">${r.seats.map((p,i)=>`<div class="seat"><div class="avatar ${i?'orange':''}">${p?escape(p.name.slice(0,1)):'＋'}</div><div class="seat-name">${p?escape(p.name):'等待朋友加入'}${i===this.seat?' · 你':''}${p?`<small>${getCharacter(p.characterId).name} · ${getCharacter(p.characterId).role}</small>`:''}</div><span class="seat-status">${p?p.connected?p.ready?'已准备':'已就位':'重连中':'空位'}</span></div>`).join('')}</div>
+      <button class="secondary" data-action="characters">更换球员 · ${getCharacter(this.characterId).name}</button><button class="primary" data-action="ready" ${!both||me?.ready?'disabled':''}>${!both?'等朋友一起上场':me?.ready?'已准备，等待朋友…':'准备开赛 →'}</button>
+      <p class="small-note">7 分制 · 领先 2 分获胜 · 角色各有所长 · 全部免费</p><div class="status-line">${escape(this.status)}</div>`);
   }
   private playing(){return `<div class="match-top"><button class="icon-button" data-action="quit" aria-label="退出比赛">‹</button><div class="match-label">GARDEN COURT <span class="connection" id="connection"></span></div><button class="icon-button" data-action="mute" aria-label="${this.audio.muted?'开启声音':'关闭声音'}">${this.audio.muted?'♪̸':'♪'}</button></div>
     <div class="scoreboard"><div class="score-player"><div class="score-name" id="name-me"></div><div class="score-value" id="score-me">0</div><div class="stamina"><i id="stamina-me"></i></div></div><div class="score-divider">vs</div><div class="score-player"><div class="score-name" id="name-them"></div><div class="score-value" id="score-them">0</div><div class="stamina"><i id="stamina-them"></i></div></div></div>
@@ -206,10 +225,11 @@ export class App {
   private renderScreen(){
     this.view.setMode(this.screen==='playing'||this.screen==='result'?'match':'home',this.seat);
     this.controls.enabled=this.screen==='playing'&&!this.help;
-    if(this.screen==='home')this.ui.innerHTML=this.home();
+    if(this.screen==='characters')this.ui.innerHTML=characterPicker(this.choosingOpponent?this.opponentId:this.characterId,this.choosingOpponent);
+    else if(this.screen==='home')this.ui.innerHTML=this.home();
     else if(this.screen==='room')this.ui.innerHTML=this.roomPanel();
-    else if(this.screen==='join')this.ui.innerHTML=this.panel(`<div class="panel-top"><span>YOUR FRIEND IS WAITING</span>${close}</div><h2>加入朋友的球场。</h2><p>输入 6 位房间号，下一场好球等你来。</p><label class="name-label" for="nickname">昵称<input id="nickname" value="${escape(this.name)}" maxlength="16"/></label><input id="room-input" class="code-input" aria-label="六位房间号" placeholder="000000" maxlength="6" inputmode="numeric" pattern="[0-9]{6}" value="${escape(this.code)}"/><button class="primary" data-action="join-submit" ${this.busy?'disabled':''}>${this.busy?'正在加入…':'加入球场 →'}</button><div class="status-line">${escape(this.status)}</div>`);
-    else if(this.screen==='setup')this.ui.innerHTML=this.panel(`<div class="panel-top"><span>TAKE A FEW PRACTICE SWINGS</span>${close}</div><div class="panel-heading">Warm up.</div><h2>先和搭档热热身。</h2><p>同一片球场，同样的操作。找找击球节奏，再叫上朋友。</p><div class="select-row"><button class="${this.difficulty==='relaxed'?'selected':''}" data-action="relaxed">轻松练习</button><button class="${this.difficulty==='standard'?'selected':''}" data-action="standard">认真对打</button></div><button class="primary" data-action="start-practice">开始练习 →</button><p class="small-note">点按移动 · 滑动击球 · 7 分制</p>`);
+    else if(this.screen==='join')this.ui.innerHTML=this.panel(`<div class="panel-top"><span>YOUR FRIEND IS WAITING</span>${close}</div><h2>加入朋友的球场。</h2><p>输入 6 位房间号，下一场好球等你来。</p><label class="name-label" for="nickname">昵称<input id="nickname" value="${escape(this.name)}" maxlength="16"/></label><button class="secondary" data-action="characters">球员 · ${getCharacter(this.characterId).name} / 更换</button><input id="room-input" class="code-input" aria-label="六位房间号" placeholder="000000" maxlength="6" inputmode="numeric" pattern="[0-9]{6}" value="${escape(this.code)}"/><button class="primary" data-action="join-submit" ${this.busy?'disabled':''}>${this.busy?'正在加入…':'加入球场 →'}</button><div class="status-line">${escape(this.status)}</div>`);
+    else if(this.screen==='setup')this.ui.innerHTML=this.panel(`<div class="panel-top"><span>TAKE A FEW PRACTICE SWINGS</span>${close}</div><div class="panel-heading">Warm up.</div><h2>先和搭档热热身。</h2><p>同一片球场，同样的操作。找找击球节奏，再叫上朋友。</p><div class="character-matchup"><button class="secondary" data-action="characters">你 · ${getCharacter(this.characterId).name}</button><button class="secondary" data-action="opponent-characters">搭档 · ${getCharacter(this.opponentId).name}</button></div><div class="select-row"><button class="${this.difficulty==='relaxed'?'selected':''}" data-action="relaxed">轻松练习</button><button class="${this.difficulty==='standard'?'selected':''}" data-action="standard">认真对打</button></div><button class="primary" data-action="start-practice">开始练习 →</button><p class="small-note">点按移动 · 滑动击球 · 7 分制</p>`);
     else if(this.screen==='playing'){this.ui.innerHTML=this.playing()+(this.help?this.helpPanel():'');this.lastPhase='';this.updateHud();}
     else this.ui.innerHTML=this.result();
   }

@@ -76,8 +76,12 @@ export class Athlete {
     this.leftHand.position.y=-.31;this.elbows[0].add(this.leftHand);
     this.root.rotation.y=seat===0?Math.PI:0;
   }
+  clearModel(){
+    if(this.generated){this.generated.scene.removeFromParent();this.generated.scene.traverse(o=>{if(o instanceof T.SkinnedMesh)o.skeleton.dispose();});this.generated=undefined;}
+    this.root.traverse(o=>{if(o.userData.fallbackBody)o.visible=true;});this.modelSource='procedural';
+  }
   attachModel(scene:T.Object3D){
-    if(this.generated)return;
+    this.clearModel();
     const anchors:Record<string,T.Object3D>={};
     anchors.Hips=this.hips;
     for(let i=0;i<2;i++){

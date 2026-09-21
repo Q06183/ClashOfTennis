@@ -1,3 +1,4 @@
+import {getCharacter,characterEffects} from './characters.js';
 import { BallPhysics } from './physics.js';
 import {shotDepth,shotTier,SHOT_PROFILES} from './shot-profile.js';
 import {reception} from './reception.js';
@@ -6,7 +7,7 @@ import {movePlayer} from './movement.js';
 import { COURT, isInCourt, isInServiceBox, serverForPoint, winnerForScore } from './rules.js';
 import { clamp, other, side, type Input, type MatchState, type PlayerState, type Seat, type Shot } from './types.js';
 
-const player = (seat: Seat): PlayerState => ({x:0,z:side(seat)*10,tx:0,tz:side(seat)*10,stamina:1,swing:0,stroke:'forehand',moving:false});
+const player = (seat: Seat, characterId: string): PlayerState => ({characterId:getCharacter(characterId).id,x:0,z:side(seat)*10,tx:0,tz:side(seat)*10,stamina:1,swing:0,stroke:'forehand',moving:false});
 export class Match {
   readonly physics = new BallPhysics();
   readonly state: MatchState;
@@ -19,8 +20,8 @@ export class Match {
   private serviceFlight = false;
   private faultReset = false;
   private impact: {x:number;z:number}|null = null;
-  constructor() {
-    this.state = {time:0,phase:'serve',score:[0,0],players:[player(0),player(1)],
+  constructor(characters:readonly [string,string]=['lin','lin']) {
+    this.state = {time:0,phase:'serve',score:[0,0],players:[player(0,characters[0]),player(1,characters[1])],
       ball:{x:0,y:2.5,z:11.8,vx:0,vy:0,vz:0,bounces:0,hitter:0,targetX:0,targetZ:-5},
       server:0,fault:0,pointTimer:0,rally:0,maxRally:0,winner:null,event:'准备发球',eventId:0,lastPoint:null};
     this.resetPoint();
@@ -38,7 +39,7 @@ export class Match {
     s.players.forEach((p,i) => {
       p.x=i===s.server?serveSide*1.5:-serveSide*1.5;
       p.z=side(i as Seat)*(i===s.server?12.4:10.3); p.tx=p.x;p.tz=p.z;p.vx=0;p.vz=0;p.moving=false;p.swing=0;p.preparation=undefined;p.shotQueued=false;
-      if(!this.faultReset) p.stamina=clamp(p.stamina+.2,0,1);
+      if(!this.faultReset) p.stamina=clamp(p.stamina+.2*characterEffects(p.characterId).recovery,0,1);
     });
     const p=s.players[s.server];
     this.physics.place({x:p.x,y:1.25,z:p.z-.25*side(s.server)});
@@ -80,7 +81,10 @@ export class Match {
     const distance=Math.hypot(targetX-start.x,targetZ-start.z);
     const power=shot.power*(.65+.35*p.stamina)*(1-.2*stretch);
     const critical=tier==='critical';
-    let flight=clamp(distance/((11+power*12)*(critical?1.14:1)),critical?.42:.48,1.85)+(shot.lob?.85:0);
+    const backhand=(b.x-p.x)*sign<0;
+    const attribute=serve?'serve':!this.bouncePoint?'volley':backhand?'backhand':'forehand';
+    const effects=characterEffects(p.characterId),strokeSpeed=effects[attribute];
+    let flight=clamp(distance/((11+power*12)*(critical?1.14:1)*strokeSpeed),critical?.42:.48,1.85)+(shot.lob?.85:0);
     const crossing=-start.z/(targetZ-start.z);
     // Exact net clearance keeps tier speed increases while retaining real arcs.
     if(crossing>0&&crossing<1){
@@ -96,7 +100,7 @@ export class Match {
     p.stroke=serve?'serve':!this.bouncePoint?'volley':shot.lob?'lob':p.backhand?'backhand':'forehand';
     p.preparation=undefined;p.shotQueued=false;
     p.contact={...start};
-    p.stamina=clamp(p.stamina-.022-.028*power,0,1);
+    p.stamina=clamp(p.stamina-(.022+.028*power)*effects.drain*strokeSpeed,0,1);
     this.sinceHit=0;this.serviceFlight=serve;this.pending[seat]=null;this.impact=null;this.bouncePoint=null;
     // A recovery tap belongs to the previous flight. Fresh incoming-ball taps
     // can still override assistance, but a stale one must not delay the split step.
@@ -178,7 +182,8 @@ export class Match {
         if(soon<.65){p.preparation={stroke:volley?'volley':receiving.backhand?'backhand':'forehand',progress:clamp(1-soon/.65,0,1),contact:volley?{x:b.x,y:b.y,z:b.z}:receiving.point};p.backhand=receiving.backhand;}
       }
       movePlayer(p,seat,dt);
-      p.stamina=clamp(p.stamina-(p.moving?.013:-.006)*dt,0,1);
+      const endurance=characterEffects(p.characterId);
+      p.stamina=clamp(p.stamina-(p.moving?.013*endurance.drain:-.006*endurance.recovery)*dt,0,1);
       const pending=this.pending[seat];
       if(pending&&pending.until<s.time){this.pending[seat]=null;p.shotQueued=false;}
       if(pending&&pending.until>=s.time&&seat===receiver&&this.sinceHit>.06&&b.z*ownSide>.35&&b.y>.25&&b.y<3.1&&

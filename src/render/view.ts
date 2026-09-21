@@ -1,3 +1,4 @@
+import {getCharacter} from '../simulation/characters.js';
 import * as T from 'three';
 import { makeCourt } from './court.js';
 import { Athlete } from './player.js';
@@ -23,6 +24,9 @@ export class CourtView {
   private ray=new T.Raycaster();
   private plane=new T.Plane(new T.Vector3(0,1,0),0);
   private disposed=false;
+  private modelCache=new Map<string,Promise<T.Group>>();
+  private characterIds=['',''];
+  private loadedModels:T.Group[]=[];
   private mode:'home'|'match'='home';
   private seat:Seat=0;
   private aimLock=0;
@@ -44,30 +48,6 @@ export class CourtView {
     sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-16;sun.shadow.camera.right=16;sun.shadow.camera.top=18;sun.shadow.camera.bottom=-18;sun.shadow.bias=-.001;
     this.scene.add(sun,this.flight.root);this.stadiumEnds=makeCourt(this.scene);
     for(const a of this.athletes)this.scene.add(a.root);
-    new GLTFLoader().load('/models/athlete.glb?v=1',gltf=>{
-      if(this.disposed){disposeTree(gltf.scene);return;}
-      for(const a of this.athletes){
-        const model=clone(gltf.scene);
-        if(a.seat===1)model.traverse(o=>{
-          if(!(o instanceof T.Mesh))return;
-          const tint=(source:T.Material)=>{
-            const mat=source.clone();
-            mat.onBeforeCompile=shader=>{
-              shader.vertexShader='varying vec3 kitPosition;\n'+shader.vertexShader;
-              shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nkitPosition=position;');
-              shader.fragmentShader='varying vec3 kitPosition;\n'+shader.fragmentShader;
-              shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
-                float cream=1.0-smoothstep(0.18,0.34,max(diffuseColor.r,max(diffuseColor.g,diffuseColor.b))-min(diffuseColor.r,min(diffuseColor.g,diffuseColor.b)));
-                float shirt=step(0.99,kitPosition.y)*(1.0-step(1.48,kitPosition.y))*(1.0-step(0.44,abs(kitPosition.x)));
-                diffuseColor.rgb*=mix(vec3(1.0),vec3(1.0,0.36,0.14),cream*shirt);`);
-            };mat.customProgramCacheKey=()=> 'away-shirt';return mat;
-          };
-          o.material=Array.isArray(o.material)?o.material.map(tint):tint(o.material);
-        });
-        a.attachModel(model);
-      }
-      canvas.dataset.athleteSource='lux3d';
-    },undefined,()=>{canvas.dataset.athleteSource='fallback';});
     this.ball=new T.Mesh(new T.SphereGeometry(.075,14,10),new T.MeshStandardMaterial({color:0xe4ff3a,emissive:0x717a03,emissiveIntensity:.35,roughness:.7}));this.ball.castShadow=true;this.scene.add(this.ball);
     this.shadow=new T.Mesh(new T.CircleGeometry(.24,20),new T.MeshBasicMaterial({color:0x132f29,transparent:true,opacity:.38,depthWrite:false}));this.shadow.rotation.x=-Math.PI/2;this.scene.add(this.shadow);
     this.target=new T.Mesh(new T.RingGeometry(.34,.41,40),new T.MeshBasicMaterial({color:0xf6f2b7,transparent:true,opacity:.65,side:T.DoubleSide,depthWrite:false}));this.target.rotation.x=-Math.PI/2;this.scene.add(this.target);
@@ -76,6 +56,17 @@ export class CourtView {
       const t=new T.Mesh(new T.SphereGeometry(.06*(1-i/10),6,4),new T.MeshBasicMaterial({color:0xf0ff85,transparent:true,opacity:.65*(1-i/8),depthWrite:false,toneMapped:false}));this.trail.push(t);this.scene.add(t);
     }
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(container);this.resize();
+  }
+  private setCharacter(seat:Seat,id?:string){
+    const character=getCharacter(id);if(this.characterIds[seat]===character.id)return;
+    this.characterIds[seat]=character.id;const athlete=this.athletes[seat];athlete.clearModel();
+    const canvas=this.renderer.domElement;canvas.dataset[`athlete${seat}`]='loading';
+    let promise=this.modelCache.get(character.model);
+    if(!promise){promise=new GLTFLoader().loadAsync(character.model).then(g=>{if(this.disposed){disposeTree(g.scene);return g.scene;}this.loadedModels.push(g.scene);return g.scene;});this.modelCache.set(character.model,promise);}
+    promise.then(model=>{
+      if(this.disposed||this.characterIds[seat]!==character.id)return;
+      athlete.attachModel(clone(model));canvas.dataset[`athlete${seat}`]=character.id;canvas.dataset.athleteSource='lux3d';
+    }).catch(()=>{if(this.characterIds[seat]===character.id){canvas.dataset[`athlete${seat}`]='fallback';canvas.dataset.athleteSource='fallback';}this.modelCache.delete(character.model);});
   }
   setMode(mode:'home'|'match',seat:Seat=0){
     this.mode=mode;this.seat=seat;this.focus={x:0,depth:11};
@@ -112,7 +103,7 @@ export class CourtView {
       this.focus.depth=clamp(this.focus.depth,p.z*side(this.seat)-.6,p.z*side(this.seat)+.6);
       frameMatch(this.camera,this.size.w,this.size.h,this.seat,this.focus.x,this.focus.depth);
     }
-    for(const seat of [0,1] as Seat[])this.athletes[seat].update(state.players[seat],state.time,dt);
+    for(const seat of [0,1] as Seat[]){this.setCharacter(seat,state.players[seat].characterId);this.athletes[seat].update(state.players[seat],state.time,dt);}
     const b=state.ball;
     this.flight.update(state,this.seat,this.mode==='match',authoritative);
     for(let i=this.trail.length-1;i>0;i--)this.trail[i].position.copy(this.trail[i-1].position);
@@ -128,7 +119,8 @@ export class CourtView {
   }
   dispose(){
     this.disposed=true;
-    this.resizeObserver.disconnect();disposeTree(this.scene);
+    this.resizeObserver.disconnect();for(const a of this.athletes)a.clearModel();
+    for(const model of this.loadedModels)this.scene.add(model);disposeTree(this.scene);this.modelCache.clear();this.loadedModels=[];
     this.renderer.dispose();this.renderer.domElement.remove();
   }
 }

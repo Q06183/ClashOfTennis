@@ -1,9 +1,10 @@
+import {getCharacter,isCharacterId,type CharacterId} from '../src/simulation/characters.js';
 import { randomInt, randomUUID } from 'node:crypto';
 import { WebSocket } from 'ws';
 import { Match } from '../src/simulation/match.js';
 import type { RoomView, Seat } from '../src/simulation/types.js';
 
-type Member={name:string;token:string;ws:WebSocket|null;ready:boolean;gone:number|null};
+type Member={name:string;characterId:CharacterId;token:string;ws:WebSocket|null;ready:boolean;gone:number|null};
 type Room={code:string;seats:[Member|null,Member|null];match:Match|null;updated:number;seq:number};
 type Peer={ws:WebSocket;room:Room|null;seat:Seat|null;window:number;count:number;lastInput:number;lastPong:number;lastPing:number};
 const send=(ws:WebSocket|null,v:unknown)=>{if(ws?.readyState===WebSocket.OPEN&&ws.bufferedAmount<256_000)ws.send(JSON.stringify(v));};
@@ -24,15 +25,15 @@ export class Rooms {
   private error(peer:Peer,message:string){send(peer.ws,{type:'error',message});}
   private view(r:Room):RoomView {
     const disconnected=r.seats.filter(m=>m?.gone!=null).map(m=>m!.gone!);
-    return {code:r.code,seats:r.seats.map(m=>m?{name:m.name,connected:!!m.ws,ready:m.ready}:null),
+    return {code:r.code,seats:r.seats.map(m=>m?{name:m.name,characterId:m.characterId,connected:!!m.ws,ready:m.ready}:null),
       playing:!!r.match,paused:!!r.match&&r.match.state.phase!=='over'&&r.seats.some(m=>!m?.ws),
       expiresAt:disconnected.length?Math.min(...disconnected)+this.reconnectMs:null};
   }
   private broadcast(r:Room,v:unknown){for(const member of r.seats)send(member?.ws??null,v);}
   private roomUpdate(r:Room){this.broadcast(r,{type:'room',room:this.view(r)});}
   private welcome(p:Peer){const r=p.room!,seat=p.seat!;send(p.ws,{type:'welcome',code:r.code,seat,token:r.seats[seat]!.token});this.roomUpdate(r);}
-  private attach(p:Peer,r:Room,seat:Seat,name:string){
-    p.room=r;p.seat=seat;r.seats[seat]={name,token:randomUUID(),ws:p.ws,ready:false,gone:null};r.updated=Date.now();this.welcome(p);
+  private attach(p:Peer,r:Room,seat:Seat,name:string,characterId:CharacterId){
+    p.room=r;p.seat=seat;r.seats[seat]={name,characterId,token:randomUUID(),ws:p.ws,ready:false,gone:null};r.updated=Date.now();this.welcome(p);
   }
   private handle(p:Peer,m:any){
     if(!m||typeof m.type!=='string')return;
@@ -40,15 +41,17 @@ export class Rooms {
     if(m.type==='leave'){this.detach(p,true);return;}
     if(['create','join','resume'].includes(m.type)&&p.room){this.error(p,'你已经在房间中');return;}
     const name=typeof m.name==='string'?m.name.trim().slice(0,16)||'球友':'球友';
+    if(['create','join'].includes(m.type)&&m.characterId!==undefined&&!isCharacterId(m.characterId)){this.error(p,'角色不存在，请重新选择');return;}
+    const characterId=getCharacter(m.characterId).id;
     if(m.type==='create'){
       if(this.rooms.size>=100){this.error(p,'球场暂时已满，请稍后再试');return;}
       let code:string;do{code=String(randomInt(100000,1000000));}while(this.rooms.has(code));
-      const r:Room={code,seats:[null,null],match:null,updated:Date.now(),seq:0};this.rooms.set(code,r);this.attach(p,r,0,name);return;
+      const r:Room={code,seats:[null,null],match:null,updated:Date.now(),seq:0};this.rooms.set(code,r);this.attach(p,r,0,name,characterId);return;
     }
     if(m.type==='join'){
       const r=this.rooms.get(String(m.code));if(!r){this.error(p,'房间不存在或已结束');return;}
       if(r.seats[0]&&r.seats[1]){this.error(p,'房间已满，两位球友已就位');return;}
-      this.attach(p,r,r.seats[0]?1:0,name);return;
+      this.attach(p,r,r.seats[0]?1:0,name,characterId);return;
     }
     if(m.type==='resume'){
       const r=this.rooms.get(String(m.code));
@@ -60,12 +63,18 @@ export class Rooms {
     }
     const r=p.room,seat=p.seat;if(!r||seat===null){this.error(p,'请先创建或加入房间');return;}
     r.updated=Date.now();
+    if(m.type==='select-character'){
+      if(r.match&&r.match.state.phase!=='over'){this.error(p,'比赛中不能更换角色');return;}
+      if(!isCharacterId(m.characterId)){this.error(p,'角色不存在，请重新选择');return;}
+      r.seats[seat]!.characterId=m.characterId;for(const member of r.seats)if(member)member.ready=false;
+      this.roomUpdate(r);return;
+    }
     if(m.type==='ready'){
       if(r.seats.some(member=>!member?.ws)){this.error(p,'等待好友加入后再准备');return;}
       if(r.match&&r.match.state.phase!=='over')return;
       r.seats[seat]!.ready=true;
       if(r.seats.every(member=>member?.ready)){
-        r.match?.dispose();r.match=new Match();for(const member of r.seats)member!.ready=false;
+        r.match?.dispose();r.match=new Match([r.seats[0]!.characterId,r.seats[1]!.characterId]);for(const member of r.seats)member!.ready=false;
       }
       this.roomUpdate(r);return;
     }

@@ -86,3 +86,18 @@ test('both players retain reconnect window even after waiting in lobby',async()=
     const response=await c.wait('welcome');assert.equal(response.seat,0);
   }finally{a.ws.terminate();b.ws.terminate();c?.ws.terminate();await server.close();}
 });
+
+test('character picks are validated, shared, locked during play and retained after resume',async()=>{
+ const server=await createGameServer({port:0,host:'127.0.0.1'});const clients:Awaited<ReturnType<typeof client>>[]=[];
+ try{
+  const a=await client(server.wsUrl);clients.push(a);a.send({type:'create',name:'A',characterId:'mei'});const first=await a.wait('welcome');
+  const b=await client(server.wsUrl);clients.push(b);b.send({type:'join',code:first.code,name:'B',characterId:'leo'});await b.wait('welcome');
+  const room=await b.wait('room',m=>m.room.seats[1]?.characterId==='leo');assert.equal(room.room.seats[0].characterId,'mei');
+  a.send({type:'select-character',characterId:'hacked',stats:{serve:1000}});assert.match((await a.wait('error')).message,/角色/);
+  a.send({type:'ready'});await b.wait('room',m=>m.room.seats[0]?.ready);
+  b.send({type:'select-character',characterId:'rafa'});const changed=await a.wait('room',m=>m.room.seats[1]?.characterId==='rafa');assert.ok(changed.room.seats.every((s:any)=>!s.ready));
+  a.send({type:'ready'});b.send({type:'ready'});const start=await b.wait('state');assert.deepEqual(start.state.players.map((p:any)=>p.characterId),['mei','rafa']);
+  a.send({type:'select-character',characterId:'leo'});assert.match((await a.wait('error')).message,/比赛/);
+  a.ws.close();await b.wait('room',m=>m.room.paused);const resumed=await client(server.wsUrl);clients.push(resumed);resumed.send({type:'resume',code:first.code,token:first.token});await resumed.wait('welcome');const restored=await resumed.wait('state');assert.equal(restored.state.players[0].characterId,'mei');
+ }finally{clients.forEach(c=>c.ws.terminate());await server.close();}
+});

@@ -5,8 +5,9 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {Box3,SkinnedMesh,Vector3,Quaternion,type BufferAttribute,type InterleavedBufferAttribute} from 'three';
 import {disposeTree} from '../src/render/dispose.js';
 import {Athlete} from '../src/render/player.js';
-async function model(){
-  const raw=await readFile(new URL('../public/models/athlete.glb',import.meta.url));
+const variants=['athlete','characters/mei','characters/rafa','characters/sora','characters/ines','characters/leo'];
+async function model(id='athlete'){
+  const raw=await readFile(new URL(`../public/models/${id}.glb`,import.meta.url));
   const length=raw.readUInt32LE(12),json=JSON.parse(raw.toString('utf8',20,20+length));
   // Keep actual mesh/skin/bind matrices; omit image decoding in this Node test.
   json.materials=[{pbrMetallicRoughness:{baseColorFactor:[1,1,1,1]}}];
@@ -16,8 +17,8 @@ async function model(){
   const bin=raw.subarray(20+length),out=Buffer.alloc(20+j.length+bin.length);raw.copy(out,0,0,12);out.writeUInt32LE(out.length,8);out.writeUInt32LE(j.length,12);out.writeUInt32LE(0x4e4f534a,16);j.copy(out,20);bin.copy(out,20+j.length);
   return new GLTFLoader().parseAsync(out.buffer.slice(out.byteOffset,out.byteOffset+out.byteLength),'');
 }
-test('generated athlete loads a real skin and animates without missing weights or explosive bounds',async()=>{
-  const gltf=await model(),a=new Athlete(0);a.attachModel(gltf.scene);
+for(const id of variants)test(`generated ${id} loads a real skin and animates without missing weights or explosive bounds`,async()=>{
+  const gltf=await model(id),a=new Athlete(0);a.attachModel(gltf.scene);
   assert.equal(a.modelSource,'lux3d');
   a.root.traverse(o=>{if(o instanceof SkinnedMesh){const p=o.geometry.attributes.position,w=o.geometry.attributes.skinWeight;for(let i=0;i<p.count;i++){const sum=w.getX(i)+w.getY(i)+w.getZ(i)+w.getW(i);assert.ok(Math.abs(sum-1)<1e-5);if(Math.abs(p.getX(i))<.2&&p.getY(i)<1.2){const joints:BufferAttribute|InterleavedBufferAttribute=o.geometry.attributes.skinIndex;for(let k=0;k<4;k++)if(w.getComponent(i,k)>.001)assert.ok(!/Arm|Hand/.test(o.skeleton.bones[joints.getComponent(i,k)].name),'arm weights must not pull torso or shorts');}}}});
   for(const stroke of ['forehand','backhand','serve','volley'] as const)for(const frame of [0,.32,.52,.64,.85,.99,1,1.14,1.34]){
@@ -47,8 +48,8 @@ test('generated skin disposal releases shared PBR textures and each skeleton exa
 });
 
 
-test('running skin stays grounded and bounded through side runs, backpedal, and cuts',async()=>{
-  const {scene}=await model(),a=new Athlete(1);a.attachModel(scene);
+for(const id of variants)test(`running ${id} skin stays grounded and bounded through side runs, backpedal, and cuts`,async()=>{
+  const {scene}=await model(id),a=new Athlete(1);a.attachModel(scene);
   const p={x:0,z:-9,tx:0,tz:-9,stamina:1,moving:true,stroke:'forehand' as const,swing:0};
   let frame=0;
   for(const [vx,vz] of [[4,0],[-4,0],[0,3],[0,-3],[0,0]])for(let i=0;i<45;i++){
