@@ -1,12 +1,13 @@
 {
-  "verifiedAt": "2026-09-20T13:03:08.385Z",
+  "verifiedAt": "2026-09-21T04:59:04.091Z",
   "transport": "two independent WebSocket clients on this computer",
   "fullMatchScore": [
     7,
-    5
+    4
   ],
-  "maxRally": 20,
+  "maxRally": 3,
   "rematchReset": true,
-  "wallSeconds": 111,
-  "scope": "Protocol and authoritative simulation only. Not real phone or cross-network verification."
+  "wallSeconds": 55,
+  "scope": "Protocol and authoritative simulation only. Not real phone or cross-network verification.",
+  "endpoint": "ws://100.81.1.29:7470/ws"
 }

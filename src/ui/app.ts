@@ -4,6 +4,7 @@ import { other, side, type Input, type MatchState, type RoomView, type Seat, typ
 import { CourtView } from '../render/view.js';
 import { Controls } from '../input/controls.js';
 import { NetworkClient } from '../network/client.js';
+import {invitationLink} from '../network/invite.js';
 import { CourtAudio } from './audio.js';
 
 const escape=(value:string)=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
@@ -101,8 +102,12 @@ export class App {
       this.connect({type:'join',code:this.code,name:this.name});
     }
     else if(action==='ready')this.net?.send({type:'ready'});
-    else if(action==='copy-code')await this.copy(this.room?.code??'');
-    else if(action==='copy-link')await this.copy(`${location.origin}/?room=${this.room?.code}`);
+    else if(action==='copy-code')await this.copy(this.room?.code??'','已复制房间号，请朋友打开同一游戏地址后加入');
+    else if(action==='copy-link'){
+      const link=invitationLink(location.origin,this.room?.code??'');
+      if(link)await this.copy(link,'已复制邀请链接，请确认朋友能访问这个游戏地址');
+      else this.toast('当前是本机地址。请用电脑的 Wi-Fi 地址打开游戏后分享。');
+    }
     else if(action==='back'||action==='quit'){
       this.net?.close();this.net=null;this.remote=null;this.room=null;this.drawState=null;this.screen='home';this.help=false;
       this.busy=false;this.connected=true;this.paused=false;this.local.dispose();this.local=new Match();
@@ -117,8 +122,8 @@ export class App {
     else if(action==='mute'){this.audio.toggle();this.renderScreen();}
     else if(action==='relaxed'||action==='standard'){this.difficulty=action;this.renderScreen();}
   }
-  private async copy(value:string){
-    try{await navigator.clipboard.writeText(value);this.toast('已复制，发给朋友就能加入');}
+  private async copy(value:string,message:string){
+    try{await navigator.clipboard.writeText(value);this.toast(message);}
     catch{
       const panel=this.ui.querySelector('.panel');if(!panel)return;
       let input=panel.querySelector<HTMLInputElement>('.copy-fallback');
@@ -169,10 +174,10 @@ export class App {
   private panel(content:string){return `<div class="overlay"><section class="panel">${content}</section></div>`;}
   private roomPanel(){
     const r=this.room;if(!r)return this.panel(`<h2>正在打开球场</h2><p>${escape(this.status)}</p>${close}`);
-    const me=r.seats[this.seat],both=r.seats.every(p=>p?.connected);
-    return this.panel(`<div class="panel-top"><span>FRIENDS ON COURT</span>${close}</div><h2>球场已为你留好。</h2><p>把邀请链接发给朋友，准备好就开打。</p>
+    const me=r.seats[this.seat],both=r.seats.every(p=>p?.connected),shareable=!!invitationLink(location.origin,r.code);
+    return this.panel(`<div class="panel-top"><span>FRIENDS ON COURT</span>${close}</div><h2>球场已为你留好。</h2><p>${shareable?'把邀请链接发给朋友，准备好就开打。':'当前地址只能在这台设备打开。手机请先打开电脑的 Wi-Fi 地址，再用房间号加入。'}</p>
       <div class="room-code" aria-label="房间号">${r.code}</div><div class="room-caption">私人球场 · 6 位房间号</div>
-      <div class="copy-row"><button class="secondary" data-action="copy-code">复制房间号</button><button class="secondary" data-action="copy-link">复制邀请链接 ↗</button></div>
+      <div class="copy-row"><button class="secondary" data-action="copy-code">复制房间号</button><button class="secondary" data-action="copy-link" ${shareable?'':'disabled'}>复制邀请链接 ↗</button></div>
       <div class="seats">${r.seats.map((p,i)=>`<div class="seat"><div class="avatar ${i?'orange':''}">${p?escape(p.name.slice(0,1)):'＋'}</div><div class="seat-name">${p?escape(p.name):'等待朋友加入'}${i===this.seat?' · 你':''}</div><span class="seat-status">${p?p.connected?p.ready?'已准备':'已就位':'重连中':'空位'}</span></div>`).join('')}</div>
       <button class="primary" data-action="ready" ${!both||me?.ready?'disabled':''}>${!both?'等朋友一起上场':me?.ready?'已准备，等待朋友…':'准备开赛 →'}</button>
       <p class="small-note">7 分制 · 领先 2 分获胜 · 双方能力相同</p><div class="status-line">${escape(this.status)}</div>`);

@@ -13,7 +13,7 @@ function send(seat:Seat,value:unknown){if(clients[seat].readyState===WebSocket.O
 async function finish(error?:Error){
   if(done)return;done=true;clearTimeout(timeout);for(const ws of clients)ws.close();
   if(error){console.error(error.message);process.exitCode=1;return;}
-  const result={verifiedAt:new Date().toISOString(),transport:'two independent WebSocket clients on this computer',fullMatchScore:firstScore,maxRally,rematchReset:true,wallSeconds:Math.round((Date.now()-started)/1000),scope:'Protocol and authoritative simulation only. Not real phone or cross-network verification.'};
+  const result={verifiedAt:new Date().toISOString(),endpoint:url,transport:'two independent WebSocket clients on this computer',fullMatchScore:firstScore,maxRally,rematchReset:true,wallSeconds:Math.round((Date.now()-started)/1000),scope:'Protocol and authoritative simulation only. Not real phone or cross-network verification.'};
   await writeFile('docs/network-verification.json',JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result));
 }
 clients.forEach((ws,index)=>{
