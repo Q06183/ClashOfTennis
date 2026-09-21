@@ -1,4 +1,5 @@
 import { BallPhysics } from './physics.js';
+import {reception} from './reception.js';
 import { COURT, isInCourt, isInServiceBox, serverForPoint, winnerForScore } from './rules.js';
 import { clamp, other, side, type Input, type MatchState, type PlayerState, type Seat, type Shot } from './types.js';
 
@@ -9,6 +10,8 @@ export class Match {
   private pending: [{shot:Shot;until:number}|null,{shot:Shot;until:number}|null] = [null,null];
   private manualUntil = [0,0];
   private serveElapsed = 0;
+  private serveMotion:{shot:Shot;elapsed:number}|null=null;
+  private bouncePoint:{x:number;z:number}|null=null;
   private sinceHit = 0;
   private serviceFlight = false;
   private faultReset = false;
@@ -20,18 +23,22 @@ export class Match {
     this.resetPoint();
   }
   private announce(event: string) { this.state.event=event; this.state.eventId++; }
+  private clearPreparation() {
+    this.pending=[null,null];this.serveMotion=null;
+    for(const p of this.state.players){p.preparation=undefined;p.shotQueued=false;}
+  }
   private resetPoint() {
     const s=this.state, total=s.score[0]+s.score[1];
     s.phase='serve'; s.server=serverForPoint(total); s.rally=0; s.pointTimer=0;
-    this.pending=[null,null]; this.manualUntil=[0,0]; this.serveElapsed=0; this.serviceFlight=false;this.impact=null;
+    this.pending=[null,null]; this.manualUntil=[0,0]; this.serveElapsed=0; this.serviceFlight=false;this.impact=null;this.serveMotion=null;this.bouncePoint=null;
     const serveSide=side(s.server)*(total%2===0?1:-1);
     s.players.forEach((p,i) => {
       p.x=i===s.server?serveSide*1.5:-serveSide*1.5;
-      p.z=side(i as Seat)*(i===s.server?12.4:10.3); p.tx=p.x;p.tz=p.z;p.moving=false;p.swing=0;
+      p.z=side(i as Seat)*(i===s.server?12.4:10.3); p.tx=p.x;p.tz=p.z;p.moving=false;p.swing=0;p.preparation=undefined;p.shotQueued=false;
       if(!this.faultReset) p.stamina=clamp(p.stamina+.2,0,1);
     });
     const p=s.players[s.server];
-    this.physics.place({x:p.x,y:2.65,z:p.z-.25*side(s.server)});
+    this.physics.place({x:p.x,y:1.25,z:p.z-.25*side(s.server)});
     Object.assign(s.ball,this.physics.read(),{bounces:0,hitter:s.server,targetX:-serveSide*2,targetZ:-side(s.server)*4.8});
     this.announce(s.fault?'二发 · 稳一点':'滑动发球');
     this.faultReset=false;
@@ -48,9 +55,9 @@ export class Match {
     if(cmd.directionX!==undefined&&!Number.isFinite(cmd.directionX))return;
     const shot:Shot={type:'shot',aim:clamp(cmd.aim,-1.2,1.2),depth:clamp(cmd.depth,0,1),power:clamp(cmd.power,0,1),lob:cmd.lob};
     if(cmd.directionX!==undefined)shot.directionX=clamp(cmd.directionX,-.8,.8);
-    if(s.phase==='serve') { if(seat===s.server) this.hit(seat,shot,true); return; }
+    if(s.phase==='serve') { if(seat===s.server&&!this.serveMotion){this.serveMotion={shot,elapsed:0};p.stroke='serve';p.preparation={stroke:'serve',progress:0,contact:{x:p.x,y:2.65,z:p.z-.25*side(seat)}};} return; }
     if(s.ball.hitter===seat) return;
-    this.pending[seat]={shot,until:s.time+1.25};
+    this.pending[seat]={shot,until:s.time+2.6};p.shotQueued=true;
   }
   private hit(seat: Seat, shot: Shot, serve=false) {
     const s=this.state,p=s.players[seat],b=s.ball,sign=side(seat);
@@ -81,16 +88,22 @@ export class Match {
     this.physics.place(start,velocity);
     Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ});
     s.phase='rally';s.rally++;s.maxRally=Math.max(s.maxRally,s.rally);
-    p.swing=.44;p.stroke=serve?'serve':shot.lob?'lob':b.y>1.4&&Math.abs(p.z)<6?'volley':((b.x-p.x)*sign>0?'forehand':'backhand');
+    p.swing=.44;p.backhand=(b.x-p.x)*sign<0;
+    p.stroke=serve?'serve':!this.bouncePoint?'volley':shot.lob?'lob':p.backhand?'backhand':'forehand';
+    p.preparation=undefined;p.shotQueued=false;
     p.contact={...start};
     p.stamina=clamp(p.stamina-.022-.028*power,0,1);
-    this.sinceHit=0;this.serviceFlight=serve;this.pending[seat]=null;this.impact=null;
+    this.sinceHit=0;this.serviceFlight=serve;this.pending[seat]=null;this.impact=null;this.bouncePoint=null;
+    // A recovery tap belongs to the previous flight. Fresh incoming-ball taps
+    // can still override assistance, but a stale one must not delay the split step.
+    this.manualUntil[other(seat)]=0;
     this.announce(serve?'发球':p.stroke==='lob'?'高吊球':p.stroke==='volley'?'截击':power>.7?'强力回球':'回球');
   }
   private faultOrPoint(reason: string) {
     const s=this.state;
     if(this.serviceFlight&&s.fault===0) {
       s.fault=1;s.phase='point';s.pointTimer=1.2;this.faultReset=true;
+      this.clearPreparation();
       this.announce(`一发${reason} · 准备二发`);
     } else this.award(other(s.ball.hitter),this.serviceFlight?'双误':reason);
   }
@@ -98,10 +111,11 @@ export class Match {
     const s=this.state;
     s.score[winner]++;s.lastPoint=winner;s.fault=0;s.winner=winnerForScore(s.score);
     s.phase=s.winner===null?'point':'over';s.pointTimer=1.8;this.faultReset=false;
-    this.announce(reason);this.pending=[null,null];
+    this.announce(reason);this.clearPreparation();
   }
   finish(winner: Seat, reason: string) {
     this.state.winner=winner;this.state.phase='over';this.state.lastPoint=winner;this.announce(reason);
+    this.clearPreparation();for(const p of this.state.players){p.swing=0;p.moving=false;}
   }
   step(dt: number) {
     if(this.state.phase==='over') return;
@@ -110,6 +124,12 @@ export class Match {
     if(s.phase==='point') { s.pointTimer-=dt;if(s.pointTimer<=0)this.resetPoint();return; }
     if(s.phase==='serve') {
       this.serveElapsed+=dt;
+      if(this.serveMotion){
+        const motion=this.serveMotion;motion.elapsed+=dt;const u=clamp(motion.elapsed/.8,0,1),p=s.players[s.server];
+        p.preparation={stroke:'serve',progress:u,contact:{x:p.x,y:2.65,z:p.z-.25*side(s.server)}};
+        this.physics.place({x:p.x,y:1.25+4.6*u-3.2*u*u,z:p.z-.25*side(s.server)});Object.assign(s.ball,this.physics.read());
+        if(u>=1){this.serveMotion=null;this.hit(s.server,motion.shot,true);}return;
+      }
       if(this.serveElapsed>12) this.award(other(s.server),'发球超时');
       return;
     }
@@ -135,7 +155,7 @@ export class Match {
         if(!isInCourt(contact.x,contact.z,receiver)||(this.serviceFlight&&!isInServiceBox(contact.x,contact.z,s.server,s.score[0]+s.score[1]))) {
           this.faultOrPoint('出界');return;
         }
-        this.announce('落地');
+        this.bouncePoint={x:contact.x,z:contact.z};this.announce('落地');
       } else {this.award(b.hitter,'二跳');return;}
     }
     if(Math.abs(b.z)>22||Math.abs(b.x)>14||this.sinceHit>5) {
@@ -144,9 +164,14 @@ export class Match {
     for(const seat of [0,1] as Seat[]) {
       const p=s.players[seat],ownSide=side(seat);
       if(seat===receiver&&s.time>this.manualUntil[seat]) {
-        const follow=b.bounces>0;
-        p.tx=clamp(follow?b.x+b.vx*.12:b.targetX+b.vx*.12,-5.8,5.8);
-        p.tz=ownSide*clamp(follow?(b.z+b.vz*.12)*ownSide:b.targetZ*ownSide+1.55,1.1,14.5);
+        const receiving=reception(b,p,seat);
+        // At the net, retain the chosen volley position instead of retreating to a bounce.
+        if(Math.abs(p.z)>6||this.serviceFlight){p.tx=receiving.x;p.tz=receiving.z;}
+      }
+      if(seat===receiver){
+        const receiving=reception(b,p,seat),volley=Math.abs(p.z)<6&&!this.serviceFlight&&b.bounces===0;
+        const soon=volley?Math.hypot(b.x-p.x,b.z-p.z)/Math.max(1,Math.hypot(b.vx,b.vz)):receiving.time;
+        if(soon<.65){p.preparation={stroke:volley?'volley':receiving.backhand?'backhand':'forehand',progress:clamp(1-soon/.65,0,1),contact:volley?{x:b.x,y:b.y,z:b.z}:receiving.point};p.backhand=receiving.backhand;}
       }
       const dx=p.tx-p.x,dz=p.tz-p.z,distance=Math.hypot(dx,dz);
       const speed=6.8*(.55+.45*p.stamina),move=Math.min(distance,speed*dt);
@@ -154,9 +179,11 @@ export class Match {
       if(distance>.001) {p.x+=dx/distance*move;p.z+=dz/distance*move;}
       p.stamina=clamp(p.stamina-(p.moving?.013:-.006)*dt,0,1);
       const pending=this.pending[seat];
-      if(pending&&pending.until<s.time) this.pending[seat]=null;
-      if(pending&&pending.until>=s.time&&seat===receiver&&this.sinceHit>.16&&b.z*ownSide>.35&&b.y>.25&&b.y<3.1&&
+      if(pending&&pending.until<s.time){this.pending[seat]=null;p.shotQueued=false;}
+      if(pending&&pending.until>=s.time&&seat===receiver&&this.sinceHit>.06&&b.z*ownSide>.35&&b.y>.25&&b.y<3.1&&
          (!this.serviceFlight||b.bounces>0)&&
+         (Math.abs(p.z)<6||b.bounces>0)&&
+         (Math.abs(p.z)<6||!this.bouncePoint||b.y>.48&&Math.hypot(b.x-this.bouncePoint.x,b.z-this.bouncePoint.z)>1.5)&&
          Math.hypot(b.x-(p.x+.31*ownSide),b.y-1.39,b.z-(p.z-.08*ownSide))<1.28) {
         this.hit(seat,pending.shot);break;
       }

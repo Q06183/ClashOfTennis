@@ -21,7 +21,7 @@ test('network guide uses authoritative flight even when rendered position is smo
   const {FlightGuide}=await import('../src/render/trajectory.js');
   const {Match}=await import('../src/simulation/match.js');
   await initPhysics();const match=new Match();match.input(0,{type:'shot',aim:0,depth:.5,power:.5,lob:false});
-  for(let i=0;i<25;i++)match.step(1/60);
+  for(let i=0;i<75;i++)match.step(1/60);
   const actual=match.state,draw=structuredClone(actual);draw.ball.z+=1;draw.ball.y+=.15;
   const guide=new FlightGuide();guide.update(draw,0,true,actual);
   const ring=guide.root.children[1];const expected=predictFlight(actual.ball).landing;

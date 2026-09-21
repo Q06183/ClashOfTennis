@@ -1,6 +1,7 @@
 import * as T from 'three';
 import {AthleteSkin} from './athlete-skin.js';
-import {side,type PlayerState,type Seat} from '../simulation/types.js';
+import {strokePose} from './strokes.js';
+import {type PlayerState,type Seat} from '../simulation/types.js';
 const material=(color:number)=>new T.MeshStandardMaterial({color,roughness:.72});
 const down=new T.Vector3(0,-1,0);
 /** Articulated fallback athlete; generated assets must share these contact semantics. */
@@ -12,6 +13,7 @@ export class Athlete {
   private legs=[new T.Group(),new T.Group()];
   private knees=[new T.Group(),new T.Group()];
   private racket=new T.Group();
+  private leftHand=new T.Group();
   modelSource:'procedural'|'lux3d'='procedural';
   private generated?:AthleteSkin;
   private skin=material(0xd5a07d);
@@ -63,6 +65,7 @@ export class Athlete {
     for(let v=-.18;v<=.18;v+=.045){const end=Math.sqrt(.245**2-v*v);pts.push(v,-.69-end*1.3,0,v,-.69+end*1.3,0,-end,-.69+v*1.3,0,end,-.69+v*1.3,0);}
     racket.add(new T.LineSegments(new T.BufferGeometry().setAttribute('position',new T.Float32BufferAttribute(pts,3)),new T.LineBasicMaterial({color:0xe3e4cf,transparent:true,opacity:.8})));
     racket.traverse(o=>{o.userData.fallbackBody=false;});
+    this.leftHand.position.y=-.31;this.elbows[0].add(this.leftHand);
     this.root.rotation.y=seat===0?Math.PI:0;
   }
   attachModel(scene:T.Object3D){
@@ -74,46 +77,67 @@ export class Athlete {
       anchors['UpperLeg_'+suffix]=this.legs[i];anchors['LowerLeg_'+suffix]=this.knees[i];
       const foot=new T.Group();foot.position.y=-.37;this.knees[i].add(foot);anchors['Foot_'+suffix]=foot;
       if(i)anchors.Hand_R=this.racket;
-      else {const hand=new T.Group();hand.position.y=-.31;this.elbows[i].add(hand);anchors.Hand_L=hand;}
+      else anchors.Hand_L=this.leftHand;
     }
     this.generated=new AthleteSkin(scene,this.torso,anchors);
     this.root.traverse(o=>{if(o.userData.fallbackBody)o.visible=false;});
     this.root.add(scene);this.modelSource='lux3d';
   }
-  private reach(worldTarget:T.Vector3){
+  private armTo(index:number,hand:T.Vector3){
     this.root.updateMatrixWorld(true);
-    const target=this.torso.worldToLocal(worldTarget.clone());
-    const shoulder=this.arms[1].position,delta=target.sub(shoulder),distance=delta.length();
-    const upper=.36,lower=T.MathUtils.clamp(distance+.27,.4,1),reach=T.MathUtils.clamp(distance,Math.abs(lower-upper)+.001,lower+upper-.001);
-    const wristAngle=Math.acos(T.MathUtils.clamp((lower*lower-.31**2-.69**2)/(2*.31*.69),-1,1));
-    this.racket.rotation.z=wristAngle;
-    const lowerAxis=new T.Vector3(.69*Math.sin(wristAngle),-.31-.69*Math.cos(wristAngle),0).normalize();
-    const axis=delta.normalize(),bend=new T.Vector3(-.8,-.25,.5);
-    bend.addScaledVector(axis,-bend.dot(axis));
-    if(bend.lengthSq()<1e-6)bend.set(0,0,1).addScaledVector(axis,-axis.z);
-    bend.normalize();
-    const along=(upper*upper+reach*reach-lower*lower)/(2*reach);
-    const elbow=axis.clone().multiplyScalar(along).addScaledVector(bend,Math.sqrt(Math.max(0,upper*upper-along*along)));
-    this.arms[1].quaternion.setFromUnitVectors(down,elbow.clone().normalize());
-    const forearm=axis.multiplyScalar(reach).sub(elbow).normalize().applyQuaternion(this.arms[1].quaternion.clone().invert());
-    this.elbows[1].quaternion.setFromUnitVectors(lowerAxis,forearm);
+    const arm=this.arms[index],elbow=this.elbows[index],target=this.torso.worldToLocal(hand.clone()).sub(arm.position);
+    const d=T.MathUtils.clamp(target.length(),.051,.669),axis=target.normalize();
+    const pole=new T.Vector3(index?-.7:.7,-1,.35);pole.addScaledVector(axis,-pole.dot(axis)).normalize();
+    const along=(.36**2+d*d-.31**2)/(2*d),height=Math.sqrt(Math.max(0,.36**2-along*along));
+    const upper=axis.clone().multiplyScalar(along).addScaledVector(pole,height);
+    arm.quaternion.setFromUnitVectors(down,upper.clone().normalize());
+    const lower=axis.multiplyScalar(d).sub(upper).normalize().applyQuaternion(arm.quaternion.clone().invert());
+    elbow.quaternion.setFromUnitVectors(down,lower);
+    this.root.updateMatrixWorld(true);
+  }
+  private racketTo(tipLocal:T.Vector3,shaftLocal:T.Vector3,twoHands:boolean){
+    this.root.updateMatrixWorld(true);
+    const tip=this.root.localToWorld(tipLocal.clone()),rootQ=this.root.getWorldQuaternion(new T.Quaternion());
+    const shoulder=this.arms[1].getWorldPosition(new T.Vector3()),axis=tip.clone().sub(shoulder),d=axis.length();axis.normalize();
+    let shaft=shaftLocal.clone().applyQuaternion(rootQ).normalize(),hand=tip.clone().addScaledVector(shaft,-.69);
+    // Choose a wrist on the intersection of arm reach and racket-length spheres.
+    // This keeps the racket head on the ball without folding the wrist backwards.
+    const armReach=T.MathUtils.clamp(hand.distanceTo(shoulder),Math.min(.667,Math.abs(d-.69)+.002),.667);
+    const along=(d*d+armReach*armReach-.69**2)/(2*Math.max(d,.001));
+    const radial=hand.clone().sub(shoulder).addScaledVector(axis,-hand.clone().sub(shoulder).dot(axis));
+    if(radial.lengthSq()<1e-5)radial.set(0,-1,0).addScaledVector(axis,axis.y);
+    radial.normalize();hand=shoulder.clone().addScaledVector(axis,along).addScaledVector(radial,Math.sqrt(Math.max(0,armReach*armReach-along*along)));
+    this.armTo(1,hand);
+    const actualHand=this.racket.getWorldPosition(new T.Vector3());shaft=tip.clone().sub(actualHand).normalize();
+    const y=shaft.clone().negate(),normal=new T.Vector3(0,0,1).applyQuaternion(rootQ);normal.addScaledVector(y,-normal.dot(y)).normalize();
+    const x=y.clone().cross(normal).normalize(),z=x.clone().cross(y).normalize();
+    const q=new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(x,y,z));
+    this.racket.quaternion.copy(this.elbows[1].getWorldQuaternion(new T.Quaternion()).invert().multiply(q));
+    this.root.updateMatrixWorld(true);
+    if(twoHands){
+      this.armTo(0,actualHand.clone().addScaledVector(shaft,.12));
+      this.leftHand.quaternion.copy(this.elbows[0].getWorldQuaternion(new T.Quaternion()).invert().multiply(q));
+    }
   }
   update(p:PlayerState,time:number){
-    this.root.position.set(p.x,0,p.z);
-    const stride=p.moving?Math.sin(time*15):0;
-    for(let i=0;i<2;i++){const phase=i?stride:-stride;this.legs[i].rotation.x=phase*.58-.10;this.knees[i].rotation.x=Math.max(0,-phase)*.8+.12;}
-    this.torso.position.y=p.moving?Math.abs(stride)*.035:Math.sin(time*2)*.008;
-    this.torso.rotation.set(.06,0,0);
-    this.arms[0].rotation.set(-.3-stride*.45,0,-.15);this.elbows[0].rotation.set(-.55,0,0);
-    this.arms[1].rotation.set(-.48+stride*.3,0,.2);this.elbows[1].rotation.set(-.7,0,0);
-    this.racket.rotation.z=0;
-    if(p.swing>0&&p.contact){
-      const t=1-p.swing/.44,sign=side(this.seat),arc=Math.sin(t*Math.PI/2);
-      const target=new T.Vector3(p.contact.x,p.contact.y,p.contact.z);
-      const across=p.stroke==='backhand'?1:-1;
-      if(p.stroke==='serve'){target.y-=arc*1.1;target.z-=sign*arc*.6;this.arms[0].rotation.x=-.3-t*.3;}
-      else {target.x+=across*sign*arc*.75;target.y+=arc*.35;target.z-=sign*arc*.35;this.torso.rotation.y=across*arc*.35;}
-      this.reach(target);
+    this.root.position.set(p.x,0,p.z);this.root.updateMatrixWorld(true);
+    const actual=p.preparation?.contact??p.contact;
+    const contact=actual?this.root.worldToLocal(new T.Vector3(actual.x,actual.y,actual.z)):new T.Vector3(-.85,1.1,.65);
+    const pose=strokePose(p,contact),active=!!p.preparation||p.swing>0;
+    const stride=p.moving?Math.sin(time*12):0,hipDrop=.74*(1-Math.cos(pose.knee/2));
+    for(let i=0;i<2;i++){
+      const phase=i?stride:-stride;
+      this.legs[i].position.y=.85-hipDrop;this.legs[i].rotation.set(phase*.5-pose.knee/2,0,(i?-1:1)*.15);
+      this.knees[i].rotation.x=Math.max(0,-phase)*.65+pose.knee;
+    }
+    this.torso.position.y=-hipDrop+(p.moving?Math.abs(stride)*.02:0);
+    this.torso.rotation.set(.035,pose.turn,0);
+    this.arms[0].rotation.set(-.45-stride*.3,0,-.3);this.elbows[0].rotation.set(-.6,0,0);this.leftHand.quaternion.identity();
+    this.racketTo(pose.tip,pose.shaft,pose.twoHands);
+    if(pose.toss>0){
+      const hand=this.root.localToWorld(new T.Vector3(.22,1.2+pose.toss*.88,.25));this.armTo(0,hand);
+    }else if(active&&!pose.twoHands){
+      const hand=this.root.localToWorld(new T.Vector3(.38,1.15,.36));this.armTo(0,hand);
     }
     if(this.generated){this.root.updateMatrixWorld(true);this.generated.update();}
   }

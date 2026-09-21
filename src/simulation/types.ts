@@ -7,6 +7,9 @@ export type PlayerState = {
   swing: number; stroke: 'forehand' | 'backhand' | 'serve' | 'volley' | 'lob';
   moving: boolean;
   contact?: Vec;
+  backhand?: boolean;
+  preparation?: {stroke:PlayerState['stroke'];progress:number;contact:Vec};
+  shotQueued?: boolean;
 };
 export type BallState = Vec & { vx: number; vy: number; vz: number; bounces: number; hitter: Seat; targetX: number; targetZ: number };
 export type MatchState = {

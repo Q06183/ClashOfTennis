@@ -221,7 +221,7 @@ export class App {
     document.getElementById('stamina-them')!.style.width=`${s.players[them].stamina*100}%`;
     text('connection',this.net?`${this.latency||'—'} ms`:'单人练习');
     text('rally-count',s.rally>1?`${s.rally} 拍回合  /  RALLY`:'FIRST TO 7 · 领先两分');
-    text('match-hint',s.phase==='serve'?(s.server===me?(s.fault?'二发 · 轻一点，滑进对角发球区':'斜向滑动，发进对角发球区'):'对手发球 · 准备接球'):s.phase==='point'?`${s.event} · ${s.lastPoint===me?'你得分':'下一分加油'}`:s.ball.hitter===me?'好球！轻点球场，调整下一拍站位':'来球了，向上滑动回击');
+    text('match-hint',s.phase==='serve'?(s.server===me?(s.fault?'二发 · 轻一点，滑进对角发球区':s.players[me].preparation?.stroke==='serve'?'抛球、举拍，准备发出':'斜向滑动，发进对角发球区'):'对手发球 · 准备接球'):s.phase==='point'?`${s.event} · ${s.lastPoint===me?'你得分':'下一分加油'}`:s.ball.hitter===me?'好球！轻点球场，调整下一拍站位':s.players[me].shotQueued?'已蓄好这一拍，等球弹起击出':'来球了，可以提前向上滑动');
     text('match-subhint',s.phase==='rally'?'快滑更有力 · 长滑更深 · 按住半秒再滑打高吊':'快滑打强球 · 长滑打深球 · 轻点地面跑位');
     const phaseKey=`${s.phase}-${s.eventId}`;
     if(this.lastPhase!==phaseKey){
@@ -254,7 +254,7 @@ export class App {
       for(const seat of [0,1] as Seat[]){
         const p=state.players[seat],d=draw.players[seat];
         const x=d.x+(p.x-d.x)*alpha,z=d.z+(p.z-d.z)*alpha;
-        Object.assign(d,p,{x,z});
+        Object.assign(d,p,{x,z,preparation:p.preparation,shotQueued:p.shotQueued,backhand:p.backhand});
         if(seat===this.seat&&this.predictedMove&&now<this.predictedMove.until&&!this.paused&&this.connected&&state.phase==='rally'){
           const target=this.predictedMove,dx=target.x-d.x,dz=target.z-d.z,dist=Math.hypot(dx,dz);
           if(dist>.1&&Math.hypot(d.x-p.x,d.z-p.z)<.65){const step=Math.min(dist,dt*5);d.x+=dx/dist*step;d.z+=dz/dist*step;}

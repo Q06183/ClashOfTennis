@@ -8,7 +8,7 @@ const clients=[new WebSocket(url),new WebSocket(url)];
 const scores:(number[]|null)[]=[null,null];
 let code='',round=0,done=false,firstScore:number[]|null=null,maxRally=0;
 const started=Date.now();
-const timeout=setTimeout(()=>finish(new Error('Match did not finish within 180 seconds')),180_000);
+const timeout=setTimeout(()=>finish(new Error('Match did not finish within 600 seconds')),600_000);
 function send(seat:Seat,value:unknown){if(clients[seat].readyState===WebSocket.OPEN)clients[seat].send(JSON.stringify(value));}
 async function finish(error?:Error){
   if(done)return;done=true;clearTimeout(timeout);for(const ws of clients)ws.close();

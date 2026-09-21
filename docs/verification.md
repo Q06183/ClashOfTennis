@@ -61,3 +61,16 @@
 - TEST_WS_URL=ws://100.81.1.29:7470/ws 执行完整网络对局：7:4 完赛、双方比分一致、再赛归零，55 秒。客户端仍运行于本机，不能据此判定手机可达。
 - 浏览器实际检查 localhost 建房提示和禁止复制错误链接；Wi-Fi 地址正常建房，HTTP 剪贴板不可用时显示正确邀请文本，允许手动复制。
 - 邀请地址新增 3 项测试，完整回归 38 项通过，生产构建通过。未改动球场、模型或计分规则。
+
+## 2026-09-21 真人反馈后的动作与接球修订
+
+- 用户明确确认两台手机在同一 Wi-Fi 下可以连通并对打；此前的“手机可达性未验证”已由此反馈补足。用户同时指出动作不真实、接球离落点过近；新版手感尚待其复打。
+- 参考 USTA [正手转肩](https://www.usta.com/en/home/improve/tips-and-instruction/national/improve-your-tennis-game--get-your-forehand-flowing.html)、[双手反手](https://www.usta.com/en/home/improve/tips-and-instruction/national/improve-your-tennis-game--the-driving-force-in-your-two-handed-b.html)、[发球](https://www.usta.com/en/home/improve/tips-and-instruction/national/learning-the-basics--serve.html)、[截击](https://www.usta.com/en/home/improve/tips-and-instruction/national/learning-the-basics--volleys.html)及 [Net Generation 教学手册](https://www.usta.com/es/content/dam/usta/sections/southern/pdf/net-generation-high-school-team-tennis-manual.pdf)的动作分解。教学文字已核验，未把网页图片当作已逐帧观看的视频证据。
+- 现有 Lux3D 模型接入独立准备/触球/随挥/恢复关键姿态：正手转肩，反手双手持拍，发球抛球、屈膝、落拍和头顶触球，截击短引拍；握拍朝向与手臂 IK 随实际触球点变化，根位置不瞬移。浏览器独立预览实际检查了正手和反手触球、反手过肩随挥、发球蓄力/背后落拍/头顶触球，以及截击。原模型无手指骨骼，握指、精细步法和重心转换仍有简化，未达到动作捕捉细节。
+- 接球站位预测弹跳后的触球点，预留后方约 0.65m、横向约 0.65–0.8m；底线弹跳球须离落点超过 1.5m，网前不套用此限制。缓存从 1.25s 延长为 2.6s。发球增加 0.8s 抛球阶段，接发仍必须等第一跳。
+- 独立复核发现并修复网前短球被底线距离门槛错误阻拦，以及外部终止后准备姿态残留；新增失败复现后修复，再次复核通过。
+- 完整对局对照发现旧回位指令延迟新来球启动，现按球的每次新飞行清除此旧指令，仍接受当前来球期间的新点按。确定性离线双 AI 对照最长回合由 3 拍提高到 37 拍（它是回归诊断，不能代替真人手感）。
+- 最终 `npm test` 47/47 通过；`npm run build`、`git diff --check` 通过。实际蒙皮准备和随挥帧也纳入边拉伸/包围盒验证。
+- 更新运行中的 7470 服务后，通过 `ws://100.81.1.29:7470/ws` 双独立客户端完成 5:7 比赛，最长连续 23 拍，204 秒，双方比分一致，再赛归零。最新原始结果见 [network-verification.json](network-verification.json)。这是本机客户端经 Wi-Fi 地址的协议测试，不能代替新版真人试玩。
+- 主页面实际可加载并显示人物球场，但本轮最后的内置浏览器交互检查被 CDP 操作超时阻断；不能声称这轮在主游戏完成了手机尺寸滑动实测。独立动作预览检查和自动协议测试不受此限制。
+- 未提交新的 Lux3D 任务，没有新增积分消费。
