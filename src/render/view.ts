@@ -7,6 +7,7 @@ import { clamp, side, type MatchState, type Seat, type Shot, type Vec } from '..
 import { swipeDirection } from '../input/aim.js';
 import { FlightGuide } from './trajectory.js';
 import {disposeTree} from './dispose.js';
+import {shotDepth,SHOT_PROFILES} from '../simulation/shot-profile.js';
 import {frameMatch} from './camera.js';
 export class CourtView {
   readonly renderer:T.WebGLRenderer;
@@ -24,6 +25,7 @@ export class CourtView {
   private disposed=false;
   private mode:'home'|'match'='home';
   private seat:Seat=0;
+  private aimLock=0;
   private focus={x:0,depth:11};
   private stadiumEnds:T.Group[];
   private size={w:0,h:0};
@@ -71,7 +73,7 @@ export class CourtView {
     this.target=new T.Mesh(new T.RingGeometry(.34,.41,40),new T.MeshBasicMaterial({color:0xf6f2b7,transparent:true,opacity:.65,side:T.DoubleSide,depthWrite:false}));this.target.rotation.x=-Math.PI/2;this.scene.add(this.target);
     this.marker=new T.Mesh(new T.RingGeometry(.4,.45,36),new T.MeshBasicMaterial({color:0xdfff84,transparent:true,opacity:.65,side:T.DoubleSide}));this.marker.rotation.x=-Math.PI/2;this.scene.add(this.marker);
     for(let i=0;i<8;i++){
-      const t=new T.Mesh(new T.SphereGeometry(.06*(1-i/10),6,4),new T.MeshBasicMaterial({color:0xf0ff85,transparent:true,opacity:.35*(1-i/8),depthWrite:false}));this.trail.push(t);this.scene.add(t);
+      const t=new T.Mesh(new T.SphereGeometry(.06*(1-i/10),6,4),new T.MeshBasicMaterial({color:0xf0ff85,transparent:true,opacity:.65*(1-i/8),depthWrite:false,toneMapped:false}));this.trail.push(t);this.scene.add(t);
     }
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(container);this.resize();
   }
@@ -88,8 +90,11 @@ export class CourtView {
     }
     this.camera.updateProjectionMatrix();this.camera.updateMatrixWorld();
   }
-  aimShot(shot:Shot,ball:Vec,dx:number,dy:number):Shot{
-    return {...shot,directionX:swipeDirection(this.camera,ball,dx,dy,this.size.w,this.size.h,side(this.seat))};
+  aimShot(shot:Shot,state:MatchState,dx:number,dy:number):Shot{
+    const serve=state.phase==='serve'&&state.server===this.seat;
+    const ball=serve?{...state.ball,y:2.65}:state.ball;
+    if(serve)this.aimLock=.9;
+    return {...shot,directionX:swipeDirection(this.camera,ball,dx,dy,this.size.w,this.size.h,side(this.seat),serve?-side(this.seat)*shotDepth(shot,true):undefined)};
   }
   courtPoint(x:number,y:number){
     const rect=this.container.getBoundingClientRect();
@@ -98,7 +103,8 @@ export class CourtView {
   }
   render(state:MatchState,dt:number,authoritative:MatchState=state){
     if(this.mode==='match'){
-      const p=state.players[this.seat],alpha=1-Math.exp(-Math.min(dt,.08)*7);
+      this.aimLock=Math.max(0,this.aimLock-dt);
+      const p=state.players[this.seat],alpha=this.aimLock>0?0:1-Math.exp(-Math.min(dt,.08)*7);
       this.focus.x+=(p.x-this.focus.x)*alpha;
       this.focus.depth+=(p.z*side(this.seat)-this.focus.depth)*alpha;
       // Limit camera lag after point resets and at the edge of the close view.
@@ -117,7 +123,7 @@ export class CourtView {
     this.target.visible=false;
     this.marker.position.set(state.players[this.seat].tx,.08,state.players[this.seat].tz);
     this.marker.visible=this.mode==='match'&&state.phase==='rally';
-    const trailVisible=state.phase==='rally';for(const t of this.trail){t.visible=trailVisible;(t.material as T.MeshBasicMaterial).color.setHex(b.critical?0xffad35:0xf0ff85);}
+    const trailVisible=state.phase==='rally';for(const t of this.trail){t.visible=trailVisible;(t.material as T.MeshBasicMaterial).color.setHex(SHOT_PROFILES[b.tier??(b.critical?'critical':'normal')].color);}
     this.renderer.render(this.scene,this.camera);
   }
   dispose(){

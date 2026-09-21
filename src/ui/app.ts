@@ -1,3 +1,4 @@
+import {shotTier,SHOT_PROFILES} from '../simulation/shot-profile.js';
 import { Match } from '../simulation/match.js';
 import { driveAI } from '../simulation/ai.js';
 import { other, side, type Input, type MatchState, type RoomView, type Seat, type Shot } from '../simulation/types.js';
@@ -49,7 +50,7 @@ export class App {
       else this.toast('球场画面已恢复');
     });
     this.controls=new Controls(this.view.renderer.domElement,(x,y)=>this.view.courtPoint(x,y),i=>this.input(i),(s,x,y,end)=>this.feedback(s,x,y,end),()=>this.audio.unlock(),
-      (shot,dx,dy)=>this.view.aimShot(shot,(this.drawState??this.remote??this.local.state).ball,dx,dy));
+      (shot,dx,dy)=>this.view.aimShot(shot,(this.drawState??this.remote??this.local.state),dx,dy));
     this.ui.addEventListener('click',e=>{
       const button=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-action]');
       if(button&&!button.disabled){this.audio.unlock();void this.action(button.dataset.action!);}
@@ -83,8 +84,9 @@ export class App {
     if(this.feedbackTimer)clearTimeout(this.feedbackTimer);
     if(!shot){el.style.display='none';return;}
     el.style.display='block';el.style.left=`${Math.max(65,Math.min(innerWidth-65,x))}px`;el.style.top=`${Math.max(160,y-30)}px`;
-    el.classList.toggle('critical',!!shot.critical);
-    el.querySelector('span')!.textContent=shot.critical?'暴击球':shot.lob?'高吊球':shot.power>.7?'强力击球':shot.depth<.28?'短球':'稳稳回球';
+    const tier=shotTier(shot),profile=SHOT_PROFILES[tier];
+    el.dataset.tier=tier;el.style.setProperty('--shot-color',`#${profile.color.toString(16).padStart(6,'0')}`);
+    el.querySelector('span')!.textContent=profile.label;
     (el.querySelector('i') as HTMLElement).style.transform=`scaleX(${Math.max(.1,shot.power)})`;
     if(end)this.feedbackTimer=setTimeout(()=>el.style.display='none',550);
   }
@@ -186,11 +188,11 @@ export class App {
   private playing(){return `<div class="match-top"><button class="icon-button" data-action="quit" aria-label="退出比赛">‹</button><div class="match-label">GARDEN COURT <span class="connection" id="connection"></span></div><button class="icon-button" data-action="mute" aria-label="${this.audio.muted?'开启声音':'关闭声音'}">${this.audio.muted?'♪̸':'♪'}</button></div>
     <div class="scoreboard"><div class="score-player"><div class="score-name" id="name-me"></div><div class="score-value" id="score-me">0</div><div class="stamina"><i id="stamina-me"></i></div></div><div class="score-divider">vs</div><div class="score-player"><div class="score-name" id="name-them"></div><div class="score-value" id="score-them">0</div><div class="stamina"><i id="stamina-them"></i></div></div></div>
     <div class="rally-count" id="rally-count">FIRST TO 7</div><div id="point-slot"></div><div id="reconnect-slot"></div>
-    <div class="match-bottom"><div class="hint"><strong id="match-hint">斜向滑动，发进对角发球区</strong><small id="match-subhint">快滑强力 · 更快滑动暴击 · 点按跑位</small></div><button class="help-button" data-action="help" aria-label="查看操作帮助">?</button></div>`;}
+    <div class="match-bottom"><div class="hint"><strong id="match-hint">斜向滑动，发进对角发球区</strong><small id="match-subhint">绿普通 · 蓝快速 · 橙强力 · 玫红暴击</small></div><button class="help-button" data-action="help" aria-label="查看操作帮助">?</button></div>`;}
   private helpPanel(){return this.panel(`<div class="panel-top"><span>JUST THREE MOVES</span><button class="icon-button" data-action="close-help" aria-label="关闭帮助">×</button></div><h2>好球，从这一拍开始。</h2><p>${this.net?'线上对局仍在进行，请尽快回到球场。':'先记住三个动作，马上就能打出回合。'}</p>
     <div class="tutorial-steps"><div class="tutorial-step"><b>1</b><div><strong>轻点球场，移动到位</strong><span>人物会辅助追球。回球后，点地面选择你的下一个站位。</span></div></div>
-    <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>从屏幕下方向上滑。球从触球点沿滑动方向飞出。发球请斜向对角发球区。滑得越长，打得越深；滑得越快，力量越大；快速甩出一段滑动可打出更快的暴击球。可在来球接近时提前滑动。</span></div></div>
-    <div class="tutorial-step"><b>3</b><div><strong>变换节奏，调动对手</strong><span>短滑放短球；按住约半秒再滑打高吊。靠近球网可截击，接发球必须等球落地。</span></div></div></div>
+    <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>从屏幕下方向上滑。球从触球点沿滑动方向飞出。发球请斜向对角发球区。滑得越长、越快，落点越深，也更容易出界。极快且较长的甩动才会触发暴击，同样距离比强力球更深。可在来球接近时提前滑动。</span></div></div>
+    <div class="tutorial-step"><b>3</b><div><strong>认颜色，控制速度与深度</strong><span>绿：普通；蓝：快速；橙：强力；玫红：暴击；紫：高吊。短滑放短球；按住约半秒再滑打高吊。靠近球网可截击，接发球必须等球落地。</span></div></div></div>
     <button class="primary" data-action="close-help">知道了，上场 →</button><p class="small-note">先到 7 分且领先 2 分获胜 · 发球限时 12 秒</p>`);}
   private result(){
     const s=this.remote??this.local.state,won=s.winner===this.seat;
@@ -223,7 +225,7 @@ export class App {
     text('connection',this.net?`${this.latency||'—'} ms`:'单人练习');
     text('rally-count',s.rally>1?`${s.rally} 拍回合  /  RALLY`:'FIRST TO 7 · 领先两分');
     text('match-hint',s.phase==='serve'?(s.server===me?(s.fault?'二发 · 轻一点，滑进对角发球区':s.players[me].preparation?.stroke==='serve'?'抛球、举拍，准备发出':'斜向滑动，发进对角发球区'):'对手发球 · 准备接球'):s.phase==='point'?`${s.event} · ${s.lastPoint===me?'你得分':'下一分加油'}`:s.ball.hitter===me?(s.ball.critical?'暴击球！准备下一拍':'好球！轻点球场，调整下一拍站位'):s.ball.critical?'对手暴击球！提前滑动准备回击':s.players[me].shotQueued?'已蓄好这一拍，等球弹起击出':'来球了，可以提前向上滑动');
-    text('match-subhint',s.phase==='rally'?'快滑强力 · 迅速甩动暴击 · 长滑更深':'快滑强力 · 更快滑动暴击 · 点按跑位');
+    text('match-subhint',s.phase==='rally'?'越快越深，注意出界 · 极快长甩触发暴击':'绿普通 · 蓝快速 · 橙强力 · 玫红暴击');
     const phaseKey=`${s.phase}-${s.eventId}`;
     if(this.lastPhase!==phaseKey){
       this.lastPhase=phaseKey;document.getElementById('point-slot')!.innerHTML=s.phase==='point'?`<div class="point-banner"><strong>${s.fault?'Second serve':s.lastPoint===me?'Your point':'Good try'}</strong><span>${escape(s.event)}</span></div>`:'';

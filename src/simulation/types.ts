@@ -1,3 +1,4 @@
+export type ShotTier = 'normal'|'fast'|'power'|'critical'|'lob';
 export type Seat = 0 | 1;
 export type Vec = { x: number; y: number; z: number };
 export type Shot = { type: 'shot'; aim: number; depth: number; power: number; lob: boolean; critical?: boolean; directionX?: number };
@@ -12,7 +13,7 @@ export type PlayerState = {
   preparation?: {stroke:PlayerState['stroke'];progress:number;contact:Vec};
   shotQueued?: boolean;
 };
-export type BallState = Vec & { vx: number; vy: number; vz: number; bounces: number; hitter: Seat; targetX: number; targetZ: number; critical?: boolean };
+export type BallState = Vec & { vx: number; vy: number; vz: number; bounces: number; hitter: Seat; targetX: number; targetZ: number; tier?: ShotTier; critical?: boolean };
 export type MatchState = {
   time: number; phase: 'serve' | 'rally' | 'point' | 'over';
   score: [number, number]; players: [PlayerState, PlayerState]; ball: BallState;

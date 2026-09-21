@@ -9,3 +9,5 @@
 .swipe-trail{position:fixed;inset:0;width:100%;height:100%;z-index:15;pointer-events:none;overflow:visible;filter:drop-shadow(0 0 7px #dfff84b3);opacity:0}
 
 #shot-feedback.critical{background:#71391deF;color:#fff2c6;box-shadow:0 0 18px #ffbc4a66}#shot-feedback.critical i{background:#ffbb45}
+
+#shot-feedback[data-tier]{border:1px solid var(--shot-color);color:var(--shot-color)}#shot-feedback[data-tier] i{background:var(--shot-color)}#shot-feedback[data-tier="critical"]{background:#5f1935ef;box-shadow:0 0 18px #ff517966}

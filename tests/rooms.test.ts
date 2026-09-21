@@ -32,6 +32,7 @@ test('real sockets create/join/ready, reject third seat, share state and resume 
     const hit=await b.wait('state',m=>m.state.phase==='rally');
     assert.ok(Math.abs(hit.state.ball.vx)<1e-6,'direction must survive WebSocket input');
     assert.equal(hit.state.ball.critical,true,'critical tier must reach the opponent through the authoritative state');
+    assert.equal(hit.state.ball.tier,'critical','path colour tier must reach the opponent through the authoritative state');
     assert.match(hit.state.event,/暴击/);
     assert.ok(hit.state.players[0].contact,'both clients need the actual animation contact point');
     a.ws.close();await b.wait('room',m=>m.room.paused);

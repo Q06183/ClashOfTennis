@@ -7,11 +7,11 @@ function launch(critical:boolean,total=0,extra:Partial<Shot>={}){
  for(let i=0;i<60&&m.state.rally===0;i++)m.step(1/60);
  const result=structuredClone(m.state);m.dispose();return result;
 }
-test('critical shot is faster than maximum-power strong shot with the same target at both ends',()=>{
+test('critical shot is faster than maximum-power strong shot and goes deeper at both ends',()=>{
  for(const total of [0,1]){
   const normal=launch(false,total),critical=launch(true,total),speed=(s:typeof normal)=>Math.hypot(s.ball.vx,s.ball.vz);
   assert.ok(speed(critical)>speed(normal)*1.08);assert.ok(speed(critical)<speed(normal)*1.2);
-  assert.equal(critical.ball.targetX,normal.ball.targetX);assert.equal(critical.ball.targetZ,normal.ball.targetZ);
+  assert.equal(critical.ball.targetX,normal.ball.targetX);assert.ok(Math.abs(critical.ball.targetZ)>Math.abs(normal.ball.targetZ));
   assert.equal(critical.ball.critical,true);assert.match(critical.event,/暴击/);assert.equal(predictFlight(critical.ball).hitNet,false);
  }
 });
@@ -36,7 +36,7 @@ test('critical rally return beats the strongest ordinary return and ordinary rep
   assert.equal(m.state.rally,3);assert.equal(m.state.ball.critical,false);m.dispose();
  }
  assert.ok(Math.hypot(returns[1].vx,returns[1].vz)>Math.hypot(returns[0].vx,returns[0].vz)*1.08);
- assert.equal(returns[0].targetX,returns[1].targetX);assert.equal(returns[0].targetZ,returns[1].targetZ);
+ assert.equal(returns[0].targetX,returns[1].targetX);assert.ok(Math.abs(returns[1].targetZ)>Math.abs(returns[0].targetZ));
 });
 test('malformed critical flags cannot launch a serve',()=>{
  for(const critical of ['true',1,{},null]){
