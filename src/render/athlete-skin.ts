@@ -2,6 +2,7 @@ import * as T from 'three';
 
 /** Retarget the generated bind pose to the same joints that drive racket contact. */
 export class AthleteSkin {
+  private world=new T.Matrix4();
   private joints:{bone:T.Bone;anchor:T.Object3D;offset:T.Matrix4}[]=[];
   constructor(readonly scene:T.Object3D,torso:T.Object3D,anchors:Record<string,T.Object3D>){
     scene.updateMatrixWorld(true);
@@ -24,7 +25,7 @@ export class AthleteSkin {
   }
   update(){
     for(const {bone,anchor,offset} of this.joints){
-      const world=anchor.matrixWorld.clone().multiply(offset);
+      const world=this.world.copy(anchor.matrixWorld).multiply(offset);
       bone.matrix.copy(bone.parent!.matrixWorld).invert().multiply(world);
       bone.matrixWorld.copy(world);
     }

@@ -27,3 +27,19 @@ test('network guide uses authoritative flight even when rendered position is smo
   const ring=guide.root.children[1];const expected=predictFlight(actual.ball).landing;
   assert.ok(Math.abs(ring.position.z-expected.z)<1e-6);match.dispose();
 });
+
+test('flight guide reuses GPU attributes while updating line segments, dashes and landing',async()=>{
+ const {FlightGuide}=await import('../src/render/trajectory.js');const {Match}=await import('../src/simulation/match.js');
+ const {Line2}=await import('three/addons/lines/Line2.js');await initPhysics();const match=new Match();
+ Object.assign(match.state,{phase:'rally',rally:3});Object.assign(match.state.ball,{x:1,y:2,z:8,vx:-1,vy:4,vz:-13,bounces:0});
+ const guide=new FlightGuide();guide.update(match.state,0,true);const line=guide.root.children[0] as InstanceType<typeof Line2>;
+ const start=line.geometry.attributes.instanceStart,end=line.geometry.attributes.instanceEnd,distance=line.geometry.attributes.instanceDistanceEnd;
+ for(let i=0;i<300;i++){
+  match.state.ball.x=Math.sin(i*.1);guide.update(match.state,0,true);const f=predictFlight(match.state.ball);
+  assert.equal(line.geometry.attributes.instanceStart,start,'position buffer identity must remain stable');assert.equal(line.geometry.attributes.instanceDistanceEnd,distance,'dash buffer identity must remain stable');
+  assert.ok(Math.abs(start.getX(0)-f.points[0].x)<1e-5);assert.ok(Math.abs(end.getZ(39)-f.landing.z)<1e-5);
+  let length=0;for(let j=1;j<f.points.length;j++)length+=Math.hypot(f.points[j].x-f.points[j-1].x,f.points[j].y-f.points[j-1].y,f.points[j].z-f.points[j-1].z);
+  assert.ok(Math.abs(distance.getX(39)-length)<1e-4);
+ }
+ match.dispose();
+});

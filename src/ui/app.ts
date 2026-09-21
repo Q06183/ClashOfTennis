@@ -71,6 +71,9 @@ export class App {
     if(invite&&/^\d{6}$/.test(invite)){this.code=invite;this.screen='join';}
     this.renderScreen();
     document.querySelector('#boot')?.classList.add('hide');
+    document.addEventListener('visibilitychange',()=>{
+      this.lastFrame=performance.now();this.accumulator=0;this.view.recordFrame(0,false);
+    });
     requestAnimationFrame(this.frame);
     // Refresh recovery is bound to this tab's previous seat, never the invite link.
     const stored=sessionStorage.getItem('rally-seat');
@@ -212,7 +215,7 @@ export class App {
     <div class="tutorial-steps"><div class="tutorial-step"><b>1</b><div><strong>轻点球场，移动到位</strong><span>人物会辅助追球。回球后，点地面选择你的下一个站位。</span></div></div>
     <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>从屏幕下方向上滑。球从触球点沿滑动方向飞出。发球请斜向对角发球区。滑得越长、越快，落点越深，也更容易出界。极快且较长的甩动才会触发暴击，同样距离比强力球更深。可在来球接近时提前滑动。</span></div></div>
     <div class="tutorial-step"><b>3</b><div><strong>认颜色，控制速度与深度</strong><span>绿：普通；蓝：快速；橙：强力；玫红：暴击；紫：高吊。短滑放短球；按住约半秒再滑打高吊。靠近球网可截击，接发球必须等球落地。</span></div></div></div>
-    <button class="primary" data-action="close-help">知道了，上场 →</button><p class="small-note">先到 7 分且领先 2 分获胜 · 发球限时 12 秒</p>`);}
+    <p id="performance-stats" class="small-note"></p><button class="primary" data-action="close-help">知道了，上场 →</button><p class="small-note">先到 7 分且领先 2 分获胜 · 发球限时 12 秒</p>`);}
   private result(){
     const s=this.remote??this.local.state,won=s.winner===this.seat;
     const me=this.room?.seats[this.seat]?.name??this.name,them=this.room?.seats[other(this.seat)]?.name??'练习搭档';
@@ -242,6 +245,7 @@ export class App {
     text('score-me',String(s.score[me]));text('score-them',String(s.score[them]));
     document.getElementById('stamina-me')!.style.width=`${s.players[me].stamina*100}%`;
     document.getElementById('stamina-them')!.style.width=`${s.players[them].stamina*100}%`;
+    text('performance-stats',`画面 ${this.view.fps||'测量中'} FPS · 自动${this.view.qualityLabel}${this.net?` · 网络 ${this.latency||'—'} ms`:''}`);
     text('connection',this.net?`${this.latency||'—'} ms`:'单人练习');
     text('rally-count',s.rally>1?`${s.rally} 拍回合  /  RALLY`:'FIRST TO 7 · 领先两分');
     text('match-hint',s.phase==='serve'?(s.server===me?(s.fault?'二发 · 轻一点，滑进对角发球区':s.players[me].preparation?.stroke==='serve'?'抛球、举拍，准备发出':'斜向滑动，发进对角发球区'):'对手发球 · 准备接球'):s.phase==='point'?`${s.event} · ${s.lastPoint===me?'你得分':'下一分加油'}`:s.ball.hitter===me?(s.ball.critical?'暴击球！准备下一拍':'好球！轻点球场，调整下一拍站位'):s.ball.critical?'对手暴击球！提前滑动准备回击':s.players[me].shotQueued?'已蓄好这一拍，等球弹起击出':'来球了，可以提前向上滑动');
@@ -255,7 +259,8 @@ export class App {
     if(reconnect.textContent!==warning)reconnect.innerHTML=warning?`<div class="reconnect-banner">${warning}</div>`:'';
   }
   private frame=(now:number)=>{
-    const dt=Math.min((now-this.lastFrame)/1000,.08);this.lastFrame=now;
+    const frameMs=now-this.lastFrame,dt=Math.min(frameMs/1000,.08);this.lastFrame=now;
+    this.view.recordFrame(frameMs,!document.hidden);
     const active=this.screen==='playing'||this.screen==='result';
     if(!this.net){
       const training=this.screen==='playing';

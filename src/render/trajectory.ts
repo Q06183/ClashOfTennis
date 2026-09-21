@@ -8,14 +8,16 @@ import {COURT,isInServiceBox} from '../simulation/rules.js';
 import type {MatchState,Seat} from '../simulation/types.js';
 export class FlightGuide {
   readonly root=new T.Group();
-  private positions=new Float32Array(41*3);
   private line:Line2;
   private ring:T.Mesh;
   private dot:T.Mesh;
   constructor(){
-    const geometry=new LineGeometry();geometry.setPositions(this.positions);
+    const geometry=new LineGeometry();geometry.setPositions(new Float32Array(41*3));
     this.line=new Line2(geometry,new LineMaterial({color:0xf2ffa5,linewidth:3,dashed:true,dashSize:.26,gapSize:.17,transparent:true,opacity:.95,depthWrite:false,toneMapped:false}));
     this.line.frustumCulled=false;
+    this.line.computeLineDistances();
+    for(const name of ['instanceStart','instanceDistanceStart'])
+      (geometry.attributes[name] as T.InterleavedBufferAttribute).data.setUsage(T.DynamicDrawUsage);
     this.ring=new T.Mesh(new T.RingGeometry(.35,.41,48),new T.MeshBasicMaterial({color:0xf2ffa5,transparent:true,opacity:1,depthWrite:false,toneMapped:false,side:T.DoubleSide}));
     this.ring.rotation.x=-Math.PI/2;
     this.dot=new T.Mesh(new T.CircleGeometry(.09,16),new T.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.8,depthWrite:false}));this.dot.rotation.x=-Math.PI/2;
@@ -30,8 +32,20 @@ export class FlightGuide {
     const color=SHOT_PROFILES[state.ball.tier??(state.ball.critical?'critical':'normal')].color;
     this.line.material.color.setHex(color);
     (this.ring.material as T.MeshBasicMaterial).color.setHex(out?0xff453a:color);
-    for(let i=0;i<f.points.length;i++){const p=f.points[i];this.positions.set([p.x,p.y,p.z],i*3);}
-    this.line.geometry.setPositions(this.positions);this.line.computeLineDistances();
+    // Reuse the two GPU buffers. setPositions/computeLineDistances replace
+    // attributes and otherwise allocate new WebGL buffers every visible frame.
+    const geometry=this.line.geometry;
+    const start=geometry.attributes.instanceStart as T.InterleavedBufferAttribute;
+    const end=geometry.attributes.instanceEnd as T.InterleavedBufferAttribute;
+    const d0=geometry.attributes.instanceDistanceStart as T.InterleavedBufferAttribute;
+    const d1=geometry.attributes.instanceDistanceEnd as T.InterleavedBufferAttribute;
+    let distance=0;
+    for(let i=0;i<f.points.length-1;i++){
+      const a=f.points[i],b=f.points[i+1];start.setXYZ(i,a.x,a.y,a.z);end.setXYZ(i,b.x,b.y,b.z);
+      d0.setX(i,distance);distance+=Math.hypot(b.x-a.x,b.y-a.y,b.z-a.z);d1.setX(i,distance);
+    }
+    start.data.needsUpdate=true;d0.data.needsUpdate=true;
+    geometry.computeBoundingBox();geometry.computeBoundingSphere();
     this.ring.position.set(f.landing.x,.08,f.landing.z);this.dot.position.set(f.landing.x,.085,f.landing.z);
     this.ring.scale.setScalar(1+Math.sin(state.time*7)*.08);
   }

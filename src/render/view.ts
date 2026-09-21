@@ -10,6 +10,7 @@ import { FlightGuide } from './trajectory.js';
 import {disposeTree} from './dispose.js';
 import {shotDepth,SHOT_PROFILES} from '../simulation/shot-profile.js';
 import {frameMatch} from './camera.js';
+import {FrameQuality,QUALITY,type QualityLevel} from './quality.js';
 export class CourtView {
   readonly renderer:T.WebGLRenderer;
   readonly camera=new T.PerspectiveCamera(43,1,.1,130);
@@ -34,9 +35,14 @@ export class CourtView {
   private stadiumEnds:T.Group[];
   private size={w:0,h:0};
   private resizeObserver:ResizeObserver;
+  private quality=new FrameQuality(matchMedia('(pointer: coarse)').matches);
+  private sun=new T.DirectionalLight(0xffe3b0,3.5);
+  private contactShadows:T.Mesh[]=[];
+  get fps(){return this.quality.fps;}
+  get qualityLabel(){return QUALITY[this.quality.level].label;}
   constructor(private container:HTMLElement,onContext:(lost:boolean)=>void){
     this.renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio,QUALITY[this.quality.level].maxDpr));
     this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=T.PCFShadowMap;
     this.renderer.outputColorSpace=T.SRGBColorSpace;this.renderer.toneMapping=T.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.05;
     const canvas=this.renderer.domElement;canvas.setAttribute('aria-label','3D 网球场，点按跑位，向上滑动击球');container.append(canvas);
@@ -44,10 +50,14 @@ export class CourtView {
     canvas.addEventListener('webglcontextrestored',()=>onContext(false));
     this.scene.background=new T.Color(0xb8d1c2);this.scene.fog=new T.Fog(0xb8d1c2,48,100);
     this.scene.add(new T.HemisphereLight(0xfff8df,0x405e64,1.8));
-    const sun=new T.DirectionalLight(0xffe3b0,3.5);sun.position.set(-10,24,8);sun.castShadow=true;
-    sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-16;sun.shadow.camera.right=16;sun.shadow.camera.top=18;sun.shadow.camera.bottom=-18;sun.shadow.bias=-.001;
+    const sun=this.sun;sun.position.set(-10,24,8);sun.castShadow=true;
+    sun.shadow.mapSize.setScalar(QUALITY[this.quality.level].shadowSize);sun.shadow.camera.left=-16;sun.shadow.camera.right=16;sun.shadow.camera.top=18;sun.shadow.camera.bottom=-18;sun.shadow.bias=-.001;
     this.scene.add(sun,this.flight.root);this.stadiumEnds=makeCourt(this.scene);
     for(const a of this.athletes)this.scene.add(a.root);
+    for(let i=0;i<2;i++){
+      const shadow=new T.Mesh(new T.CircleGeometry(.38,20),new T.MeshBasicMaterial({color:0x17352c,transparent:true,opacity:.2,depthWrite:false}));
+      shadow.rotation.x=-Math.PI/2;shadow.visible=false;this.scene.add(shadow);this.contactShadows.push(shadow);
+    }
     this.ball=new T.Mesh(new T.SphereGeometry(.075,14,10),new T.MeshStandardMaterial({color:0xe4ff3a,emissive:0x717a03,emissiveIntensity:.35,roughness:.7}));this.ball.castShadow=true;this.scene.add(this.ball);
     this.shadow=new T.Mesh(new T.CircleGeometry(.24,20),new T.MeshBasicMaterial({color:0x132f29,transparent:true,opacity:.38,depthWrite:false}));this.shadow.rotation.x=-Math.PI/2;this.scene.add(this.shadow);
     this.target=new T.Mesh(new T.RingGeometry(.34,.41,40),new T.MeshBasicMaterial({color:0xf6f2b7,transparent:true,opacity:.65,side:T.DoubleSide,depthWrite:false}));this.target.rotation.x=-Math.PI/2;this.scene.add(this.target);
@@ -56,6 +66,22 @@ export class CourtView {
       const t=new T.Mesh(new T.SphereGeometry(.06*(1-i/10),6,4),new T.MeshBasicMaterial({color:0xf0ff85,transparent:true,opacity:.65*(1-i/8),depthWrite:false,toneMapped:false}));this.trail.push(t);this.scene.add(t);
     }
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(container);this.resize();
+    canvas.dataset.quality=this.quality.level;
+  }
+  configureQuality(level:QualityLevel){
+    this.quality.level=level;const profile=QUALITY[level];
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio,profile.maxDpr));
+    const shadowsChanged=this.renderer.shadowMap.enabled!==(profile.shadowSize>0);
+    this.renderer.shadowMap.enabled=profile.shadowSize>0;
+    this.sun.shadow.map?.dispose();this.sun.shadow.map=null;
+    this.sun.shadow.mapSize.setScalar(Math.max(1,profile.shadowSize));
+    if(shadowsChanged)this.scene.traverse(o=>{
+      if(o instanceof T.Mesh)for(const material of Array.isArray(o.material)?o.material:[o.material])material.needsUpdate=true;
+    });
+    this.renderer.domElement.dataset.quality=level;this.resize();
+  }
+  recordFrame(ms:number,visible:boolean){
+    const changed=this.quality.sample(ms,visible);if(changed)this.configureQuality(changed);
   }
   private setCharacter(seat:Seat,id?:string){
     const character=getCharacter(id);if(this.characterIds[seat]===character.id)return;
@@ -103,7 +129,10 @@ export class CourtView {
       this.focus.depth=clamp(this.focus.depth,p.z*side(this.seat)-.6,p.z*side(this.seat)+.6);
       frameMatch(this.camera,this.size.w,this.size.h,this.seat,this.focus.x,this.focus.depth);
     }
-    for(const seat of [0,1] as Seat[]){this.setCharacter(seat,state.players[seat].characterId);this.athletes[seat].update(state.players[seat],state.time,dt);}
+    for(const seat of [0,1] as Seat[]){
+      const p=state.players[seat];this.setCharacter(seat,p.characterId);this.athletes[seat].update(p,state.time,dt);
+      this.contactShadows[seat].position.set(p.x,.065,p.z);this.contactShadows[seat].visible=this.quality.level==='low';
+    }
     const b=state.ball;
     this.flight.update(state,this.seat,this.mode==='match',authoritative);
     for(let i=this.trail.length-1;i>0;i--)this.trail[i].position.copy(this.trail[i-1].position);
