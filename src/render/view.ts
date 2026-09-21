@@ -66,12 +66,12 @@ export class CourtView {
       }
       canvas.dataset.athleteSource='lux3d';
     },undefined,()=>{canvas.dataset.athleteSource='fallback';});
-    this.ball=new T.Mesh(new T.SphereGeometry(.14,14,10),new T.MeshStandardMaterial({color:0xe4ff3a,emissive:0x717a03,emissiveIntensity:.35,roughness:.7}));this.ball.castShadow=true;this.scene.add(this.ball);
+    this.ball=new T.Mesh(new T.SphereGeometry(.075,14,10),new T.MeshStandardMaterial({color:0xe4ff3a,emissive:0x717a03,emissiveIntensity:.35,roughness:.7}));this.ball.castShadow=true;this.scene.add(this.ball);
     this.shadow=new T.Mesh(new T.CircleGeometry(.24,20),new T.MeshBasicMaterial({color:0x132f29,transparent:true,opacity:.38,depthWrite:false}));this.shadow.rotation.x=-Math.PI/2;this.scene.add(this.shadow);
     this.target=new T.Mesh(new T.RingGeometry(.34,.41,40),new T.MeshBasicMaterial({color:0xf6f2b7,transparent:true,opacity:.65,side:T.DoubleSide,depthWrite:false}));this.target.rotation.x=-Math.PI/2;this.scene.add(this.target);
     this.marker=new T.Mesh(new T.RingGeometry(.4,.45,36),new T.MeshBasicMaterial({color:0xdfff84,transparent:true,opacity:.65,side:T.DoubleSide}));this.marker.rotation.x=-Math.PI/2;this.scene.add(this.marker);
     for(let i=0;i<8;i++){
-      const t=new T.Mesh(new T.SphereGeometry(.105*(1-i/10),6,4),new T.MeshBasicMaterial({color:0xf0ff85,transparent:true,opacity:.35*(1-i/8),depthWrite:false}));this.trail.push(t);this.scene.add(t);
+      const t=new T.Mesh(new T.SphereGeometry(.06*(1-i/10),6,4),new T.MeshBasicMaterial({color:0xf0ff85,transparent:true,opacity:.35*(1-i/8),depthWrite:false}));this.trail.push(t);this.scene.add(t);
     }
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(container);this.resize();
   }

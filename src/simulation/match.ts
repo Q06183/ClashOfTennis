@@ -1,5 +1,6 @@
 import { BallPhysics } from './physics.js';
 import {reception} from './reception.js';
+import {canReachContact} from './athlete.js';
 import {movePlayer} from './movement.js';
 import { COURT, isInCourt, isInServiceBox, serverForPoint, winnerForScore } from './rules.js';
 import { clamp, other, side, type Input, type MatchState, type PlayerState, type Seat, type Shot } from './types.js';
@@ -182,7 +183,7 @@ export class Match {
          (!this.serviceFlight||b.bounces>0)&&
          (Math.abs(p.z)<6||b.bounces>0)&&
          (Math.abs(p.z)<6||!this.bouncePoint||b.y>.48&&Math.hypot(b.x-this.bouncePoint.x,b.z-this.bouncePoint.z)>1.5)&&
-         Math.hypot(b.x-(p.x+.31*ownSide),b.y-1.39,b.z-(p.z-.08*ownSide))<1.28) {
+         canReachContact(-(b.x-p.x)*ownSide,b.y,-(b.z-p.z)*ownSide,(b.x-p.x)*ownSide<0)) {
         this.hit(seat,pending.shot);break;
       }
     }
