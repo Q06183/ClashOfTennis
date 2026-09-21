@@ -6,13 +6,14 @@ import {canReachContact} from './athlete.js';
 import {RESCUE,rescueTarget,moveRescue,canReachRescue} from './rescue.js';
 import {movePlayer} from './movement.js';
 import { COURT, isInCourt, isInServiceBox, serverForPoint, winnerForScore } from './rules.js';
-import { clamp, other, side, type Input, type MatchState, type PlayerState, type Seat, type Shot } from './types.js';
+import { clamp, other, side, type BallState, type Input, type MatchState, type PlayerState, type Seat, type Shot } from './types.js';
 
 const player = (seat: Seat, characterId: string): PlayerState => ({characterId:getCharacter(characterId).id,x:0,z:side(seat)*10,tx:0,tz:side(seat)*10,stamina:1,swing:0,stroke:'forehand',moving:false});
 export class Match {
   readonly physics = new BallPhysics();
   readonly state: MatchState;
-  private pending: [{shot:Shot;until:number}|null,{shot:Shot;until:number}|null] = [null,null];
+  private pending: [{shot:Shot;flight:number}|null,{shot:Shot;flight:number}|null] = [null,null];
+  private recentContact:{at:number;flight:number;seat:Seat;ball:BallState}|null=null;
   private rescueAttempt=[-1,-1];
   private manualUntil = [0,0];
   private serveElapsed = 0;
@@ -30,13 +31,13 @@ export class Match {
   }
   private announce(event: string) { this.state.event=event; this.state.eventId++; }
   private clearPreparation() {
-    this.pending=[null,null];this.serveMotion=null;
+    this.pending=[null,null];this.serveMotion=null;this.recentContact=null;
     for(const p of this.state.players)p.rescue=undefined;
     for(const p of this.state.players){p.preparation=undefined;p.shotQueued=false;}
   }
   private resetPoint() {
     const s=this.state, total=s.score[0]+s.score[1];
-    this.rescueAttempt=[-1,-1];for(const p of s.players)p.rescue=undefined;
+    this.recentContact=null;this.rescueAttempt=[-1,-1];for(const p of s.players)p.rescue=undefined;
     s.phase='serve'; s.server=serverForPoint(total); s.rally=0; s.pointTimer=0;
     this.pending=[null,null]; this.manualUntil=[0,0]; this.serveElapsed=0; this.serviceFlight=false;this.impact=null;this.serveMotion=null;this.bouncePoint=null;
     const serveSide=side(s.server)*(total%2===0?1:-1);
@@ -66,7 +67,24 @@ export class Match {
     if(cmd.directionX!==undefined)shot.directionX=clamp(cmd.directionX,-4,4);
     if(s.phase==='serve') { if(seat===s.server&&!this.serveMotion){this.serveMotion={shot,elapsed:0};p.stroke='serve';p.preparation={stroke:'serve',progress:0,contact:{x:p.x,y:2.65,z:p.z-.25*side(seat)}};} return; }
     if(s.ball.hitter===seat) return;
-    this.pending[seat]={shot,until:s.time+2.6};p.shotQueued=true;
+    this.pending[seat]={shot,flight:s.rally};p.shotQueued=true;
+    const recent=this.recentContact;
+    // Cover the presentation buffer and small delivery jitter without undoing
+    // a bounce/point or extending physical racket reach at the current position.
+    if(recent&&recent.seat===seat&&recent.flight===s.rally&&s.time-recent.at<=.16&&
+       recent.ball.bounces===s.ball.bounces&&!p.rescue&&this.returnLegal(seat,recent.ball)&&this.returnReachable(seat,recent.ball)){
+      Object.assign(s.ball,recent.ball);this.hit(seat,shot);
+    }
+  }
+  private returnLegal(seat:Seat,b:BallState=this.state.ball){
+    const p=this.state.players[seat];
+    return this.state.phase==='rally'&&seat===other(b.hitter)&&this.sinceHit>.06&&
+      !p.rescue?.hit&&b.z*side(seat)>.35&&b.y>.25&&b.y<3.1&&
+      (!this.serviceFlight||b.bounces>0)&&(Math.abs(p.z)<6||b.bounces>0);
+  }
+  private returnReachable(seat:Seat,b:BallState=this.state.ball){
+    const p=this.state.players[seat],sign=side(seat);
+    return p.rescue?canReachRescue(b,p,seat,this.state.time):canReachContact(-(b.x-p.x)*sign,b.y,-(b.z-p.z)*sign,(b.x-p.x)*sign<0);
   }
   private hit(seat: Seat, shot: Shot, serve=false) {
     const s=this.state,p=s.players[seat],b=s.ball,sign=side(seat);
@@ -82,7 +100,7 @@ export class Match {
     } else if(stretch>.65) {
       targetX+=Math.sign(targetX||1)*stretch*.25;
     }
-    const start={x:b.x,y:serve?2.65:Math.max(.42,b.y),z:b.z};
+    const start={x:b.x,y:serve?2.65:b.y,z:b.z};
     if(shot.directionX!==undefined)targetX=start.x+shot.directionX*Math.abs(targetZ-start.z)*sign;
     if(rescue){targetX+=(this.random()*2-1)*1.6;targetZ+=(this.random()*2-1)*1.8;}
     const distance=Math.hypot(targetX-start.x,targetZ-start.z);
@@ -109,7 +127,7 @@ export class Match {
     p.preparation=undefined;p.shotQueued=false;
     p.contact={...start};if(rescue&&p.rescue){p.rescue.hit=true;p.rescue.contact={...start};}
     p.stamina=clamp(p.stamina-(.022+.028*power)*effects.drain*strokeSpeed,0,1);
-    this.sinceHit=0;this.serviceFlight=serve;this.pending[seat]=null;this.impact=null;this.bouncePoint=null;
+    this.recentContact=null;this.sinceHit=0;this.serviceFlight=serve;this.pending[seat]=null;this.impact=null;this.bouncePoint=null;
     // A recovery tap belongs to the previous flight. Fresh incoming-ball taps
     // can still override assistance, but a stale one must not delay the split step.
     this.manualUntil[other(seat)]=0;
@@ -192,15 +210,12 @@ export class Match {
       if(!moveRescue(p,s.time,dt))movePlayer(p,seat,dt);
       const endurance=characterEffects(p.characterId);
       p.stamina=clamp(p.stamina-(p.moving?.013*endurance.drain:-.006*endurance.recovery)*dt,0,1);
+      const legal=this.returnLegal(seat),reachable=legal&&this.returnReachable(seat);
+      if(reachable&&!p.rescue)this.recentContact={at:s.time,flight:s.rally,seat,ball:{...b}};
       const pending=this.pending[seat];
-      if(pending&&pending.until<s.time){this.pending[seat]=null;p.shotQueued=false;}
-      if(pending&&pending.until>=s.time&&!p.rescue?.hit&&seat===receiver&&this.sinceHit>.06&&b.z*ownSide>.35&&b.y>.25&&b.y<3.1&&
-         (!this.serviceFlight||b.bounces>0)&&
-         (Math.abs(p.z)<6||b.bounces>0)&&
-         (Math.abs(p.z)<6||!this.bouncePoint||b.y>.48&&Math.hypot(b.x-this.bouncePoint.x,b.z-this.bouncePoint.z)>1.5)) {
-        if(p.rescue?canReachRescue(b,p,seat,s.time):canReachContact(-(b.x-p.x)*ownSide,b.y,-(b.z-p.z)*ownSide,(b.x-p.x)*ownSide<0)){
-          this.hit(seat,pending.shot);break;
-        }
+      if(pending&&pending.flight!==s.rally){this.pending[seat]=null;p.shotQueued=false;}
+      if(pending&&pending.flight===s.rally&&legal){
+        if(reachable){this.hit(seat,pending.shot);break;}
         if(!p.rescue&&this.rescueAttempt[seat]!==s.rally){
           const target=rescueTarget(b,p,seat);
           if(target){

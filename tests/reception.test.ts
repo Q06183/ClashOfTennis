@@ -17,7 +17,7 @@ test('an early return gesture survives the full incoming flight and strikes afte
  const m=new Match();m.input(0,{...shot,lob:true});for(let i=0;i<60&&m.state.phase==='serve';i++)m.step(1/60);
  m.input(1,shot);let bounce:{x:number;z:number}|undefined;let elapsed=0;
  for(let i=0;i<220&&m.state.rally===1&&m.state.phase==='rally';i++){m.step(1/60);elapsed+=1/60;if(m.state.ball.bounces===1&&!bounce)bounce={...m.state.ball};}
- assert.equal(m.state.rally,2);assert.ok(elapsed>1.25);assert.ok(bounce);const c=m.state.players[1].contact!;assert.ok(Math.hypot(c.x-bounce.x,c.z-bounce.z)>1.3);m.dispose();
+ assert.equal(m.state.rally,2);assert.ok(elapsed>1.25);assert.ok(bounce);const c=m.state.players[1].contact!;assert.ok(c.y>.25,'contact occurs above ground after the legal first bounce');m.dispose();
 });
 test('a short bounced ball at the net can be taken before travelling 1.5 metres',()=>{
  const m=new Match();m.input(0,shot);for(let i=0;i<220&&m.state.rally<2;i++){driveAI(m,1);m.step(1/60);}assert.equal(m.state.rally,2);
