@@ -34,3 +34,9 @@ test('bounce, point reset, reconnect and rematch do not blend incompatible state
 test('playback diagnostics report snapshot rate, jitter and actual packet silence',()=>{
  const p=new SnapshotPlayback();for(let i=0;i<20;i++)p.push(state(i*.05),100+i*50);assert.deepEqual(p.stats(1100),{hz:20,jitterMs:0,gapMs:50});p.reset();assert.deepEqual(p.stats(2000),{hz:0,jitterMs:0,gapMs:0});
 });
+test('serialized snapshots clear completed rescue motion instead of retaining a stale pose',()=>{
+ const playback=new SnapshotPlayback(),a=state(1),b=state(1.8);
+ a.players[0].rescue={startedAt:1,fromX:0,fromZ:10,toX:1.5,toZ:10,contact:{x:2,y:1,z:10},hit:true};
+ playback.push(JSON.parse(JSON.stringify(a)),1000);assert.ok(playback.sample(1000)!.players[0].rescue);
+ playback.push(JSON.parse(JSON.stringify(b)),1800);assert.equal(playback.sample(1900)!.players[0].rescue,undefined);
+});

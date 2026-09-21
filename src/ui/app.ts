@@ -216,7 +216,7 @@ export class App {
   private helpPanel(){return this.panel(`<div class="panel-top"><span>JUST THREE MOVES</span><button class="icon-button" data-action="close-help" aria-label="关闭帮助">×</button></div><h2>好球，从这一拍开始。</h2><p>${this.net?'线上对局仍在进行，请尽快回到球场。':'先记住三个动作，马上就能打出回合。'}</p>
     <div class="tutorial-steps"><div class="tutorial-step"><b>1</b><div><strong>轻点球场，移动到位</strong><span>人物会辅助追球。回球后，点地面选择你的下一个站位。</span></div></div>
     <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>从屏幕下方向上滑。球从触球点沿滑动方向飞出。发球请斜向对角发球区。滑得越长、越快，落点越深，也更容易出界。极快且较长的甩动才会触发暴击，同样距离比强力球更深。可在来球接近时提前滑动。</span></div></div>
-    <div class="tutorial-step"><b>3</b><div><strong>认颜色，控制速度与深度</strong><span>绿：普通；蓝：快速；橙：强力；玫红：暴击；紫：高吊。短滑放短球；按住约半秒再滑打高吊。靠近球网可截击，接发球必须等球落地。</span></div></div></div>
+    <div class="tutorial-step"><b>3</b><div><strong>认颜色，控制速度与深度</strong><span>绿：普通；蓝：快速；橙：强力；玫红：暴击；紫：高吊。短滑放短球；按住约半秒再滑打高吊。靠近球网可截击，接发球必须等球落地。已滑动却差一点够不到时，有35%概率跳步救球；救回的球明显变慢，落点会随机偏移，也可能出界。</span></div></div></div>
     <p id="performance-stats" class="small-note"></p><p id="performance-sync" class="small-note"></p><button class="primary" data-action="close-help">知道了，上场 →</button><p class="small-note">先到 7 分且领先 2 分获胜 · 发球限时 12 秒</p>`);}
   private result(){
     const s=this.remote??this.local.state,won=s.winner===this.seat;
@@ -252,7 +252,7 @@ export class App {
     text('performance-stats',`画面 ${this.view.fps||'测量中'} FPS · 自动${this.view.qualityLabel}${this.net?` · 网络 ${this.latency||'—'} ms`:''}`);
     text('connection',this.net?`${this.latency||'—'} ms`:'单人练习');
     text('rally-count',s.rally>1?`${s.rally} 拍回合  /  RALLY`:'FIRST TO 7 · 领先两分');
-    text('match-hint',s.phase==='serve'?(s.server===me?(s.fault?'二发 · 轻一点，滑进对角发球区':s.players[me].preparation?.stroke==='serve'?'抛球、举拍，准备发出':'斜向滑动，发进对角发球区'):'对手发球 · 准备接球'):s.phase==='point'?`${s.event} · ${s.lastPoint===me?'你得分':'下一分加油'}`:s.ball.hitter===me?(s.ball.critical?'暴击球！准备下一拍':'好球！轻点球场，调整下一拍站位'):s.ball.critical?'对手暴击球！提前滑动准备回击':s.players[me].shotQueued?'已蓄好这一拍，等球弹起击出':'来球了，可以提前向上滑动');
+    text('match-hint',s.phase==='serve'?(s.server===me?(s.fault?'二发 · 轻一点，滑进对角发球区':s.players[me].preparation?.stroke==='serve'?'抛球、举拍，准备发出':'斜向滑动，发进对角发球区'):'对手发球 · 准备接球'):s.phase==='point'?`${s.event} · ${s.lastPoint===me?'你得分':'下一分加油'}`:s.ball.rescue?(s.ball.hitter===me?'极限救球！回球变慢，尽快恢复站位':'对手极限救球 · 注意偏移后的落点'):s.players[me].rescue?'跳步救球中…':s.ball.hitter===me?(s.ball.critical?'暴击球！准备下一拍':'好球！轻点球场，调整下一拍站位'):s.ball.critical?'对手暴击球！提前滑动准备回击':s.players[me].shotQueued?'已蓄好这一拍，等球弹起击出':'来球了，可以提前向上滑动');
     text('match-subhint',s.phase==='rally'?'越快越深，注意出界 · 极快长甩触发暴击':'绿普通 · 蓝快速 · 橙强力 · 玫红暴击');
     const phaseKey=`${s.phase}-${s.eventId}`;
     if(this.lastPhase!==phaseKey){

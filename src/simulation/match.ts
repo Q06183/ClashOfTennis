@@ -3,6 +3,7 @@ import { BallPhysics } from './physics.js';
 import {shotDepth,shotTier,SHOT_PROFILES} from './shot-profile.js';
 import {reception} from './reception.js';
 import {canReachContact} from './athlete.js';
+import {RESCUE,rescueTarget,moveRescue,canReachRescue} from './rescue.js';
 import {movePlayer} from './movement.js';
 import { COURT, isInCourt, isInServiceBox, serverForPoint, winnerForScore } from './rules.js';
 import { clamp, other, side, type Input, type MatchState, type PlayerState, type Seat, type Shot } from './types.js';
@@ -12,6 +13,7 @@ export class Match {
   readonly physics = new BallPhysics();
   readonly state: MatchState;
   private pending: [{shot:Shot;until:number}|null,{shot:Shot;until:number}|null] = [null,null];
+  private rescueAttempt=[-1,-1];
   private manualUntil = [0,0];
   private serveElapsed = 0;
   private serveMotion:{shot:Shot;elapsed:number}|null=null;
@@ -20,7 +22,7 @@ export class Match {
   private serviceFlight = false;
   private faultReset = false;
   private impact: {x:number;z:number}|null = null;
-  constructor(characters:readonly [string,string]=['lin','lin']) {
+  constructor(characters:readonly [string,string]=['lin','lin'],private random:()=>number=Math.random) {
     this.state = {time:0,phase:'serve',score:[0,0],players:[player(0,characters[0]),player(1,characters[1])],
       ball:{x:0,y:2.5,z:11.8,vx:0,vy:0,vz:0,bounces:0,hitter:0,targetX:0,targetZ:-5},
       server:0,fault:0,pointTimer:0,rally:0,maxRally:0,winner:null,event:'准备发球',eventId:0,lastPoint:null};
@@ -29,10 +31,12 @@ export class Match {
   private announce(event: string) { this.state.event=event; this.state.eventId++; }
   private clearPreparation() {
     this.pending=[null,null];this.serveMotion=null;
+    for(const p of this.state.players)p.rescue=undefined;
     for(const p of this.state.players){p.preparation=undefined;p.shotQueued=false;}
   }
   private resetPoint() {
     const s=this.state, total=s.score[0]+s.score[1];
+    this.rescueAttempt=[-1,-1];for(const p of s.players)p.rescue=undefined;
     s.phase='serve'; s.server=serverForPoint(total); s.rally=0; s.pointTimer=0;
     this.pending=[null,null]; this.manualUntil=[0,0]; this.serveElapsed=0; this.serviceFlight=false;this.impact=null;this.serveMotion=null;this.bouncePoint=null;
     const serveSide=side(s.server)*(total%2===0?1:-1);
@@ -43,7 +47,7 @@ export class Match {
     });
     const p=s.players[s.server];
     this.physics.place({x:p.x,y:1.25,z:p.z-.25*side(s.server)});
-    Object.assign(s.ball,this.physics.read(),{bounces:0,hitter:s.server,targetX:-serveSide*2,targetZ:-side(s.server)*4.8,critical:false,tier:undefined});
+    Object.assign(s.ball,this.physics.read(),{bounces:0,hitter:s.server,targetX:-serveSide*2,targetZ:-side(s.server)*4.8,critical:false,tier:undefined,rescue:false});
     this.announce(s.fault?'二发 · 稳一点':'滑动发球');
     this.faultReset=false;
   }
@@ -69,8 +73,10 @@ export class Match {
     const total=s.score[0]+s.score[1], serveSide=sign*(total%2===0?1:-1);
     const stretch=serve?0:clamp(Math.hypot(p.x-b.x,p.z-b.z)-.6,0,1.2);
     let targetX=shot.aim*4.45*sign;
+    const rescue=!serve&&!!p.rescue&&!p.rescue.hit;
+    if(rescue)shot={...shot,power:.25,critical:false,lob:false};
     const tier=shotTier(shot);
-    const targetZ=-sign*shotDepth(shot,serve);
+    let targetZ=-sign*shotDepth(shot,serve);
     if(serve) {
       targetX=-serveSide*1.75+shot.aim*2.25*sign;
     } else if(stretch>.65) {
@@ -78,6 +84,7 @@ export class Match {
     }
     const start={x:b.x,y:serve?2.65:Math.max(.42,b.y),z:b.z};
     if(shot.directionX!==undefined)targetX=start.x+shot.directionX*Math.abs(targetZ-start.z)*sign;
+    if(rescue){targetX+=(this.random()*2-1)*1.6;targetZ+=(this.random()*2-1)*1.8;}
     const distance=Math.hypot(targetX-start.x,targetZ-start.z);
     const power=shot.power*(.65+.35*p.stamina)*(1-.2*stretch);
     const critical=tier==='critical';
@@ -92,20 +99,21 @@ export class Match {
       const minimum=Math.sqrt(Math.max(0,(1.16+(shot.lob?.7:0)-baseHeight)/(4.905*crossing*(1-crossing))));
       flight=Math.max(flight,minimum+.002);
     }
+    if(rescue)flight*=RESCUE.slowdown;
     const velocity={x:(targetX-start.x)/flight,y:(.12-start.y+4.905*flight*flight)/flight,z:(targetZ-start.z)/flight};
     this.physics.place(start,velocity);
-    Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ,critical,tier});
+    Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ,critical,tier,rescue});
     s.phase='rally';s.rally++;s.maxRally=Math.max(s.maxRally,s.rally);
     p.swing=.44;p.backhand=(b.x-p.x)*sign<0;
     p.stroke=serve?'serve':!this.bouncePoint?'volley':shot.lob?'lob':p.backhand?'backhand':'forehand';
     p.preparation=undefined;p.shotQueued=false;
-    p.contact={...start};
+    p.contact={...start};if(rescue&&p.rescue){p.rescue.hit=true;p.rescue.contact={...start};}
     p.stamina=clamp(p.stamina-(.022+.028*power)*effects.drain*strokeSpeed,0,1);
     this.sinceHit=0;this.serviceFlight=serve;this.pending[seat]=null;this.impact=null;this.bouncePoint=null;
     // A recovery tap belongs to the previous flight. Fresh incoming-ball taps
     // can still override assistance, but a stale one must not delay the split step.
     this.manualUntil[other(seat)]=0;
-    this.announce(serve?`${SHOT_PROFILES[tier].label.replace('球','')}发球`:SHOT_PROFILES[tier].label);
+    this.announce(rescue?'极限救球':serve?`${SHOT_PROFILES[tier].label.replace('球','')}发球`:SHOT_PROFILES[tier].label);
   }
   private faultOrPoint(reason: string) {
     const s=this.state;
@@ -171,27 +179,38 @@ export class Match {
     }
     for(const seat of [0,1] as Seat[]) {
       const p=s.players[seat],ownSide=side(seat);
-      if(seat===receiver&&s.time>this.manualUntil[seat]) {
+      if(seat===receiver&&!p.rescue&&s.time>this.manualUntil[seat]) {
         const receiving=reception(b,p,seat);
         // At the net, retain the chosen volley position instead of retreating to a bounce.
         if(Math.abs(p.z)>6||this.serviceFlight){p.tx=receiving.x;p.tz=receiving.z;}
       }
-      if(seat===receiver){
+      if(seat===receiver&&!p.rescue){
         const receiving=reception(b,p,seat),volley=Math.abs(p.z)<6&&!this.serviceFlight&&b.bounces===0;
         const soon=volley?Math.hypot(b.x-p.x,b.z-p.z)/Math.max(1,Math.hypot(b.vx,b.vz)):receiving.time;
         if(soon<.65){p.preparation={stroke:volley?'volley':receiving.backhand?'backhand':'forehand',progress:clamp(1-soon/.65,0,1),contact:volley?{x:b.x,y:b.y,z:b.z}:receiving.point};p.backhand=receiving.backhand;}
       }
-      movePlayer(p,seat,dt);
+      if(!moveRescue(p,s.time,dt))movePlayer(p,seat,dt);
       const endurance=characterEffects(p.characterId);
       p.stamina=clamp(p.stamina-(p.moving?.013*endurance.drain:-.006*endurance.recovery)*dt,0,1);
       const pending=this.pending[seat];
       if(pending&&pending.until<s.time){this.pending[seat]=null;p.shotQueued=false;}
-      if(pending&&pending.until>=s.time&&seat===receiver&&this.sinceHit>.06&&b.z*ownSide>.35&&b.y>.25&&b.y<3.1&&
+      if(pending&&pending.until>=s.time&&!p.rescue?.hit&&seat===receiver&&this.sinceHit>.06&&b.z*ownSide>.35&&b.y>.25&&b.y<3.1&&
          (!this.serviceFlight||b.bounces>0)&&
          (Math.abs(p.z)<6||b.bounces>0)&&
-         (Math.abs(p.z)<6||!this.bouncePoint||b.y>.48&&Math.hypot(b.x-this.bouncePoint.x,b.z-this.bouncePoint.z)>1.5)&&
-         canReachContact(-(b.x-p.x)*ownSide,b.y,-(b.z-p.z)*ownSide,(b.x-p.x)*ownSide<0)) {
-        this.hit(seat,pending.shot);break;
+         (Math.abs(p.z)<6||!this.bouncePoint||b.y>.48&&Math.hypot(b.x-this.bouncePoint.x,b.z-this.bouncePoint.z)>1.5)) {
+        if(p.rescue?canReachRescue(b,p,seat,s.time):canReachContact(-(b.x-p.x)*ownSide,b.y,-(b.z-p.z)*ownSide,(b.x-p.x)*ownSide<0)){
+          this.hit(seat,pending.shot);break;
+        }
+        if(!p.rescue&&this.rescueAttempt[seat]!==s.rally){
+          const target=rescueTarget(b,p,seat);
+          if(target){
+            this.rescueAttempt[seat]=s.rally;
+            if(this.random()<RESCUE.chance){
+              p.rescue={startedAt:s.time,fromX:p.x,fromZ:p.z,toX:target.x,toZ:target.z,contact:target.contact,hit:false};
+              p.stamina=clamp(p.stamina-.1,0,1);p.preparation=undefined;
+            }
+          }
+        }
       }
     }
   }

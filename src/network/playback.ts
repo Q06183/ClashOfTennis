@@ -33,7 +33,7 @@ export class SnapshotPlayback {
   if(!this.draw)this.draw=structuredClone(state);
   const out=this.draw,players=out.players,ball=out.ball;
   Object.assign(out,state,{players,ball});Object.assign(ball,state.ball);
-  for(let i=0;i<2;i++)Object.assign(players[i],state.players[i],{preparation:state.players[i].preparation,contact:state.players[i].contact});
+  for(let i=0;i<2;i++)Object.assign(players[i],state.players[i],{preparation:state.players[i].preparation,contact:state.players[i].contact,rescue:state.players[i].rescue});
   return out;
  }
  sample(now:number,frozen=false):MatchState|null{

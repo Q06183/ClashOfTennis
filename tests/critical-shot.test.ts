@@ -19,14 +19,14 @@ test('critical flag does not boost lobs or low-power shots and clears for the ne
  for(const extra of [{power:.5},{lob:true}]){
   const a=launch(false,0,extra),b=launch(true,0,extra);assert.equal(!!b.ball.critical,false);assert.equal(b.ball.vz,a.ball.vz);
  }
- const m=new Match();m.input(0,{type:'shot',aim:0,depth:.5,power:1,lob:false,critical:true});
+ const m=new Match(['lin','lin'],()=>1);m.input(0,{type:'shot',aim:0,depth:.5,power:1,lob:false,critical:true});
  for(let i=0;i<60&&m.state.rally===0;i++)m.step(1/60);
  assert.equal(m.state.ball.critical,true);m.state.phase='point';m.state.pointTimer=0;m.step(1/60);assert.equal(m.state.ball.critical,false);m.dispose();
 });
 test('critical rally return beats the strongest ordinary return and ordinary reply clears the effect',()=>{
  const returns=[];
  for(const critical of [false,true]){
-  const m=new Match();m.input(0,{type:'shot',aim:0,depth:.5,power:.5,lob:false});
+  const m=new Match(['lin','lin'],()=>1);m.input(0,{type:'shot',aim:0,depth:.5,power:.5,lob:false});
   for(let i=0;i<60&&m.state.rally===0;i++)m.step(1/60);
   m.input(1,{type:'shot',aim:0,depth:.6,power:1,lob:false,critical});
   for(let i=0;i<220&&m.state.phase==='rally'&&m.state.rally<2;i++)m.step(1/60);
@@ -40,7 +40,7 @@ test('critical rally return beats the strongest ordinary return and ordinary rep
 });
 test('malformed critical flags cannot launch a serve',()=>{
  for(const critical of ['true',1,{},null]){
-  const m=new Match();m.input(0,{type:'shot',aim:0,depth:.5,power:1,lob:false,critical} as unknown as Shot);
+  const m=new Match(['lin','lin'],()=>1);m.input(0,{type:'shot',aim:0,depth:.5,power:1,lob:false,critical} as unknown as Shot);
   for(let i=0;i<60;i++)m.step(1/60);assert.equal(m.state.rally,0);assert.equal(m.state.players[0].preparation,undefined);m.dispose();
  }
 });

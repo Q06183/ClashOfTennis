@@ -6,7 +6,7 @@ import { writeFile } from 'node:fs/promises';
 const characterPicks=(process.env.TEST_CHARACTERS??'lin,lin').split(',');
 if(characterPicks.length!==2)throw new Error('TEST_CHARACTERS requires two IDs');
 const criticalMode=process.env.TEST_CRITICAL==='1';
-let criticalHits=0,lastRally=0,lastScore='0:0';
+let rescueHits=0,criticalHits=0,lastRally=0,lastScore='0:0';
 const url=process.env.TEST_WS_URL??'ws://127.0.0.1:7470/ws';
 const clients=[new WebSocket(url),new WebSocket(url)];
 const scores:(number[]|null)[]=[null,null];
@@ -18,8 +18,8 @@ async function finish(error?:Error){
   if(done)return;done=true;clearTimeout(timeout);for(const ws of clients)ws.close();
   if(!error&&criticalMode&&criticalHits<2)error=new Error('No repeated critical shots observed');
   if(error){console.error(error.message);process.exitCode=1;return;}
-  const result={verifiedAt:new Date().toISOString(),endpoint:url,transport:'two independent WebSocket clients on this computer',fullMatchScore:firstScore,characters:characterPicks,maxRally,...(criticalMode?{criticalHits,criticalPolicy:'critical on every non-lob shot'}:{}),rematchReset:true,wallSeconds:Math.round((Date.now()-started)/1000),scope:'Protocol and authoritative simulation only. Not real phone or cross-network verification.'};
-  await writeFile('docs/network-verification.json',JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result));
+  const result={verifiedAt:new Date().toISOString(),endpoint:url,transport:'two independent WebSocket clients on this computer',fullMatchScore:firstScore,characters:characterPicks,maxRally,rescueHits,...(criticalMode?{criticalHits,criticalPolicy:'critical on every non-lob shot'}:{}),rematchReset:true,wallSeconds:Math.round((Date.now()-started)/1000),scope:'Protocol and authoritative simulation only. Not real phone or cross-network verification.'};
+  await writeFile(process.env.TEST_REPORT??'docs/network-verification.json',JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result));
 }
 clients.forEach((ws,index)=>{
   const seat=index as Seat;
@@ -33,7 +33,7 @@ clients.forEach((ws,index)=>{
     if(m.type==='state'){
       const state=m.state as MatchState;
       if(state.players.some((p,i)=>(p.characterId??'lin')!==characterPicks[i])){void finish(new Error('Character picks did not survive authoritative state/rematch'));return;}
-      if(seat===0){const score=state.score.join(':');if(score!==lastScore){console.log(JSON.stringify({score,criticalHits}));lastScore=score;}if(state.rally>lastRally&&state.ball.critical)criticalHits++;lastRally=state.rally;}
+      if(seat===0){const score=state.score.join(':');if(score!==lastScore){console.log(JSON.stringify({score,criticalHits}));lastScore=score;}if(state.rally>lastRally&&state.ball.critical)criticalHits++;if(state.rally>lastRally&&state.ball.rescue)rescueHits++;lastRally=state.rally;}
       maxRally=Math.max(maxRally,state.maxRally);
       if(state.phase==='over'){
         scores[seat]=state.score;

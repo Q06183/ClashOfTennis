@@ -65,3 +65,18 @@ for(const id of variants)test(`running ${id} skin stays grounded and bounded thr
     }
   }
 });
+
+test('all generated characters stay finite and bounded through rescue leap and landing',async()=>{
+ const {moveRescue}=await import('../src/simulation/rescue.js');
+ for(const id of variants){
+  const {scene}=await model(id),a=new Athlete(0);a.attachModel(scene);
+  const p:import('../src/simulation/types.js').PlayerState={x:0,z:10,tx:1.5,tz:10,stamina:.8,moving:true,stroke:'forehand',swing:0,rescue:{startedAt:0,fromX:0,fromZ:10,toX:1.5,toZ:10.4,hit:false,contact:{x:2.1,y:1,z:10}}};
+  for(let i=1;i<=45;i++){
+   moveRescue(p,i/60,1/60);a.update(p,i/60,1/60);a.root.updateMatrixWorld(true);
+   if(i%5)continue;
+   const box=new Box3();a.root.traverse(o=>{if(o instanceof SkinnedMesh){o.skeleton.update();o.computeBoundingBox();box.union(o.boundingBox!.clone().applyMatrix4(o.matrixWorld));}});
+   const size=box.getSize(new Vector3());assert.ok(size.toArray().every(Number.isFinite));assert.ok(size.x<3&&size.y>1&&size.y<3&&size.z<3,`${id}: ${size.toArray()}`);assert.ok(box.min.y>-.2);
+  }
+  assert.equal(p.rescue,undefined);assert.equal(a.root.position.y,0);disposeTree(a.root);
+ }
+});

@@ -101,3 +101,20 @@ test('character picks are validated, shared, locked during play and retained aft
   a.ws.close();await b.wait('room',m=>m.room.paused);const resumed=await client(server.wsUrl);clients.push(resumed);resumed.send({type:'resume',code:first.code,token:first.token});await resumed.wait('welcome');const restored=await resumed.wait('state');assert.equal(restored.state.players[0].characterId,'mei');
  }finally{clients.forEach(c=>c.ws.terminate());await server.close();}
 });
+
+test('authoritative rescue animation, slow ball and scatter arrive identically at both sockets',async()=>{
+ const {Match}=await import('../src/simulation/match.js');
+ const server=await createGameServer({port:0,host:'127.0.0.1'});const a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{
+  a.send({type:'create',name:'A'});const first=await a.wait('welcome');b.send({type:'join',code:first.code,name:'B'});await b.wait('welcome');
+  a.send({type:'ready'});b.send({type:'ready'});await a.wait('state');
+  const room=server.rooms.rooms.get(first.code)!;room.match!.dispose();room.match=new Match(['lin','lin'],()=>0);
+  const m=room.match;m.state.phase='rally';m.state.rally=2;
+  Object.assign(m.state.players[0],{x:0,z:10,tx:0,tz:10,vx:0,vz:0});m.input(0,{type:'move',x:0,z:10});
+  m.physics.place({x:2.1,y:1,z:7.8},{x:0,y:.5,z:10});Object.assign(m.state.ball,m.physics.read(),{hitter:1,bounces:1});
+  a.send({type:'input',command:{type:'shot',aim:.25,depth:.6,power:1,lob:false,critical:true,rescue:true}});
+  const jump=await a.wait('state',v=>!!v.state.players[0].rescue);const jumpB=await b.wait('state',v=>v.seq===jump.seq);assert.deepEqual(jump.state,jumpB.state);
+  const hit=await a.wait('state',v=>v.state.ball.rescue===true);const hitB=await b.wait('state',v=>v.seq===hit.seq);
+  assert.deepEqual(hit.state,hitB.state);assert.equal(hit.state.ball.critical,false);assert.ok(Math.hypot(hit.state.ball.vx,hit.state.ball.vz)<14);assert.equal(hit.state.event,'极限救球');
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
+});

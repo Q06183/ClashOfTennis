@@ -2,6 +2,7 @@ import * as T from 'three';
 import {AthleteSkin} from './athlete-skin.js';
 import {strokePose} from './strokes.js';
 import {RACKET,contactCrouch} from '../simulation/athlete.js';
+import {rescuePose} from '../simulation/rescue.js';
 import {Footwork} from './footwork.js';
 import {type PlayerState,type Seat} from '../simulation/types.js';
 const material=(color:number)=>new T.MeshStandardMaterial({color,roughness:.72});
@@ -178,10 +179,16 @@ export class Athlete {
     foot.quaternion.copy(leg.quaternion).multiply(knee.quaternion).invert().multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),turn));
   }
   update(p:PlayerState,time:number,deltaTime?:number){
-    this.root.position.set(p.x,0,p.z);this.root.updateMatrixWorld(true);
-    const actual=p.preparation?.contact??p.contact;
+    const rescue=rescuePose(p,time);
+    this.root.position.set(p.x,rescue.lift,p.z);this.root.updateMatrixWorld(true);
+    const actual=p.rescue?.contact??p.preparation?.contact??p.contact;
     const contact=actual?this.root.worldToLocal(new T.Vector3(actual.x,actual.y,actual.z)):new T.Vector3(-.85,1.1,.65);
-    const pose=strokePose(p,contact),active=!!p.preparation||p.swing>0;
+    const pose=strokePose(p,contact),active=!!p.rescue||!!p.preparation||p.swing>0;
+    if(p.rescue){
+      const recovery=p.rescue.hit?T.MathUtils.smoothstep(time-p.rescue.startedAt,.25,.65):0;
+      pose.tip.copy(contact).lerp(new T.Vector3(-.05,1.42,.78),recovery);
+      pose.shaft.set(-.8,.15,.3).normalize();pose.twoHands=false;pose.turn=0;pose.knee=.38;pose.toss=0;
+    }
     const dt=deltaTime??Math.max(1/60,Math.min(.08,time-this.lastTime));this.lastTime=time;
     const serve=p.preparation?.stroke==='serve'||!p.preparation&&p.stroke==='serve'&&p.swing>0;
     const lift=serve?.2*(p.preparation?T.MathUtils.smoothstep(p.preparation.progress,.65,1):T.MathUtils.smoothstep(p.swing,.12,.44)):0;
@@ -195,11 +202,15 @@ export class Athlete {
     this.hips.position.y=.85-hipDrop;this.hips.rotation.y=hipTurn;
     for(let i=0;i<2;i++){
       this.legs[i].position.set((i?-1:1)*.15,.85-hipDrop,0).applyAxisAngle(new T.Vector3(0,1,0),hipTurn);
-      this.legTo(i,gait.feet[i].add(new T.Vector3(0,lift,0)),hipTurn);
+      this.legTo(i,gait.feet[i].add(new T.Vector3(0,lift+rescue.lift+rescue.air*(i?.05:.1),0)),hipTurn);
     }
     this.torso.position.y=-hipDrop;
     const lean=Math.min(.12,gait.speed*.022)*(1-striking);
     this.torso.rotation.set(.035+movement.z*lean,pose.turn+gait.turn*.65*(1-striking),-movement.x*lean*.65);
+    if(p.rescue){
+      const direction=new T.Vector3(p.rescue.toX-p.rescue.fromX,0,p.rescue.toZ-p.rescue.fromZ).applyQuaternion(this.root.quaternion.clone().invert()).normalize();
+      this.torso.rotation.x+=direction.z*rescue.lean;this.torso.rotation.z-=direction.x*rescue.lean;
+    }
     this.arms[0].rotation.set(-.45-stride*.3,0,-.3);this.elbows[0].rotation.set(-.6,0,0);this.leftHand.quaternion.identity();
     this.racketTo(pose.tip,pose.shaft,pose.twoHands);
     if(pose.toss>0){
