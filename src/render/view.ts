@@ -1,9 +1,12 @@
 import * as T from 'three';
 import { makeCourt } from './court.js';
 import { Athlete } from './player.js';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {clone} from 'three/addons/utils/SkeletonUtils.js';
 import { side, type MatchState, type Seat, type Shot, type Vec } from '../simulation/types.js';
 import { swipeDirection } from '../input/aim.js';
 import { FlightGuide } from './trajectory.js';
+import {disposeTree} from './dispose.js';
 export class CourtView {
   readonly renderer:T.WebGLRenderer;
   readonly camera=new T.PerspectiveCamera(43,1,.1,130);
@@ -17,6 +20,7 @@ export class CourtView {
   private flight=new FlightGuide();
   private ray=new T.Raycaster();
   private plane=new T.Plane(new T.Vector3(0,1,0),0);
+  private disposed=false;
   private mode:'home'|'match'='home';
   private seat:Seat=0;
   private size={w:0,h:0};
@@ -35,6 +39,30 @@ export class CourtView {
     sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-16;sun.shadow.camera.right=16;sun.shadow.camera.top=18;sun.shadow.camera.bottom=-18;sun.shadow.bias=-.001;
     this.scene.add(sun,this.flight.root);makeCourt(this.scene);
     for(const a of this.athletes)this.scene.add(a.root);
+    new GLTFLoader().load('/models/athlete.glb?v=1',gltf=>{
+      if(this.disposed){disposeTree(gltf.scene);return;}
+      for(const a of this.athletes){
+        const model=clone(gltf.scene);
+        if(a.seat===1)model.traverse(o=>{
+          if(!(o instanceof T.Mesh))return;
+          const tint=(source:T.Material)=>{
+            const mat=source.clone();
+            mat.onBeforeCompile=shader=>{
+              shader.vertexShader='varying vec3 kitPosition;\n'+shader.vertexShader;
+              shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nkitPosition=position;');
+              shader.fragmentShader='varying vec3 kitPosition;\n'+shader.fragmentShader;
+              shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+                float cream=1.0-smoothstep(0.18,0.34,max(diffuseColor.r,max(diffuseColor.g,diffuseColor.b))-min(diffuseColor.r,min(diffuseColor.g,diffuseColor.b)));
+                float shirt=step(0.99,kitPosition.y)*(1.0-step(1.48,kitPosition.y))*(1.0-step(0.44,abs(kitPosition.x)));
+                diffuseColor.rgb*=mix(vec3(1.0),vec3(1.0,0.36,0.14),cream*shirt);`);
+            };mat.customProgramCacheKey=()=> 'away-shirt';return mat;
+          };
+          o.material=Array.isArray(o.material)?o.material.map(tint):tint(o.material);
+        });
+        a.attachModel(model);
+      }
+      canvas.dataset.athleteSource='lux3d';
+    },undefined,()=>{canvas.dataset.athleteSource='fallback';});
     this.ball=new T.Mesh(new T.SphereGeometry(.14,14,10),new T.MeshStandardMaterial({color:0xe4ff3a,emissive:0x717a03,emissiveIntensity:.35,roughness:.7}));this.ball.castShadow=true;this.scene.add(this.ball);
     this.shadow=new T.Mesh(new T.CircleGeometry(.24,20),new T.MeshBasicMaterial({color:0x132f29,transparent:true,opacity:.38,depthWrite:false}));this.shadow.rotation.x=-Math.PI/2;this.scene.add(this.shadow);
     this.target=new T.Mesh(new T.RingGeometry(.34,.41,40),new T.MeshBasicMaterial({color:0xf6f2b7,transparent:true,opacity:.65,side:T.DoubleSide,depthWrite:false}));this.target.rotation.x=-Math.PI/2;this.scene.add(this.target);
@@ -80,7 +108,8 @@ export class CourtView {
     this.renderer.render(this.scene,this.camera);
   }
   dispose(){
-    this.resizeObserver.disconnect();this.scene.traverse(o=>{if(o instanceof T.Mesh||o instanceof T.Line){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material]){const map=(m as T.MeshStandardMaterial).map;map?.dispose();m.dispose();}}});
+    this.disposed=true;
+    this.resizeObserver.disconnect();disposeTree(this.scene);
     this.renderer.dispose();this.renderer.domElement.remove();
   }
 }

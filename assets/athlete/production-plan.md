@@ -1,6 +1,6 @@
 # Lux3D athlete production plan
 
-Status: China credentials verified. Quote: 20 credits before account benefits. No submission, charge, task ID, or generated model yet.
+Status: China-region task 3658015 succeeded. Original ZIP/GLB inspected; 16-bone local rig integrated and browser-checked. Quote-based committed allowance: 20 credits; remaining: 280 of 300. Settled charges are not yet known. Game GLB is approximately 700 KB with 1024px textures.
 
 - Region: China (.cn), explicitly changed by the user on 2026-09-21.
 - One distinct adult tennis athlete, reused for both players. Team distinction through controlled kit recoloring after material inspection.
@@ -10,4 +10,4 @@ Status: China credentials verified. Quote: 20 credits before account benefits. N
 - Blender is available at /Applications/Blender.app/Contents/MacOS/Blender. If rigging is needed, bind an articulated skeleton locally and validate shoulder/elbow/wrist and hip/knee bends. Preserve editable source. Attach the independent racket to the hand.
 - Three.js consumes GLB through GLTFLoader, with original procedural athlete as a loading/error fallback. Do not switch until forehand, backhand, serve, run and volley can be demonstrated with correct contact.
 - Deliver original files, prepared game GLB, provenance manifest and self-contained offline preview after actual inspection. No automatic preview opening.
-- Spending mode: user selected automatic execution, but has not yet supplied a cumulative budget. No spending is authorized until that amount is provided. Requote if expired before submission.
+- Spending mode: automatic execution. User explicitly authorized 300 cumulative credits in this conversation. The private authoritative allowance ledger is artifacts/lux3d/budget.json; resume the original task from artifacts/lux3d/athlete-attempt-1.json, never resubmit merely because a wait ends.

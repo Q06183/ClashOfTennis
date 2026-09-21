@@ -1,0 +1,31 @@
+{
+  "source": "/Users/bytedance/Desktop/TennisClash/artifacts/lux3d/original/athlete_glb.glb",
+  "height": 1.96,
+  "bones": [
+    "Hips",
+    "Spine",
+    "Neck",
+    "Head",
+    "UpperArm_R",
+    "LowerArm_R",
+    "Hand_R",
+    "UpperLeg_R",
+    "LowerLeg_R",
+    "Foot_R",
+    "UpperArm_L",
+    "LowerArm_L",
+    "Hand_L",
+    "UpperLeg_L",
+    "LowerLeg_L",
+    "Foot_L"
+  ],
+  "vertices": 5655,
+  "polygons": 11400,
+  "unweightedVertices": 0,
+  "textureLimit": 1024,
+  "rigging": "Anatomical capsule distance weights with adjacency smoothing, locally authored humanoid skeleton",
+  "outputs": [
+    "athlete-rig.glb",
+    "athlete-rig.blend"
+  ]
+}

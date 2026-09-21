@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {AthleteSkin} from './athlete-skin.js';
 import {side,type PlayerState,type Seat} from '../simulation/types.js';
 const material=(color:number)=>new T.MeshStandardMaterial({color,roughness:.72});
 const down=new T.Vector3(0,-1,0);
@@ -11,11 +12,13 @@ export class Athlete {
   private legs=[new T.Group(),new T.Group()];
   private knees=[new T.Group(),new T.Group()];
   private racket=new T.Group();
+  modelSource:'procedural'|'lux3d'='procedural';
+  private generated?:AthleteSkin;
   private skin=material(0xd5a07d);
   constructor(readonly seat:Seat){
     const shirt=material(seat===0?0xf2efdf:0xe57141),shorts=material(seat===0?0x173944:0x263543),white=material(0xf9f6e9),hair=material(0x302a25);
     const mesh=(g:T.BufferGeometry,m:T.Material,parent:T.Object3D,x:number,y:number,z:number)=>{
-      const o=new T.Mesh(g,m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;parent.add(o);return o;
+      const o=new T.Mesh(g,m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;o.userData.fallbackBody=true;parent.add(o);return o;
     };
     this.root.add(this.torso);
     mesh(new T.CapsuleGeometry(.255,.37,6,16),shirt,this.torso,0,1.19,0).scale.set(1.15,1,.65);
@@ -59,7 +62,23 @@ export class Athlete {
     const pts:number[]=[];
     for(let v=-.18;v<=.18;v+=.045){const end=Math.sqrt(.245**2-v*v);pts.push(v,-.69-end*1.3,0,v,-.69+end*1.3,0,-end,-.69+v*1.3,0,end,-.69+v*1.3,0);}
     racket.add(new T.LineSegments(new T.BufferGeometry().setAttribute('position',new T.Float32BufferAttribute(pts,3)),new T.LineBasicMaterial({color:0xe3e4cf,transparent:true,opacity:.8})));
+    racket.traverse(o=>{o.userData.fallbackBody=false;});
     this.root.rotation.y=seat===0?Math.PI:0;
+  }
+  attachModel(scene:T.Object3D){
+    if(this.generated)return;
+    const anchors:Record<string,T.Object3D>={};
+    for(let i=0;i<2;i++){
+      const suffix=i?'R':'L';
+      anchors['UpperArm_'+suffix]=this.arms[i];anchors['LowerArm_'+suffix]=this.elbows[i];
+      anchors['UpperLeg_'+suffix]=this.legs[i];anchors['LowerLeg_'+suffix]=this.knees[i];
+      const foot=new T.Group();foot.position.y=-.37;this.knees[i].add(foot);anchors['Foot_'+suffix]=foot;
+      if(i)anchors.Hand_R=this.racket;
+      else {const hand=new T.Group();hand.position.y=-.31;this.elbows[i].add(hand);anchors.Hand_L=hand;}
+    }
+    this.generated=new AthleteSkin(scene,this.torso,anchors);
+    this.root.traverse(o=>{if(o.userData.fallbackBody)o.visible=false;});
+    this.root.add(scene);this.modelSource='lux3d';
   }
   private reach(worldTarget:T.Vector3){
     this.root.updateMatrixWorld(true);
@@ -69,7 +88,10 @@ export class Athlete {
     const wristAngle=Math.acos(T.MathUtils.clamp((lower*lower-.31**2-.69**2)/(2*.31*.69),-1,1));
     this.racket.rotation.z=wristAngle;
     const lowerAxis=new T.Vector3(.69*Math.sin(wristAngle),-.31-.69*Math.cos(wristAngle),0).normalize();
-    const axis=delta.normalize(),bend=new T.Vector3(0,0,-1).addScaledVector(axis,axis.z).normalize();
+    const axis=delta.normalize(),bend=new T.Vector3(-.8,-.25,.5);
+    bend.addScaledVector(axis,-bend.dot(axis));
+    if(bend.lengthSq()<1e-6)bend.set(0,0,1).addScaledVector(axis,-axis.z);
+    bend.normalize();
     const along=(upper*upper+reach*reach-lower*lower)/(2*reach);
     const elbow=axis.clone().multiplyScalar(along).addScaledVector(bend,Math.sqrt(Math.max(0,upper*upper-along*along)));
     this.arms[1].quaternion.setFromUnitVectors(down,elbow.clone().normalize());
@@ -93,5 +115,6 @@ export class Athlete {
       else {target.x+=across*sign*arc*.75;target.y+=arc*.35;target.z-=sign*arc*.35;this.torso.rotation.y=across*arc*.35;}
       this.reach(target);
     }
+    if(this.generated){this.root.updateMatrixWorld(true);this.generated.update();}
   }
 }

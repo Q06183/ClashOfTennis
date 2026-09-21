@@ -1,0 +1,39 @@
+{
+  "source": "/Users/bytedance/Desktop/TennisClash/artifacts/lux3d/original/athlete_glb.glb",
+  "height": 1.96,
+  "bones": [
+    "Hips",
+    "Spine",
+    "Neck",
+    "Head",
+    "UpperArm_R",
+    "LowerArm_R",
+    "Hand_R",
+    "UpperLeg_R",
+    "LowerLeg_R",
+    "Foot_R",
+    "UpperArm_L",
+    "LowerArm_L",
+    "Hand_L",
+    "UpperLeg_L",
+    "LowerLeg_L",
+    "Foot_L"
+  ],
+  "vertices": 5655,
+  "polygons": 11400,
+  "unweightedVertices": 0,
+  "textureLimit": 1024,
+  "rigging": "Anatomical capsule distance weights with adjacency smoothing, locally authored humanoid skeleton",
+  "outputs": [
+    "athlete-rig.glb",
+    "athlete-rig.blend"
+  ],
+  "lux3dTaskId": "3658015",
+  "region": "cn",
+  "sourceSha256": "9c779ad362df9b0d439f1f8100e1b1ec4dd1218a617d369d713bffd599590f23",
+  "gameModel": "public/models/athlete.glb",
+  "gameBytes": 711788,
+  "gameSha256": "ff2a3952b1d072cd92e86cf9b16045aff7c40de826b1d2282f4e28243e614aea",
+  "runtimeAnimation": "Retargeted to authoritative contact-driven procedural joints; no baked animation clips",
+  "verifiedAt": "2026-09-21T04:16:08.940875+00:00"
+}
