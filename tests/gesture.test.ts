@@ -18,3 +18,11 @@ test('tap is not a shot; held upward swipe produces lob', () => {
   assert.equal(interpretGesture({dx:2,dy:-3,duration:100,hold:0,width:390,height:844}), null);
   assert.equal(interpretGesture({dx:0,dy:-130,duration:900,hold:600,width:390,height:844})?.lob, true);
 });
+test('a deliberate extra-fast swipe enters the critical tier above a strong swipe',()=>{
+ const g={dx:0,dy:-100,duration:100,hold:0,width:390,height:844};
+ const strong=interpretGesture(g)!,critical=interpretGesture({...g,duration:65})!;
+ assert.equal(strong.power,1);assert.equal(!!strong.critical,false);assert.equal(critical.critical,true);
+ assert.equal(interpretGesture({...g,dx:0,dy:-30,duration:20})?.critical,false,'tiny flick is not critical');
+ assert.equal(interpretGesture({...g,duration:565,hold:500})?.critical,false,'lob cannot become critical');
+ assert.deepEqual(critical,interpretGesture({...g,dy:-200,duration:65,width:780,height:1688}));
+});

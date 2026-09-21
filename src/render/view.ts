@@ -117,7 +117,7 @@ export class CourtView {
     this.target.visible=false;
     this.marker.position.set(state.players[this.seat].tx,.08,state.players[this.seat].tz);
     this.marker.visible=this.mode==='match'&&state.phase==='rally';
-    const trailVisible=state.phase==='rally';for(const t of this.trail)t.visible=trailVisible;
+    const trailVisible=state.phase==='rally';for(const t of this.trail){t.visible=trailVisible;(t.material as T.MeshBasicMaterial).color.setHex(b.critical?0xffad35:0xf0ff85);}
     this.renderer.render(this.scene,this.camera);
   }
   dispose(){

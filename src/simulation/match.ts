@@ -41,7 +41,7 @@ export class Match {
     });
     const p=s.players[s.server];
     this.physics.place({x:p.x,y:1.25,z:p.z-.25*side(s.server)});
-    Object.assign(s.ball,this.physics.read(),{bounces:0,hitter:s.server,targetX:-serveSide*2,targetZ:-side(s.server)*4.8});
+    Object.assign(s.ball,this.physics.read(),{bounces:0,hitter:s.server,targetX:-serveSide*2,targetZ:-side(s.server)*4.8,critical:false});
     this.announce(s.fault?'二发 · 稳一点':'滑动发球');
     this.faultReset=false;
   }
@@ -54,8 +54,9 @@ export class Match {
       this.manualUntil[seat]=s.time+.8; return;
     }
     if(cmd.type!=='shot'||![cmd.aim,cmd.depth,cmd.power].every(Number.isFinite)||typeof cmd.lob!=='boolean') return;
+    if(cmd.critical!==undefined&&typeof cmd.critical!=='boolean')return;
     if(cmd.directionX!==undefined&&!Number.isFinite(cmd.directionX))return;
-    const shot:Shot={type:'shot',aim:clamp(cmd.aim,-1.2,1.2),depth:clamp(cmd.depth,0,1),power:clamp(cmd.power,0,1),lob:cmd.lob};
+    const shot:Shot={type:'shot',aim:clamp(cmd.aim,-1.2,1.2),depth:clamp(cmd.depth,0,1),power:clamp(cmd.power,0,1),lob:cmd.lob,critical:cmd.critical===true&&cmd.power>=.9&&!cmd.lob};
     if(cmd.directionX!==undefined)shot.directionX=clamp(cmd.directionX,-.8,.8);
     if(s.phase==='serve') { if(seat===s.server&&!this.serveMotion){this.serveMotion={shot,elapsed:0};p.stroke='serve';p.preparation={stroke:'serve',progress:0,contact:{x:p.x,y:2.65,z:p.z-.25*side(seat)}};} return; }
     if(s.ball.hitter===seat) return;
@@ -77,10 +78,18 @@ export class Match {
     if(shot.directionX!==undefined)targetX=start.x+shot.directionX*Math.abs(targetZ-start.z)*sign;
     const distance=Math.hypot(targetX-start.x,targetZ-start.z);
     const power=shot.power*(.65+.35*p.stamina)*(1-.2*stretch);
-    let flight=clamp(distance/(11+power*12),.48,1.85)+(shot.lob?.85:0);
+    const critical=shot.critical===true;
+    let flight=clamp(distance/((11+power*12)*(critical?1.14:1)),critical?.42:.48,1.85)+(shot.lob?.85:0);
     const crossing=-start.z/(targetZ-start.z);
     // A ballistic arc over the net; high power reduces margin but never teleports the ball.
-    for(let i=0;i<12;i++) {
+    if(critical&&crossing>0&&crossing<1){
+      // Solve the minimum safe flight time directly: coarse time increments
+      // would erase the new speed tier when a low ball needs net clearance.
+      const baseHeight=start.y*(1-crossing)+.12*crossing;
+      const minimum=Math.sqrt(Math.max(0,(1.16-baseHeight)/(4.905*crossing*(1-crossing))));
+      flight=Math.max(flight,minimum+.002);
+    }
+    for(let i=0;!critical&&i<12;i++) {
       const vy=(.12-start.y+4.905*flight*flight)/flight;
       const netY=start.y+vy*flight*crossing-4.905*(flight*crossing)**2;
       if(netY>=1.16+(shot.lob?.7:0)) break;
@@ -88,7 +97,7 @@ export class Match {
     }
     const velocity={x:(targetX-start.x)/flight,y:(.12-start.y+4.905*flight*flight)/flight,z:(targetZ-start.z)/flight};
     this.physics.place(start,velocity);
-    Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ});
+    Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ,critical});
     s.phase='rally';s.rally++;s.maxRally=Math.max(s.maxRally,s.rally);
     p.swing=.44;p.backhand=(b.x-p.x)*sign<0;
     p.stroke=serve?'serve':!this.bouncePoint?'volley':shot.lob?'lob':p.backhand?'backhand':'forehand';
@@ -99,7 +108,7 @@ export class Match {
     // A recovery tap belongs to the previous flight. Fresh incoming-ball taps
     // can still override assistance, but a stale one must not delay the split step.
     this.manualUntil[other(seat)]=0;
-    this.announce(serve?'发球':p.stroke==='lob'?'高吊球':p.stroke==='volley'?'截击':power>.7?'强力回球':'回球');
+    this.announce(critical?(serve?'暴击发球':'暴击球'):serve?'发球':p.stroke==='lob'?'高吊球':p.stroke==='volley'?'截击':power>.7?'强力回球':'回球');
   }
   private faultOrPoint(reason: string) {
     const s=this.state;
