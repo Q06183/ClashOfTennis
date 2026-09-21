@@ -1,6 +1,7 @@
 import * as T from 'three';
 import {AthleteSkin} from './athlete-skin.js';
 import {strokePose} from './strokes.js';
+import {Footwork} from './footwork.js';
 import {type PlayerState,type Seat} from '../simulation/types.js';
 const material=(color:number)=>new T.MeshStandardMaterial({color,roughness:.72});
 const down=new T.Vector3(0,-1,0);
@@ -8,10 +9,14 @@ const down=new T.Vector3(0,-1,0);
 export class Athlete {
   readonly root=new T.Group();
   private torso=new T.Group();
+  private hips=new T.Group();
   private arms=[new T.Group(),new T.Group()];
   private elbows=[new T.Group(),new T.Group()];
   private legs=[new T.Group(),new T.Group()];
   private knees=[new T.Group(),new T.Group()];
+  private feet=[new T.Group(),new T.Group()];
+  private footwork=new Footwork();
+  private lastTime=0;
   private racket=new T.Group();
   private leftHand=new T.Group();
   modelSource:'procedural'|'lux3d'='procedural';
@@ -24,6 +29,7 @@ export class Athlete {
       const o=new T.Mesh(g,m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;o.userData.fallbackBody=true;parent.add(o);return o;
     };
     this.root.add(this.torso);
+    this.hips.position.y=.85;this.root.add(this.hips);
     mesh(new T.CapsuleGeometry(.255,.37,6,16),shirt,this.torso,0,1.19,0).scale.set(1.15,1,.65);
     mesh(new T.SphereGeometry(.26,16,12),shorts,this.torso,0,.88,0).scale.set(1.08,.65,.78);
     mesh(new T.CylinderGeometry(.085,.11,.16,12),this.skin,this.torso,0,1.56,0);
@@ -53,8 +59,9 @@ export class Athlete {
       mesh(new T.SphereGeometry(.087,12,8),this.skin,knee,0,0,0);
       mesh(new T.CapsuleGeometry(.07,.18,5,12),this.skin,knee,0,-.16,0);
       mesh(new T.CylinderGeometry(.081,.073,.17,12),white,knee,0,-.28,0);
-      mesh(new T.SphereGeometry(.128,16,10),white,knee,0,-.39,.063).scale.set(.81,.52,1.65);
-      mesh(new T.BoxGeometry(.20,.034,.32),shorts,knee,0,-.44,.075);
+      const foot=this.feet[i];foot.name=`foot-${i}`;foot.position.y=-.37;knee.add(foot);
+      mesh(new T.SphereGeometry(.128,16,10),white,foot,0,-.02,.063).scale.set(.81,.52,1.65);
+      mesh(new T.BoxGeometry(.20,.034,.32),shorts,foot,0,-.07,.075);
     }
     // Distal arm + racket centre is 1 m from elbow. Used by the two-bone IK.
     const racket=this.racket;racket.position.set(0,-.31,0);this.elbows[1].add(racket);
@@ -72,11 +79,12 @@ export class Athlete {
   attachModel(scene:T.Object3D){
     if(this.generated)return;
     const anchors:Record<string,T.Object3D>={};
+    anchors.Hips=this.hips;
     for(let i=0;i<2;i++){
       const suffix=i?'R':'L';
       anchors['UpperArm_'+suffix]=this.arms[i];anchors['LowerArm_'+suffix]=this.elbows[i];
       anchors['UpperLeg_'+suffix]=this.legs[i];anchors['LowerLeg_'+suffix]=this.knees[i];
-      const foot=new T.Group();foot.position.y=-.37;this.knees[i].add(foot);anchors['Foot_'+suffix]=foot;
+      anchors['Foot_'+suffix]=this.feet[i];
       if(i)anchors.Hand_R=this.racket;
       else anchors.Hand_L=this.leftHand;
     }
@@ -120,21 +128,36 @@ export class Athlete {
       this.leftHand.quaternion.copy(this.elbows[0].getWorldQuaternion(new T.Quaternion()).invert().multiply(q));
     }
   }
-  update(p:PlayerState,time:number){
+  private legTo(index:number,target:T.Vector3,turn:number){
+    const leg=this.legs[index],knee=this.knees[index],foot=this.feet[index];
+    const offset=this.root.worldToLocal(target.clone()).sub(leg.position),length=.37;
+    const d=T.MathUtils.clamp(offset.length(),.08,.739),axis=offset.normalize();
+    const pole=new T.Vector3(Math.sin(turn),0,Math.cos(turn));pole.addScaledVector(axis,-pole.dot(axis)).normalize();
+    const upper=axis.clone().multiplyScalar(d/2).addScaledVector(pole,Math.sqrt(Math.max(0,length*length-d*d/4)));
+    leg.quaternion.setFromUnitVectors(down,upper.clone().normalize());
+    const lower=axis.multiplyScalar(d).sub(upper).normalize().applyQuaternion(leg.quaternion.clone().invert());
+    knee.quaternion.setFromUnitVectors(down,lower);
+    // Keep the ankle level independently of the bending knee.
+    foot.quaternion.copy(leg.quaternion).multiply(knee.quaternion).invert().multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),turn));
+  }
+  update(p:PlayerState,time:number,deltaTime?:number){
     this.root.position.set(p.x,0,p.z);this.root.updateMatrixWorld(true);
     const actual=p.preparation?.contact??p.contact;
     const contact=actual?this.root.worldToLocal(new T.Vector3(actual.x,actual.y,actual.z)):new T.Vector3(-.85,1.1,.65);
     const pose=strokePose(p,contact),active=!!p.preparation||p.swing>0;
-    const movement=new T.Vector3(p.tx-p.x,0,p.tz-p.z).applyQuaternion(this.root.quaternion.clone().invert()).normalize();
-    const stride=p.moving?Math.sin(time*12):0,hipDrop=.74*(1-Math.cos(pose.knee/2));
+    const dt=deltaTime??Math.max(1/60,Math.min(.08,time-this.lastTime));this.lastTime=time;
+    const gait=this.footwork.update(this.root.position,this.root.quaternion,dt),movement=gait.localDirection;
+    const striking=Math.max(Math.min(1,p.swing/.15),p.shotQueued&&p.preparation?T.MathUtils.clamp((p.preparation.progress-.8)/.2,0,1):0);
+    const stride=Math.sin(gait.phase*Math.PI*2)*Math.min(1,gait.speed/2);
+    const hipDrop=T.MathUtils.lerp(gait.hipDrop,.74*(1-Math.cos(pose.knee/2)),striking);
+    this.hips.position.y=.85-hipDrop;this.hips.rotation.y=gait.turn;
     for(let i=0;i<2;i++){
-      const phase=i?stride:-stride;
-      this.legs[i].position.y=.85-hipDrop;
-      this.legs[i].rotation.set(phase*.38*movement.z-pose.knee/2,0,(i?-1:1)*.15+phase*.2*movement.x);
-      this.knees[i].rotation.x=Math.max(0,-phase)*.65+pose.knee;
+      this.legs[i].position.set((i?-1:1)*.15,.85-hipDrop,0).applyAxisAngle(new T.Vector3(0,1,0),gait.turn);
+      this.legTo(i,gait.feet[i],gait.turn);
     }
-    this.torso.position.y=-hipDrop+(p.moving?Math.abs(stride)*.02:0);
-    this.torso.rotation.set(.035,pose.turn,0);
+    this.torso.position.y=-hipDrop;
+    const lean=Math.min(.12,gait.speed*.022)*(1-striking);
+    this.torso.rotation.set(.035+movement.z*lean,pose.turn+gait.turn*.65*(1-striking),-movement.x*lean*.65);
     this.arms[0].rotation.set(-.45-stride*.3,0,-.3);this.elbows[0].rotation.set(-.6,0,0);this.leftHand.quaternion.identity();
     this.racketTo(pose.tip,pose.shaft,pose.twoHands);
     if(pose.toss>0){

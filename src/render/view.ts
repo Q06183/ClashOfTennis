@@ -106,7 +106,7 @@ export class CourtView {
       this.focus.depth=clamp(this.focus.depth,p.z*side(this.seat)-.6,p.z*side(this.seat)+.6);
       frameMatch(this.camera,this.size.w,this.size.h,this.seat,this.focus.x,this.focus.depth);
     }
-    for(const seat of [0,1] as Seat[])this.athletes[seat].update(state.players[seat],state.time);
+    for(const seat of [0,1] as Seat[])this.athletes[seat].update(state.players[seat],state.time,dt);
     const b=state.ball;
     this.flight.update(state,this.seat,this.mode==='match',authoritative);
     for(let i=this.trail.length-1;i>0;i--)this.trail[i].position.copy(this.trail[i-1].position);

@@ -1,5 +1,6 @@
 import { BallPhysics } from './physics.js';
 import {reception} from './reception.js';
+import {movePlayer} from './movement.js';
 import { COURT, isInCourt, isInServiceBox, serverForPoint, winnerForScore } from './rules.js';
 import { clamp, other, side, type Input, type MatchState, type PlayerState, type Seat, type Shot } from './types.js';
 
@@ -34,7 +35,7 @@ export class Match {
     const serveSide=side(s.server)*(total%2===0?1:-1);
     s.players.forEach((p,i) => {
       p.x=i===s.server?serveSide*1.5:-serveSide*1.5;
-      p.z=side(i as Seat)*(i===s.server?12.4:10.3); p.tx=p.x;p.tz=p.z;p.moving=false;p.swing=0;p.preparation=undefined;p.shotQueued=false;
+      p.z=side(i as Seat)*(i===s.server?12.4:10.3); p.tx=p.x;p.tz=p.z;p.vx=0;p.vz=0;p.moving=false;p.swing=0;p.preparation=undefined;p.shotQueued=false;
       if(!this.faultReset) p.stamina=clamp(p.stamina+.2,0,1);
     });
     const p=s.players[s.server];
@@ -115,7 +116,7 @@ export class Match {
   }
   finish(winner: Seat, reason: string) {
     this.state.winner=winner;this.state.phase='over';this.state.lastPoint=winner;this.announce(reason);
-    this.clearPreparation();for(const p of this.state.players){p.swing=0;p.moving=false;}
+    this.clearPreparation();for(const p of this.state.players){p.swing=0;p.moving=false;p.vx=0;p.vz=0;}
   }
   step(dt: number) {
     if(this.state.phase==='over') return;
@@ -173,10 +174,7 @@ export class Match {
         const soon=volley?Math.hypot(b.x-p.x,b.z-p.z)/Math.max(1,Math.hypot(b.vx,b.vz)):receiving.time;
         if(soon<.65){p.preparation={stroke:volley?'volley':receiving.backhand?'backhand':'forehand',progress:clamp(1-soon/.65,0,1),contact:volley?{x:b.x,y:b.y,z:b.z}:receiving.point};p.backhand=receiving.backhand;}
       }
-      const dx=p.tx-p.x,dz=p.tz-p.z,distance=Math.hypot(dx,dz);
-      const speed=6.8*(.55+.45*p.stamina),move=Math.min(distance,speed*dt);
-      p.moving=distance>.08;
-      if(distance>.001) {p.x+=dx/distance*move;p.z+=dz/distance*move;}
+      movePlayer(p,seat,dt);
       p.stamina=clamp(p.stamina-(p.moving?.013:-.006)*dt,0,1);
       const pending=this.pending[seat];
       if(pending&&pending.until<s.time){this.pending[seat]=null;p.shotQueued=false;}

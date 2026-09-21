@@ -2,10 +2,10 @@ import {test} from 'node:test';import assert from 'node:assert/strict';
 import {PerspectiveCamera,Vector3} from 'three';import {frameMatch} from '../src/render/camera.js';
 import {swipeDirection} from '../src/input/aim.js';
 
-test('portrait camera enlarges the near player and court while retaining both ends',()=>{
- const c=new PerspectiveCamera(52,390/844,.1,130);c.position.set(0,15,28);c.lookAt(0,.7,2);c.updateMatrixWorld();
+test('court reads larger relative to the player without shrinking its screen width',()=>{
+ const c=new PerspectiveCamera(47,390/844,.1,130);c.position.set(0,11.8,25.5);c.lookAt(0,.7,2.8);c.updateMatrixWorld();
  const height=()=>new Vector3(0,1.98,11).project(c).y-new Vector3(0,0,11).project(c).y;
- const before=height();frameMatch(c,390,844,0,0,11);assert.ok(height()>before*1.35);
+ const before=height();frameMatch(c,390,844,0,0,11);assert.ok(height()<before*.9&&height()>before*.8);
  const netWidth=new Vector3(4.115,0,0).project(c).x;assert.ok(netWidth>.7);
  for(const z of [-12,11]){const p=new Vector3(0,0,z).project(c);assert.ok(p.y>-.8&&p.y<.8);}
 });

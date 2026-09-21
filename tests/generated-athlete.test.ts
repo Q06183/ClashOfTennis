@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {Box3,SkinnedMesh,Vector3,type BufferAttribute,type InterleavedBufferAttribute} from 'three';
+import {Box3,SkinnedMesh,Vector3,Quaternion,type BufferAttribute,type InterleavedBufferAttribute} from 'three';
 import {disposeTree} from '../src/render/dispose.js';
 import {Athlete} from '../src/render/player.js';
 async function model(){
@@ -44,4 +44,23 @@ test('generated skin disposal releases shared PBR textures and each skeleton exa
   mesh!.material=new MeshStandardMaterial({map,roughnessMap:pbr,metalnessMap:pbr});mesh!.skeleton.computeBoneTexture();
   const counts={map:0,pbr:0,bone:0};map.addEventListener('dispose',()=>counts.map++);pbr.addEventListener('dispose',()=>counts.pbr++);mesh!.skeleton.boneTexture!.addEventListener('dispose',()=>counts.bone++);
   disposeTree(scene);assert.deepEqual(counts,{map:1,pbr:1,bone:1});
+});
+
+
+test('running skin stays grounded and bounded through side runs, backpedal, and cuts',async()=>{
+  const {scene}=await model(),a=new Athlete(1);a.attachModel(scene);
+  const p={x:0,z:-9,tx:0,tz:-9,stamina:1,moving:true,stroke:'forehand' as const,swing:0};
+  let frame=0;
+  for(const [vx,vz] of [[4,0],[-4,0],[0,3],[0,-3],[0,0]])for(let i=0;i<45;i++){
+    p.x+=vx/60;p.z+=vz/60;a.update(p,++frame/60,1/60);a.root.updateMatrixWorld(true);
+    const box=new Box3();a.root.traverse(o=>{if(o instanceof SkinnedMesh){o.skeleton.update();o.computeBoundingBox();box.union(o.boundingBox!.clone().applyMatrix4(o.matrixWorld));}});
+    const size=box.getSize(new Vector3());
+    assert.ok(box.min.y>-.12&&box.min.y<.28,`feet leave ground during ${vx}/${vz}: ${box.min.y}`);
+    assert.ok(size.y>1.5&&size.y<2.2&&size.x<2&&size.z<2,`running skin bounds ${size.toArray()}`);
+    for(const foot of ['foot-0','foot-1']){
+      const ankle=a.root.getObjectByName(foot)!;
+      const up=new Vector3(0,1,0).applyQuaternion(ankle.getWorldQuaternion(new Quaternion()));
+      assert.ok(up.y>.999,'support/swing soles must not inherit knee rotation');
+    }
+  }
 });

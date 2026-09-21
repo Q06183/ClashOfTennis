@@ -256,8 +256,9 @@ export class App {
         const x=d.x+(p.x-d.x)*alpha,z=d.z+(p.z-d.z)*alpha;
         Object.assign(d,p,{x,z,preparation:p.preparation,shotQueued:p.shotQueued,backhand:p.backhand});
         if(seat===this.seat&&this.predictedMove&&now<this.predictedMove.until&&!this.paused&&this.connected&&state.phase==='rally'){
-          const target=this.predictedMove,dx=target.x-d.x,dz=target.z-d.z,dist=Math.hypot(dx,dz);
-          if(dist>.1&&Math.hypot(d.x-p.x,d.z-p.z)<.65){const step=Math.min(dist,dt*5);d.x+=dx/dist*step;d.z+=dz/dist*step;}
+          // Show the chosen destination immediately; body movement follows the
+          // server's acceleration instead of bypassing it at a fixed speed.
+          d.tx=this.predictedMove.x;d.tz=this.predictedMove.z;
         }
       }
       const x=draw.ball.x+(state.ball.x-draw.ball.x)*alpha,y=draw.ball.y+(state.ball.y-draw.ball.y)*alpha,z=draw.ball.z+(state.ball.z-draw.ball.z)*alpha;

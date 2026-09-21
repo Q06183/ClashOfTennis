@@ -13,7 +13,7 @@ export class AthleteSkin {
       let offset=bind;
       if(anchor){
         const q=new T.Quaternion();bind.decompose(new T.Vector3(),q,new T.Vector3());
-        if(!o.name.startsWith('Foot')){
+        if(/^(Upper|Lower)(Arm|Leg)|^Hand_/.test(o.name)){
           const axis=new T.Vector3(0,1,0).applyQuaternion(q);
           q.premultiply(new T.Quaternion().setFromUnitVectors(axis,new T.Vector3(0,-1,0)));
         }

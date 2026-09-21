@@ -6,6 +6,7 @@ export type PlayerState = {
   x: number; z: number; tx: number; tz: number; stamina: number;
   swing: number; stroke: 'forehand' | 'backhand' | 'serve' | 'volley' | 'lob';
   moving: boolean;
+  vx?: number; vz?: number;
   contact?: Vec;
   backhand?: boolean;
   preparation?: {stroke:PlayerState['stroke'];progress:number;contact:Vec};
