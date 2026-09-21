@@ -7,6 +7,7 @@ import { other, side, type Input, type MatchState, type RoomView, type Seat, typ
 import { CourtView } from '../render/view.js';
 import { Controls } from '../input/controls.js';
 import { NetworkClient } from '../network/client.js';
+import {SnapshotPlayback} from '../network/playback.js';
 import {invitationLink} from '../network/invite.js';
 import { CourtAudio } from './audio.js';
 
@@ -29,6 +30,7 @@ export class App {
   private net:NetworkClient|null=null;
   private remote:MatchState|null=null;
   private drawState:MatchState|null=null;
+  private playback=new SnapshotPlayback();
   private room:RoomView|null=null;
   private seat:Seat=0;
   private name=localStorage.getItem('rally-name')||'球友';
@@ -72,7 +74,7 @@ export class App {
     this.renderScreen();
     document.querySelector('#boot')?.classList.add('hide');
     document.addEventListener('visibilitychange',()=>{
-      this.lastFrame=performance.now();this.accumulator=0;this.view.recordFrame(0,false);
+      this.lastFrame=performance.now();this.accumulator=0;this.view.recordFrame(0,false);this.playback.reset();
     });
     requestAnimationFrame(this.frame);
     // Refresh recovery is bound to this tab's previous seat, never the invite link.
@@ -155,7 +157,7 @@ export class App {
     }
   }
   private connect(action:unknown){
-    this.networkError='';
+    this.playback.reset();this.predictedMove=null;this.networkError='';
     this.net?.close();this.remote=null;this.drawState=null;this.busy=true;this.status='正在连接球场…';this.renderScreen();
     this.net=new NetworkClient({
       welcome:c=>{this.seat=c.seat;this.busy=false;this.connected=true;this.screen='room';this.lastEvent=-1;this.renderScreen();},
@@ -165,7 +167,7 @@ export class App {
         if(this.screen==='room'||this.screen==='result')this.renderScreen();
       },
       state:(s,paused)=>{
-        this.remote=s;this.paused=paused;
+        this.remote=s;this.paused=paused;this.playback.push(s,performance.now());
         if(s.phase==='over'){
           if(this.screen!=='result'){this.screen='result';this.renderScreen();}
         }else if(this.screen!=='playing'){
@@ -215,7 +217,7 @@ export class App {
     <div class="tutorial-steps"><div class="tutorial-step"><b>1</b><div><strong>轻点球场，移动到位</strong><span>人物会辅助追球。回球后，点地面选择你的下一个站位。</span></div></div>
     <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>从屏幕下方向上滑。球从触球点沿滑动方向飞出。发球请斜向对角发球区。滑得越长、越快，落点越深，也更容易出界。极快且较长的甩动才会触发暴击，同样距离比强力球更深。可在来球接近时提前滑动。</span></div></div>
     <div class="tutorial-step"><b>3</b><div><strong>认颜色，控制速度与深度</strong><span>绿：普通；蓝：快速；橙：强力；玫红：暴击；紫：高吊。短滑放短球；按住约半秒再滑打高吊。靠近球网可截击，接发球必须等球落地。</span></div></div></div>
-    <p id="performance-stats" class="small-note"></p><button class="primary" data-action="close-help">知道了，上场 →</button><p class="small-note">先到 7 分且领先 2 分获胜 · 发球限时 12 秒</p>`);}
+    <p id="performance-stats" class="small-note"></p><p id="performance-sync" class="small-note"></p><button class="primary" data-action="close-help">知道了，上场 →</button><p class="small-note">先到 7 分且领先 2 分获胜 · 发球限时 12 秒</p>`);}
   private result(){
     const s=this.remote??this.local.state,won=s.winner===this.seat;
     const me=this.room?.seats[this.seat]?.name??this.name,them=this.room?.seats[other(this.seat)]?.name??'练习搭档';
@@ -245,6 +247,8 @@ export class App {
     text('score-me',String(s.score[me]));text('score-them',String(s.score[them]));
     document.getElementById('stamina-me')!.style.width=`${s.players[me].stamina*100}%`;
     document.getElementById('stamina-them')!.style.width=`${s.players[them].stamina*100}%`;
+    const sync=this.playback.stats(performance.now());
+    text('performance-sync',this.net?`同步 ${sync.hz||'—'} 次/秒 · 抖动 ${sync.jitterMs} ms · 最近一包 ${sync.gapMs} ms前`:'');
     text('performance-stats',`画面 ${this.view.fps||'测量中'} FPS · 自动${this.view.qualityLabel}${this.net?` · 网络 ${this.latency||'—'} ms`:''}`);
     text('connection',this.net?`${this.latency||'—'} ms`:'单人练习');
     text('rally-count',s.rally>1?`${s.rally} 拍回合  /  RALLY`:'FIRST TO 7 · 领先两分');
@@ -277,23 +281,15 @@ export class App {
     }
     let state=this.remote??this.local.state;
     if(this.remote){
-      if(!this.drawState||this.drawState.phase!==state.phase||this.drawState.ball.hitter!==state.ball.hitter)this.drawState=structuredClone(state);
-      const draw=this.drawState,alpha=1-Math.exp(-dt*24);
-      for(const seat of [0,1] as Seat[]){
-        const p=state.players[seat],d=draw.players[seat];
-        const x=d.x+(p.x-d.x)*alpha,z=d.z+(p.z-d.z)*alpha;
-        Object.assign(d,p,{x,z,preparation:p.preparation,shotQueued:p.shotQueued,backhand:p.backhand});
-        if(seat===this.seat&&this.predictedMove&&now<this.predictedMove.until&&!this.paused&&this.connected&&state.phase==='rally'){
-          // Show the chosen destination immediately; body movement follows the
-          // server's acceleration instead of bypassing it at a fixed speed.
-          d.tx=this.predictedMove.x;d.tz=this.predictedMove.z;
-        }
+      this.drawState=this.playback.sample(now,this.paused||!this.connected)??structuredClone(this.remote);
+      const draw=this.drawState;
+      if(this.predictedMove&&now<this.predictedMove.until&&!this.paused&&this.connected&&state.phase==='rally'){
+        draw.players[this.seat].tx=this.predictedMove.x;draw.players[this.seat].tz=this.predictedMove.z;
       }
-      const x=draw.ball.x+(state.ball.x-draw.ball.x)*alpha,y=draw.ball.y+(state.ball.y-draw.ball.y)*alpha,z=draw.ball.z+(state.ball.z-draw.ball.z)*alpha;
-      Object.assign(draw.ball,state.ball,{x,y,z});Object.assign(draw,{time:state.time,phase:state.phase});state=draw;
+      state=draw;
     }
     this.view.render(state,dt,this.remote??this.local.state);
-    const actual=this.remote??this.local.state;
+    const actual=state;
     if(this.lastEvent!==actual.eventId&&active){
       this.lastEvent=actual.eventId;
       if(actual.event==='落地')this.audio.play('bounce');

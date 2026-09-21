@@ -1,0 +1,36 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {SnapshotPlayback} from '../src/network/playback.js';import type {MatchState,PlayerState} from '../src/simulation/types.js';
+function state(time:number):MatchState{
+ const player=(x:number):PlayerState=>({characterId:'lin',x,z:10,tx:x+1,tz:10,vx:5,vz:0,stamina:1,swing:Math.max(0,.44-time),stroke:'forehand',moving:true,preparation:{stroke:'forehand',progress:time*.5,contact:{x:0,y:1,z:9}}});
+ return {time,phase:'rally',score:[0,0],players:[player(time*5),player(time*5)],ball:{x:time*3,y:10-time*time*4.905,z:10-time*8,vx:3,vy:-9.81*time,vz:-8,bounces:0,hitter:1,targetX:1,targetZ:10},server:0,fault:0,pointTimer:0,rally:4,maxRally:4,winner:null,event:'击球',eventId:1,lastPoint:null};
+}
+const variation=(a:number[])=>{const mean=a.reduce((x,y)=>x+y)/a.length;return Math.sqrt(a.reduce((s,x)=>s+(x-mean)**2,0)/a.length)/mean;};
+test('20Hz snapshots render continuous movement and preparation on a 60Hz screen, including arrival jitter',()=>{
+ for(const jitter of [false,true]){
+  const playback=new SnapshotPlayback(),packets=Array.from({length:31},(_,i)=>({s:state(i*.05),at:100+i*50+(jitter?[0,18,4,12][i%4]:0)}));
+  let index=0,latest=packets[0].s,oldX=0,previousOld=0,previousNew=0,previousProgress=0;
+  const oldSpeed:number[]=[],newSpeed:number[]=[],progressSteps:number[]=[];
+  for(let frame=0;frame<90;frame++){
+   const now=100+frame*1000/60;
+   while(index<packets.length&&packets[index].at<=now){latest=packets[index].s;playback.push(latest,packets[index].at);index++;}
+   oldX+=(latest.players[0].x-oldX)*(1-Math.exp(-24/60));
+   const out=playback.sample(now)!;
+   if(frame>15&&frame<70){oldSpeed.push((oldX-previousOld)*60);newSpeed.push((out.players[0].x-previousNew)*60);progressSteps.push(out.players[0].preparation!.progress-previousProgress);}
+   previousOld=oldX;previousNew=out.players[0].x;previousProgress=out.players[0].preparation!.progress;
+  }
+  assert.ok(variation(oldSpeed)>.2,'fixture reproduces old chase-and-stop behavior');assert.ok(variation(newSpeed)<.08,`continuous velocity under jitter=${jitter}: ${variation(newSpeed)}`);assert.ok(progressSteps.every(x=>x>0&&x<.02),'preparation must advance each render frame');
+ }
+});
+test('sampling never mutates authority and missing packets cannot move indefinitely',()=>{
+ const p=new SnapshotPlayback(),a=state(1),original=structuredClone(a);p.push(a,1000);const before=structuredClone(p.sample(1200)!);const after=p.sample(9000)!;
+ assert.deepEqual(a,original);assert.equal(before.players[0].x,after.players[0].x);assert.equal(before.ball.x,after.ball.x);assert.ok(after.players[0].x<=a.players[0].x+.251);
+});
+test('bounce, point reset, reconnect and rematch do not blend incompatible states',()=>{
+ const p=new SnapshotPlayback(),a=state(0),b=state(.1);b.ball.bounces=1;b.ball.y=.3;p.push(a,100);p.push(b,200);
+ assert.equal(p.sample(225)!.ball.bounces,0,'do not show bounce before its timestamp');assert.equal(p.sample(300)!.ball.bounces,1);
+ assert.deepEqual(p.sample(310,true)!.ball,b.ball,'paused rendering stays authoritative');
+ const reset=state(0);reset.phase='serve';reset.players[0].x=-1.5;p.push(reset,400);assert.equal(p.sample(420)!.players[0].x,-1.5);
+ const next=state(.2);next.phase='serve';next.score=[1,0];next.players[0].x=2;p.push(next,600);assert.equal(p.sample(625)!.players[0].x,-1.5,'no movement through point reset');assert.equal(p.sample(700)!.players[0].x,2);
+});
+test('playback diagnostics report snapshot rate, jitter and actual packet silence',()=>{
+ const p=new SnapshotPlayback();for(let i=0;i<20;i++)p.push(state(i*.05),100+i*50);assert.deepEqual(p.stats(1100),{hz:20,jitterMs:0,gapMs:50});p.reset();assert.deepEqual(p.stats(2000),{hz:0,jitterMs:0,gapMs:0});
+});

@@ -1,0 +1,30 @@
+{
+  "verifiedAt": "2026-09-21T11:58:19.579Z",
+  "endpoint": "ws://100.81.1.29:7470/ws",
+  "transport": "two independent WebSocket clients on this computer",
+  "fullMatchScore": [
+    7,
+    4
+  ],
+  "characters": [
+    "mei",
+    "leo"
+  ],
+  "maxRally": 6,
+  "rematchReset": true,
+  "wallSeconds": 84,
+  "snapshotIntervalsMs": {
+    "samples": 1674,
+    "median": 52.000458000002254,
+    "p95": 54.58741600000212,
+    "max": 57.04333400000178
+  },
+  "rttMs": {
+    "samples": 83,
+    "median": 0.3446659999972326,
+    "p95": 0.6934590000018943,
+    "max": 0.9885419999991427
+  },
+  "renderSamples": 4979,
+  "scope": "Local two-client authoritative match and playback sample integration. Not phone Wi-Fi quality or visual acceptance."
+}
