@@ -16,3 +16,9 @@ export function airInterception(b:BallState,p:PlayerState,seat:Seat){
  const backhand=(point.x-p.x)*sign<-.25,smash=point.y>=1.85&&point.y<2.7&&b.vy-flightGravity(b)*t<=1;
  return {time:t,point,backhand,smash,x:clamp(point.x-sign*(smash?.25:backhand?-.55:.65),-6.4,6.4),z:depth*sign};
 }
+
+/** Shared ordinary reach for both live contact and the last-chance rescue gate. */
+export function canReturnNormally(b:BallState,p:PlayerState,seat:Seat,slice=false){
+ const sign=side(seat);
+ return canSmash(b,p,seat)||(b.bounces===0?canVolley(b,p,seat):canReachContact(-(b.x-p.x)*sign,b.y,-(b.z-p.z)*sign,(b.x-p.x)*sign<0,slice));
+}

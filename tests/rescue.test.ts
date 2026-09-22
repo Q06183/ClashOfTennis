@@ -63,8 +63,8 @@ test('serve return cannot rescue before its legal first bounce',()=>{
  m.input(1,shot);for(let i=0;i<12;i++)m.step(1/60);
  assert.equal(draws,0);assert.equal(p.rescue,undefined);assert.equal(m.state.ball.hitter,0);m.dispose();
 });
-test('rescue chance boundary is 35 percent and ordinary reachable returns never roll',()=>{
- for(const [value,expected] of [[.3499,true],[.35,false]] as const){
+test('rescue chance boundary is 30 percent and ordinary reachable returns never roll',()=>{
+ for(const [value,expected] of [[.2999,true],[.30,false]] as const){
   const m=incoming(()=>value);m.input(0,shot);for(let i=0;i<20;i++)m.step(1/60);assert.equal(!!m.state.ball.rescue,expected);m.dispose();
  }
  let draws=0;const m=incoming(()=>{draws++;return 0;});Object.assign(m.state.players[0],{x:1.5,tx:1.5});m.input(0,shot);
@@ -79,4 +79,38 @@ test('scattered rescue may land out and next point clears its ball and player fl
  assert.equal(m.state.event,'出界');assert.deepEqual(m.state.score,[0,1]);
  for(let i=0;i<120&&m.state.phase==='point';i++)m.step(1/60);
  assert.equal(m.state.ball.rescue,false);assert.equal(m.state.players[0].rescue,undefined);m.dispose();
+});
+
+test('well-positioned players wait for normal contact instead of rescuing before the ball arrives',()=>{
+ for(const seat of [0,1] as Seat[])for(const sample of [{x:.9,y:1,vy:0,vz:10},{x:1.2,y:1.5,vy:0,vz:5}]){
+  const sign=side(seat);let draws=0;const m=incoming(()=>{draws++;return 0;},seat);
+  m.physics.place({x:sample.x*sign,y:sample.y,z:8*sign},{x:0,y:sample.vy,z:sample.vz*sign});Object.assign(m.state.ball,m.physics.read());
+  m.input(seat,shot);let jumped=false;
+  for(let i=0;i<60&&m.state.phase==='rally'&&m.state.ball.hitter!==seat;i++){m.step(1/60);jumped||=!!m.state.players[seat].rescue;}
+  assert.equal(m.state.ball.hitter,seat,'normal return succeeds');assert.equal(jumped,false,'good positioning must never start a jump');assert.equal(draws,0,'normal upcoming contact must not enter the rescue lottery');assert.equal(m.state.ball.rescue,false);m.dispose();
+ }
+});
+
+test('normal running and volley windows take priority over the rescue lottery on both sides',()=>{
+ for(const seat of [0,1] as Seat[])for(const kind of ['running','volley']){
+  const sign=side(seat),z=(kind==='volley'?3:10)*sign;let draws=0;
+  const m=incoming(()=>{draws++;return 0;},seat),p=m.state.players[seat];Object.assign(p,{x:0,z,tx:0,tz:z});
+  m.input(seat,{type:'move',x:kind==='running'?1.5*sign:0,z});
+  m.physics.place({x:(kind==='running'?1.8:.9)*sign,y:kind==='running'?1.5:1,z:z-2*sign},{x:0,y:0,z:(kind==='running'?5:10)*sign});
+  Object.assign(m.state.ball,m.physics.read(),{bounces:kind==='volley'?0:1});m.input(seat,shot);
+  for(let i=0;i<90&&m.state.phase==='rally'&&m.state.ball.hitter!==seat;i++)m.step(1/60);
+  assert.equal(m.state.ball.hitter,seat,kind);assert.equal(m.state.ball.rescue,false,kind);assert.equal(draws,0,kind);
+  if(kind==='volley')assert.equal(m.state.ball.skill,'volley');m.dispose();
+ }
+});
+
+test('automatic positioning forecasts the new ball position before moving, just like a real tick',()=>{
+ for(const seat of [0,1] as Seat[]){
+  const sign=side(seat);let draws=0;const m=new Match(['lin','lin'],()=>{draws++;return 0;});m.state.phase='rally';m.state.rally=2;
+  Object.assign(m.state.players[seat],{x:1.6880609533*sign,z:9.1569666094*sign,tx:-.6138001657*sign,tz:9.1569666094*sign,vx:0,vz:0});
+  m.physics.place({x:1.0594274453*sign,y:2.0692738906,z:1.0028849477*sign},{x:-.7330817170*sign,y:2.0434809271,z:8.2048775163*sign});
+  Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});m.input(seat,shot);
+  for(let i=0;i<70&&m.state.phase==='rally'&&m.state.ball.hitter!==seat;i++)m.step(1/60);
+  assert.equal(m.state.ball.hitter,seat);assert.equal(m.state.ball.rescue,false);assert.equal(draws,0);m.dispose();
+ }
 });

@@ -1,12 +1,11 @@
 import {SERVE_DURATION,serveBallHeight} from './serve-motion.js';
 import {flightGravity,spinAmount} from './flight.js';
-import {canSmash,canVolley,airInterception} from './skills.js';
+import {canSmash,canReturnNormally,airInterception} from './skills.js';
 import {getCharacter,characterEffects} from './characters.js';
 import { BallPhysics } from './physics.js';
 import {shotDepth,shotTier,SHOT_PROFILES} from './shot-profile.js';
 import {reception} from './reception.js';
-import {canReachContact} from './athlete.js';
-import {RESCUE,rescueTarget,moveRescue,canReachRescue} from './rescue.js';
+import {RESCUE,rescueTarget,hasNormalReturnWindow,moveRescue,canReachRescue} from './rescue.js';
 import {movePlayer} from './movement.js';
 import { COURT, isInCourt, isInServiceBox, serverForPoint, winnerForScore } from './rules.js';
 import { clamp, other, side, type BallState, type Input, type MatchState, type PlayerState, type Seat, type Shot } from './types.js';
@@ -88,8 +87,8 @@ export class Match {
       (!this.serviceFlight||b.bounces>0);
   }
   private returnReachable(seat:Seat,b:BallState=this.state.ball){
-    const p=this.state.players[seat],sign=side(seat);
-    return p.rescue?canReachRescue(b,p,seat,this.state.time):canSmash(b,p,seat)|| (b.bounces===0?canVolley(b,p,seat):canReachContact(-(b.x-p.x)*sign,b.y,-(b.z-p.z)*sign,(b.x-p.x)*sign<0,!!this.pending[seat]?.shot.slice));
+    const p=this.state.players[seat];
+    return p.rescue?canReachRescue(b,p,seat,this.state.time):canReturnNormally(b,p,seat,!!this.pending[seat]?.shot.slice);
   }
   private hit(seat: Seat, shot: Shot, serve=false) {
     const s=this.state,p=s.players[seat],b=s.ball,sign=side(seat);
@@ -239,7 +238,7 @@ export class Match {
         if(reachable){this.hit(seat,pending.shot);break;}
         if(!p.rescue&&this.rescueAttempt[seat]!==s.rally){
           const target=rescueTarget(b,p,seat);
-          if(target){
+          if(target&&!hasNormalReturnWindow(b,p,seat,{time:s.time,manualUntil:this.manualUntil[seat],serviceFlight:this.serviceFlight,slice:!!pending.shot.slice})){
             this.rescueAttempt[seat]=s.rally;
             if(this.random()<RESCUE.chance){
               p.rescue={startedAt:s.time,fromX:p.x,fromZ:p.z,toX:target.x,toZ:target.z,contact:target.contact,hit:false};

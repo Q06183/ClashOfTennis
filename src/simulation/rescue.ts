@@ -1,7 +1,10 @@
+import {movePlayer} from './movement.js';
+import {reception} from './reception.js';
+import {airInterception,canReturnNormally} from './skills.js';
 import {flightGravity} from './flight.js';
-import {canReachContact,contactCrouch} from './athlete.js';
+import {contactCrouch} from './athlete.js';
 import {clamp,side,type BallState,type PlayerState,type Seat} from './types.js';
-export const RESCUE={chance:.35,travel:.16,duration:.65,reach:1.8,slowdown:1.7};
+export const RESCUE={chance:.30,travel:.16,duration:.65,reach:1.8,slowdown:1.7};
 /** A short, reachable interception. Never guess a future bounce or cross the net. */
 export function rescueTarget(b:BallState,p:PlayerState,seat:Seat){
  const sign=side(seat),speed2=b.vx*b.vx+b.vz*b.vz;
@@ -10,11 +13,28 @@ export function rescueTarget(b:BallState,p:PlayerState,seat:Seat){
  if(closest<-.03||closest>.18)return null;
  const t=RESCUE.travel,contact={x:b.x+b.vx*t,y:b.y+b.vy*t-flightGravity(b)*t*t/2,z:b.z+b.vz*t};
  if(contact.y<.5||contact.y>1.65||contact.z*sign<1)return null;
- const usualX=p.x+(p.vx??0)*t,usualZ=p.z+(p.vz??0)*t;
- if(canReachContact(-(contact.x-usualX)*sign,contact.y,-(contact.z-usualZ)*sign,(contact.x-usualX)*sign<0))return null;
  const x=contact.x-sign*.6,z=contact.z+sign*.4,distance=Math.hypot(x-p.x,z-p.z);
  if(distance<.7||distance>RESCUE.reach||Math.abs(x)>6.4||z*sign>16.5)return null;
  return {x,z,contact};
+}
+/** Wait for any ordinary contact on the approaching flight, not one sample at
+ * the end of a jump. Predict the same acceleration, stamina and move target
+ * as the live player, without mutating authoritative state or drawing RNG. */
+export function hasNormalReturnWindow(b:BallState,p:PlayerState,seat:Seat,options:{time:number;manualUntil:number;serviceFlight:boolean;slice:boolean}){
+ const runner={...p},ball={...b},sign=side(seat),dt=1/120,G=flightGravity(b);
+ for(let step=0;step<=72;step++){
+  if(step){
+   // Match.step advances the ball before updating the player's move target.
+   ball.x+=ball.vx*dt;ball.z+=ball.vz*dt;ball.y+=ball.vy*dt-G*dt*dt/2;ball.vy-=G*dt;
+  }
+  if(ball.y<=.12||ball.z*sign<=.35)break;
+  const air=!options.serviceFlight&&ball.bounces===0&&Math.abs(runner.z)<=7.4;
+  const receiving=air?airInterception(ball,runner,seat):reception(ball,runner,seat);
+  if(options.time+step*dt>options.manualUntil||air&&runner.shotQueued){runner.tx=receiving.x;runner.tz=receiving.z;}
+  if(step)movePlayer(runner,seat,dt);
+  if(ball.y>.25&&ball.y<3.1&&(!options.serviceFlight||ball.bounces>0)&&canReturnNormally(ball,runner,seat,options.slice))return true;
+ }
+ return false;
 }
 export function rescuePose(p:PlayerState,time:number){
  const r=p.rescue;if(!r)return {lift:0,lean:0,air:0};
