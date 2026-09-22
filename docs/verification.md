@@ -315,3 +315,11 @@
 - 未扩大范围/球高/接发合法性；保留救球及最多160ms的既有可达接触容错。立即命中使用新输入和当前实际球点，之后清除旧pending。发球仍走原发球动画流程。
 - 新回归覆盖两席×空中/落地，调用input后立刻rally加一，time和触点不变，shotQueued=false、pending=null；旧预设后身旁新滑动立即按新方向击球；远球不提前命中，继续缓存。229/229全量（含真实双WebSocket和跑动提前滑动）及构建通过。
 - 独立只读复核通过，额外验证旧slice缓存与新指令双向切换、接发落地门槛、救球即时命中及重复输入不能二次命中。正式7470已重启并回读index-B-mU8Sra.js；双方刷新重建房间复打。
+
+## 2026-09-22 Left-handed swing profiles
+
+- Research: [FITP biomechanics thesis](https://www.fitp.it/media/FIT/Federtennis/ISF/Biblioteca_pubblica/Match_analysis/Analisi_Tecnico_Biomeccanica_del_rovescio_a_una_e_due_mani_nel_tennis_maschile_old_gen_e_next_gen.pdf), PDF pages 24–25 (Nadal), 35–37 (Shapovalov), inspected actual phase photographs and written analysis. [ITPA Nadal movement analysis](https://itpa-tennis.org/uploads/3/4/3/0/34309546/doug_eng_modern_tennis_movement_learning_from_rafael_nadal.pdf) corroborates coil, stance, transfer and recovery. [ATP Shelton serve](https://www.atptour.com/en/news/shelton-us-open-2023-feature) search excerpt used only for context; direct ATP fetch was 403. ATP YouTube masterclass required sign-in; no claim of viewing it or extracting motion capture.
+- Original authored keyframes inspired by mechanics, not captured professional animation. Left profiles remain in canonical stroke coordinates and are reflected once by Athlete. Actual contact remains supplied by simulation.
+- New regression first failed the missing forehand unit-turn and single-BH counterbalance; fixes pass. Independent review then found 29.6 cm prep and 18.4 cm recovery racket jumps from two-arm IK fallback. Reachable preparation/finish keys fix both. Added 2,001-phase rendered IK check per left character/stroke/seat, plus upper grip attachment and expanded curve continuity.
+- `npm test`: 247/247 pass (24.7s). `npm run build`: TypeScript/Vite/precompression pass. Runtime bundle: `index-CAyDYr20.js`. `git diff --check`: pass.
+- Browser: actual Noah/Luca GLBs checked in local eight-panel preview, including side and rear views. No console errors observed. This verifies model rendering and continuity constraints, not real-phone subjective naturalness.

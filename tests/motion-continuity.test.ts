@@ -1,7 +1,7 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {Vector3} from 'three';
 import {strokePose} from '../src/render/strokes.js';import {strokeBody} from '../src/render/stroke-body.js';
 import type {PlayerState} from '../src/simulation/types.js';
-for(const characterId of ['lin','adrian'])for(const stroke of ['forehand','backhand','volley','slice-forehand','slice-backhand','lob','smash'] as const){
+for(const characterId of ['lin','adrian','noah','luca'])for(const stroke of ['forehand','backhand','volley','slice-forehand','slice-backhand','lob','smash'] as const){
  test(`${characterId}/${stroke} keeps continuous velocity through pose keys and impact`,()=>{
   const c=new Vector3(stroke.includes('backhand')?.65:-.65,stroke==='smash'?2.5:1.2,.65),contact={x:c.x,y:c.y,z:c.z};
   const at=(t:number)=>{const p:PlayerState={characterId,x:0,z:0,tx:0,tz:0,stamina:1,moving:false,stroke,swing:t>=1?.44-(t-1)*.65:0,shotQueued:true,contact,preparation:t<1?{stroke,progress:t,contact}:undefined};return {pose:strokePose(p,c),body:strokeBody(p)};};

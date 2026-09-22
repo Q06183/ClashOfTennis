@@ -1,4 +1,4 @@
-import {singleBackhand} from '../simulation/characters.js';
+import {handedness,singleBackhand} from '../simulation/characters.js';
 import {motionValue} from './motion-curve.js';
 import {servePhase,serveTossHand} from '../simulation/serve-motion.js';
 import {Vector3} from 'three';
@@ -32,6 +32,29 @@ export function strokeBody(p:PlayerState){
  }else if(slice){
   const stance=bh?[[.27,.105,-.16],[-.25,.105,.2]]:[[.26,.105,.19],[-.28,.105,-.17]];
   keys=[key(0),key(.5,{drop:.09,hips:dir*.45,lean:.02,hand:bh?[.5,1.48,.02]:[.6,1.35,.5],feet:stance,face:-dir*.28}),key(.8,{drop:.06,hips:dir*.35,hand:bh?[.83,1.3,-.43]:[.45,1.35,.4],feet:stance,face:-dir*.22}),key(1,{drop:.0045,hips:dir*.25,hand:bh?[.88,1.28,-.52]:[.4,1.25,.32],feet:stance,face:-dir*.22}),key(1.65,{drop:.055,hips:dir*.28,lean:.08,hand:bh?[.9,1.3,-.55]:[.48,1.35,.15],feet:stance,face:-dir*.15}),key(2)];
+ }else if(handedness(p.characterId)===-1&&(stroke==='forehand'||stroke==='backhand')){
+  // Left profiles are authored in canonical stroke space, then reflected with
+  // the racket. Shoulder coil leads the arm; the hips unwind before the finish.
+  const single=bh&&singleBackhand(p.characterId);
+  const stance=bh?[[.27,.105,-.16],[-.29,.105,.22]]:[[.3,.105,.12],[-.32,.105,-.14]];
+  if(single)keys=[key(0),
+   key(.5,{drop:.14,hips:.68,feet:stance,hand:[.4,1.36,.15],yaw:[.45,.3]}),
+   key(.76,{drop:.075,hips:.44,feet:stance,hand:[.62,1.12,-.42],yaw:[.4,.25]}),
+   key(1,{drop:.0045,hips:.28,feet:stance,hand:[.7,1.18,-.58],yaw:[.35,.2]}),
+   key(1.55,{drop:.035,hips:.14,feet:stance,hand:[.72,1.35,-.6],face:-.3,yaw:[.3,.15]}),
+   key(1.8,{drop:.025,hips:.06,hand:[.55,1.3,-.2]}),key(2)];
+  else if(bh)keys=[key(0),
+   key(.5,{drop:.14,hips:.58,feet:stance,yaw:[.5,.3]}),
+   key(.76,{drop:.075,hips:.25,feet:stance,yaw:[.3,.15]}),
+   key(1,{drop:.0045,hips:.08,feet:stance,yaw:[.15,.05]}),
+   key(1.55,{drop:.04,hips:-.43,feet:[[.25,.14,-.06],[-.29,.105,.22]],face:-.45,yaw:[-.2,-.2]}),
+   key(1.8,{drop:.03,hips:-.2,face:-.2}),key(2)];
+  else keys=[key(0),
+   key(.5,{drop:.13,hips:-.6,lean:.045,hand:[-.12,1.36,.6],feet:stance,yaw:[-.15,-.5]}),
+   key(.76,{drop:.075,hips:-.23,hand:[.08,1.32,.54],feet:stance,yaw:[-.08,-.3]}),
+   key(1,{drop:.0045,hips:.04,hand:[.27,1.27,.34],feet:stance,yaw:[0,-.12]}),
+   key(1.55,{drop:.035,hips:.45,lean:.07,hand:[.26,1.32,.35],feet:[[.3,.105,.12],[-.3,.14,-.06]],face:.4,yaw:[.25,.2]}),
+   key(1.8,{drop:.025,hips:.22,hand:[.3,1.28,.35],face:.2}),key(2)];
  }else if(bh&&singleBackhand(p.characterId)&&stroke!=='lob'){
   const stance=[[.27,.105,-.15],[-.29,.105,.23]];
   keys=[key(0),key(.5,{drop:.13,hips:.6,feet:stance,hand:[.4,1.36,.15]}),
