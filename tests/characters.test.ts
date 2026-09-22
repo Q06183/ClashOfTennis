@@ -16,7 +16,7 @@ test('movement and endurance attributes affect actual court travel and point rec
 });
 test('serve specialization alters real launch speed without changing swipe heading, target or colour tier',()=>{
  for(const total of [0,1]){const samples:Record<string,BallState>={};
- for(const id of ['mei','lin','leo']){const m=new Match([id,id]);m.state.score=[total,0];m.state.phase='point';m.state.pointTimer=0;m.step(1/60);m.input(m.state.server,{type:'shot',aim:0,depth:.5,power:.6,lob:false});for(let i=0;i<60&&m.state.rally===0;i++)m.step(1/60);samples[id]=structuredClone(m.state.ball);assert.equal(predictFlight(m.state.ball).hitNet,false);m.dispose();}
+ for(const id of ['mei','lin','leo']){const m=new Match([id,id]);m.state.score=[total,0];m.state.phase='point';m.state.pointTimer=0;m.step(1/60);m.input(m.state.server,{type:'shot',aim:0,depth:.5,power:.6,lob:false});for(let i=0;i<90&&m.state.rally===0;i++)m.step(1/60);samples[id]=structuredClone(m.state.ball);assert.equal(predictFlight(m.state.ball).hitNet,false);m.dispose();}
  assert.ok(Math.abs(samples.mei.vz)<Math.abs(samples.lin.vz)&&Math.abs(samples.lin.vz)<Math.abs(samples.leo.vz));for(const id of ['mei','leo']){assert.equal(samples[id].targetZ,samples.lin.targetZ);assert.equal(samples[id].targetX,samples.lin.targetX);assert.equal(samples[id].tier,samples.lin.tier);}
  }
 });
@@ -43,7 +43,7 @@ test('stamina specialization changes actual running drain, idle recovery and str
  for(const id of ['mei','lin','leo']){
   const samples=[];
   for(const moving of [true,false]){const m=new Match([id,'lin']);const p=m.state.players[0];p.stamina=.5;p.x=-3;p.tx=moving?3:-3;p.tz=p.z;m.state.phase='rally';m.state.ball.hitter=0;m.physics.place({x:0,y:3,z:1},{x:0,y:0,z:-3});Object.assign(m.state.ball,m.physics.read());for(let i=0;i<20;i++)m.step(1/60);samples.push(p.stamina);m.dispose();}
-  const m=new Match([id,'lin']);m.input(0,{type:'shot',aim:0,depth:.5,power:.5,lob:false});for(let i=0;i<60&&m.state.rally===0;i++)m.step(1/60);samples.push(m.state.players[0].stamina);m.dispose();results[id]=samples;
+  const m=new Match([id,'lin']);m.input(0,{type:'shot',aim:0,depth:.5,power:.5,lob:false});for(let i=0;i<90&&m.state.rally===0;i++)m.step(1/60);samples.push(m.state.players[0].stamina);m.dispose();results[id]=samples;
  }
  for(let i=0;i<3;i++)assert.ok(results.mei[i]>results.lin[i]&&results.lin[i]>results.leo[i],`stamina scenario${i}: ${JSON.stringify(results)}`);
 });

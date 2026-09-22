@@ -1,4 +1,5 @@
 import {clamp,type MatchState,type PlayerState} from '../simulation/types.js';
+import {SERVE_DURATION} from '../simulation/serve-motion.js';
 import {flightGravity} from '../simulation/flight.js';
 import {COURT} from '../simulation/rules.js';
 type Snapshot={state:MatchState;at:number};
@@ -35,7 +36,7 @@ export class SnapshotPlayback {
   const out=this.draw,players=out.players,ball=out.ball;
   Object.assign(out,state,{players,ball});Object.assign(ball,state.ball);
   for(const key of ['tier','skill','topspin','slice'] as const)if(!(key in state.ball))delete ball[key];
-  for(let i=0;i<2;i++)Object.assign(players[i],state.players[i],{preparation:state.players[i].preparation,contact:state.players[i].contact,rescue:state.players[i].rescue});
+  for(let i=0;i<2;i++)Object.assign(players[i],state.players[i],{strokeSpin:state.players[i].strokeSpin,preparation:state.players[i].preparation,contact:state.players[i].contact,rescue:state.players[i].rescue});
   return out;
  }
  sample(now:number,frozen=false):MatchState|null{
@@ -70,7 +71,7 @@ export class SnapshotPlayback {
  }
  private animate(out:PlayerState,from:PlayerState,dt:number){
   out.swing=Math.max(0,from.swing-dt);
-  if(from.preparation)out.preparation={...from.preparation,progress:Math.min(.999,from.preparation.progress+dt/(from.preparation.stroke==='serve'?.8:.65))};
+  if(from.preparation)out.preparation={...from.preparation,progress:Math.min(.999,from.preparation.progress+dt/(from.preparation.stroke==='serve'?SERVE_DURATION:.65))};
  }
  private advanceBall(out:MatchState,dt:number){
   if(out.phase!=='rally')return;

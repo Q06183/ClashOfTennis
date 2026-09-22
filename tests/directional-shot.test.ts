@@ -10,7 +10,7 @@ test('directional swipe starts at the ball, never snaps back toward court centre
     const m=new Match();m.state.score=[total,0];m.state.phase='point';m.state.pointTimer=0;m.step(1/60);
     const seat=m.state.server,sign=seat===0?1:-1,start={...m.state.ball};
     m.input(seat,{...base,directionX} as Shot);
-    for(let i=0;i<60&&m.state.rally===0;i++)m.step(1/60);
+    for(let i=0;i<90&&m.state.rally===0;i++)m.step(1/60);
     const b=m.state.ball;
     assert.ok(Math.abs((b.targetX-start.x)*sign-directionX*Math.abs(b.targetZ-start.z))<1e-6);
     assert.ok(Math.abs(b.vx/b.vz+(directionX))<1e-6);

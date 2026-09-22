@@ -34,7 +34,7 @@ test('smash uses an overhead contact pose with racket on the actual ball at both
   const tip=a.root.getObjectByName('racket-sweet-spot')!.getWorldPosition(new Vector3());assert.ok(tip.distanceTo(new Vector3(c.x,c.y,c.z))<.09,`smash contact ${tip.distanceTo(new Vector3(c.x,c.y,c.z))}`);m.dispose();
  }
 });
-function spinServe(topspin:number){const m=new Match(['lin','lin'],()=>1);m.input(0,{...shot,power:.55,depth:.5,topspin});for(let i=0;i<60&&m.state.phase==='serve';i++)m.step(1/60);return m;}
+function spinServe(topspin:number){const m=new Match(['lin','lin'],()=>1);m.input(0,{...shot,power:.55,depth:.5,topspin});for(let i=0;i<90&&m.state.phase==='serve';i++)m.step(1/60);return m;}
 test('topspin visibly bends more and actual landing follows its preview, then kicks forward on bounce',()=>{
  const flat=spinServe(0),spin=spinServe(1),f=predictFlight(flat.state.ball),t=predictFlight(spin.state.ball);
  assert.equal(spin.state.ball.tier,'topspin');assert.ok(t.points[20].y>f.points[20].y+.2);assert.ok(Math.abs(t.landing.x-spin.state.ball.targetX)<.001);assert.ok(Math.abs(t.landing.z-spin.state.ball.targetZ)<.001);

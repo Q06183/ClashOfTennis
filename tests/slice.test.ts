@@ -28,7 +28,7 @@ test('server scatter changes first landing and the irregular bounce, with a boun
 });
 test('slice input rejects malformed flags and serving stays an overhead serve',()=>{
  for(const slice of ['yes',1,null]){const m=new Match();m.input(0,{...shot,slice} as any);m.step(.1);assert.equal(m.state.players[0].preparation,undefined);m.dispose();}
- const m=new Match();m.input(0,{...shot,topspin:1,critical:true,power:1});for(let i=0;i<60&&m.state.phase==='serve';i++)m.step(1/60);assert.equal(m.state.players[0].stroke,'serve');assert.equal(m.state.ball.slice,false);assert.equal(m.state.ball.topspin,0);assert.equal(m.state.ball.critical,false);m.dispose();
+ const m=new Match();m.input(0,{...shot,topspin:1,critical:true,power:1});for(let i=0;i<90&&m.state.phase==='serve';i++)m.step(1/60);assert.equal(m.state.players[0].stroke,'serve');assert.equal(m.state.ball.slice,false);assert.equal(m.state.ball.topspin,0);assert.equal(m.state.ball.critical,false);m.dispose();
 });
 import {shotDirection,swipeDirection} from '../src/input/aim.js';import {frameMatch} from '../src/render/camera.js';
 test('downward diagonals project opposite the finger through both player cameras and authority',()=>{

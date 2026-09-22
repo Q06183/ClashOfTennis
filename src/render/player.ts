@@ -1,5 +1,6 @@
 import * as T from 'three';
 import {AthleteSkin} from './athlete-skin.js';
+import {strokeBody} from './stroke-body.js';
 import {strokePose} from './strokes.js';
 import {RACKET,contactCrouch} from '../simulation/athlete.js';
 import {rescuePose} from '../simulation/rescue.js';
@@ -97,11 +98,11 @@ export class Athlete {
     this.root.traverse(o=>{if(o.userData.fallbackBody)o.visible=false;});
     this.root.add(scene);this.modelSource='lux3d';
   }
-  private armTo(index:number,hand:T.Vector3){
+  private armTo(index:number,hand:T.Vector3,elbowPole?:T.Vector3){
     this.root.updateMatrixWorld(true);
     const arm=this.arms[index],elbow=this.elbows[index],target=this.torso.worldToLocal(hand.clone()).sub(arm.position);
     const d=T.MathUtils.clamp(target.length(),.051,.669),axis=target.normalize();
-    const pole=new T.Vector3(index?-.7:.7,-1,.35);pole.addScaledVector(axis,-pole.dot(axis)).normalize();
+    const pole=elbowPole?.clone()??new T.Vector3(index?-.7:.7,-1,.35);pole.addScaledVector(axis,-pole.dot(axis)).normalize();
     const along=(.36**2+d*d-.31**2)/(2*d),height=Math.sqrt(Math.max(0,.36**2-along*along));
     const upper=axis.clone().multiplyScalar(along).addScaledVector(pole,height);
     arm.quaternion.setFromUnitVectors(down,upper.clone().normalize());
@@ -109,7 +110,7 @@ export class Athlete {
     elbow.quaternion.setFromUnitVectors(down,lower);
     this.root.updateMatrixWorld(true);
   }
-  private racketTo(tipLocal:T.Vector3,shaftLocal:T.Vector3,twoHands:boolean,adjustment=0){
+  private racketTo(tipLocal:T.Vector3,shaftLocal:T.Vector3,twoHands:boolean,adjustment=0,faceRoll=0,elbowPole?:T.Vector3){
     this.root.updateMatrixWorld(true);
     const tip=this.root.localToWorld(tipLocal.clone()),rootQ=this.root.getWorldQuaternion(new T.Quaternion());
     const shoulder=this.arms[1].getWorldPosition(new T.Vector3()),axis=tip.clone().sub(shoulder),d=axis.length();axis.normalize();
@@ -148,15 +149,15 @@ export class Athlete {
       if(twoHands&&adjustment<8){
         // Beyond reach during preparation/follow-through, preserve the shared
         // grip by bringing the racket back towards the two-hand ready space.
-        this.racketTo(tipLocal.clone().lerp(new T.Vector3(0,1.45,.55),.25),shaftLocal,true,adjustment+1);return;
+        this.racketTo(tipLocal.clone().lerp(new T.Vector3(0,1.45,.55),.25),shaftLocal,true,adjustment+1,faceRoll,elbowPole);return;
       }
       // Predicted preparation points can be unreachable; keep the racket close
       // until the runner arrives. Actual impact eligibility uses physical reach.
       hand.copy(shoulder).addScaledVector(axis,Math.min(.667,Math.max(.1,d-RACKET.sweet)));
     }
-    this.armTo(1,hand);
+    this.armTo(1,hand,elbowPole);
     const actualHand=this.racket.getWorldPosition(new T.Vector3());shaft=tip.clone().sub(actualHand).normalize();
-    const y=shaft.clone().negate(),normal=new T.Vector3(0,0,1).applyQuaternion(rootQ);normal.addScaledVector(y,-normal.dot(y)).normalize();
+    const y=shaft.clone().negate(),normal=new T.Vector3(0,0,1).applyQuaternion(rootQ);normal.addScaledVector(y,-normal.dot(y)).normalize().applyAxisAngle(shaft,faceRoll);
     const x=y.clone().cross(normal).normalize(),z=x.clone().cross(y).normalize();
     const q=new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(x,y,z));
     this.racket.quaternion.copy(this.elbows[1].getWorldQuaternion(new T.Quaternion()).invert().multiply(q));
@@ -190,33 +191,37 @@ export class Athlete {
       pose.shaft.set(-.8,.15,.3).normalize();pose.twoHands=false;pose.turn=0;pose.knee=.38;pose.toss=0;
     }
     const dt=deltaTime??Math.max(1/60,Math.min(.08,time-this.lastTime));this.lastTime=time;
-    const serve=p.preparation?.stroke==='serve'||p.preparation?.stroke==='smash'||!p.preparation&&(p.stroke==='serve'||p.stroke==='smash')&&p.swing>0;
-    const lift=serve?.2*(p.preparation?T.MathUtils.smoothstep(p.preparation.progress,.65,1):T.MathUtils.smoothstep(p.swing,.12,.44)):0;
-    const gait=this.footwork.update(this.root.position,this.root.quaternion,dt),movement=gait.localDirection;
-    const striking=Math.max(Math.min(1,p.swing/.15),p.shotQueued&&p.preparation?T.MathUtils.clamp((p.preparation.progress-.8)/.2,0,1):0);
-    const stride=Math.sin(gait.phase*Math.PI*2)*Math.min(1,gait.speed/2);
-    const backhand=(p.preparation?.stroke??p.stroke)==='backhand';
-    const loading=backhand&&p.preparation?.progress!==undefined?.06*Math.sin(Math.PI*p.preparation.progress):0;
-    const hipDrop=T.MathUtils.lerp(gait.hipDrop,.74*(1-Math.cos(pose.knee/2)),striking)-lift+loading+contactCrouch(contact.y)*striking;
-    const hipTurn=gait.turn+(backhand&&active?pose.turn*.45*(1-Math.min(1,gait.speed/2)):0);
+    const body=strokeBody(p),gait=this.footwork.update(this.root.position,this.root.quaternion,dt),movement=gait.localDirection;
+    const speedBlend=1-T.MathUtils.smoothstep(gait.speed,1.5,4.5);
+    // Whole-body loading must run during the serve, even though it has no queued return.
+    const action=active&&!p.rescue?body.blend:0;
+    const lower=action*(p.stroke==='serve'||p.preparation?.stroke==='serve'?1:speedBlend);
+    const contactWeight=p.swing>0?Math.min(1,p.swing/.15):p.preparation?T.MathUtils.smoothstep(p.preparation.progress,.8,1):0;
+    const hipDrop=(p.rescue?T.MathUtils.lerp(gait.hipDrop,.74*(1-Math.cos(pose.knee/2)),contactWeight):T.MathUtils.lerp(gait.hipDrop,body.hipDrop-body.lift,action))+contactCrouch(contact.y)*contactWeight;
+    const hipTurn=T.MathUtils.lerp(gait.turn,body.hipTurn,lower);
     this.hips.position.y=.85-hipDrop;this.hips.rotation.y=hipTurn;
     for(let i=0;i<2;i++){
       this.legs[i].position.set((i?-1:1)*.15,.85-hipDrop,0).applyAxisAngle(new T.Vector3(0,1,0),hipTurn);
-      this.legTo(i,gait.feet[i].add(new T.Vector3(0,lift+rescue.lift+rescue.air*(i?.05:.1),0)),hipTurn);
+      const posed=this.root.localToWorld(body.feet[i].clone());
+      const foot=gait.feet[i].lerp(posed,lower).add(new T.Vector3(0,rescue.lift+rescue.air*(i?.05:.1),0));
+      this.legTo(i,foot,T.MathUtils.lerp(hipTurn*.6,body.footYaw[i],lower));
     }
     this.torso.position.y=-hipDrop;
-    const lean=Math.min(.12,gait.speed*.022)*(1-striking);
-    this.torso.rotation.set(.035+movement.z*lean,pose.turn+gait.turn*.65*(1-striking),-movement.x*lean*.65);
+    const motionStrength=p.rescue?contactWeight:action;
+    const lean=Math.min(.12,gait.speed*.022)*(1-motionStrength);
+    this.torso.rotation.set(T.MathUtils.lerp(.035,body.lean,action)+movement.z*lean,pose.turn+gait.turn*.65*(1-motionStrength),body.sideBend*action-movement.x*lean*.65);
     if(p.rescue){
       const direction=new T.Vector3(p.rescue.toX-p.rescue.fromX,0,p.rescue.toZ-p.rescue.fromZ).applyQuaternion(this.root.quaternion.clone().invert()).normalize();
       this.torso.rotation.x+=direction.z*rescue.lean;this.torso.rotation.z-=direction.x*rescue.lean;
     }
+    const stride=Math.sin(gait.phase*Math.PI*2)*Math.min(1,gait.speed/2);
     this.arms[0].rotation.set(-.45-stride*.3,0,-.3);this.elbows[0].rotation.set(-.6,0,0);this.leftHand.quaternion.identity();
-    this.racketTo(pose.tip,pose.shaft,pose.twoHands);
-    if(pose.toss>0){
-      const hand=this.root.localToWorld(new T.Vector3(.22,1.2+pose.toss*.88,.25));this.armTo(0,hand);
-    }else if(active&&!pose.twoHands){
-      const hand=this.root.localToWorld(new T.Vector3(.38,1.15,.36));this.armTo(0,hand);
+    this.racketTo(pose.tip,pose.shaft,pose.twoHands,0,body.faceRoll*action,action?body.elbow:undefined);
+    if(active&&!pose.twoHands){
+      const hand=this.root.localToWorld((p.rescue?new T.Vector3(.38,1.15,.36):body.freeHand).clone());
+      const tossing=p.preparation?.stroke==='serve';
+      this.armTo(0,hand,tossing?undefined:new T.Vector3(.7,-.6,-.2));
+      if(!tossing)this.leftHand.rotation.y=-.5;
     }
     if(this.generated){this.root.updateMatrixWorld(true);this.generated.update();}
   }

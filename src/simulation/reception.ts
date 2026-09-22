@@ -18,7 +18,7 @@ export function reception(b:BallState,p:PlayerState,seat:Seat){
     point={x:b.x+b.vx*t,y:b.y+b.vy*t-G*t*t/2,z:b.z+b.vz*t};
   }
   // Freeze the intended side while preparing so it cannot flip at the last step.
-  const backhand=(p.preparation?.stroke==='backhand'||p.preparation?.stroke==='slice-backhand')||(!p.preparation&&(point.x-p.x)*sign<-.25);
+  const backhand=(p.preparation?.stroke==='backhand'||p.preparation?.stroke==='slice-backhand'||p.preparation?.stroke==='lob'&&p.backhand)||(!p.preparation&&(point.x-p.x)*sign<-.25);
   const lateral=backhand?-.65:.8;
   return {point,time:t,backhand,x:clamp(point.x-sign*lateral,-6.4,6.4),z:sign*clamp(point.z*sign+.65,1.1,16.5)};
 }

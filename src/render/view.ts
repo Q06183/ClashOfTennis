@@ -4,7 +4,7 @@ import { makeCourt } from './court.js';
 import { Athlete } from './player.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {clone} from 'three/addons/utils/SkeletonUtils.js';
-import { clamp, side, type MatchState, type Seat, type Shot, type Vec } from '../simulation/types.js';
+import { clamp, side, other, type MatchState, type Seat, type Shot, type Vec } from '../simulation/types.js';
 import { shotDirection } from '../input/aim.js';
 import { FlightGuide } from './trajectory.js';
 import {disposeTree} from './dispose.js';
@@ -110,7 +110,7 @@ export class CourtView {
   aimShot(shot:Shot,state:MatchState,dx:number,dy:number):Shot{
     const serve=state.phase==='serve'&&state.server===this.seat;
     const ball=serve?{...state.ball,y:2.65}:state.ball;
-    if(serve)this.aimLock=.9;
+    if(serve)this.aimLock=1.3;
     return {...shot,directionX:shotDirection(this.camera,ball,shot,dx,dy,this.size.w,this.size.h,side(this.seat),serve?-side(this.seat)*shotDepth(shot,true):undefined)};
   }
   courtPoint(x:number,y:number){
@@ -127,7 +127,7 @@ export class CourtView {
       // Limit camera lag after point resets and at the edge of the close view.
       this.focus.x=clamp(this.focus.x,p.x-.6,p.x+.6);
       this.focus.depth=clamp(this.focus.depth,p.z*side(this.seat)-.6,p.z*side(this.seat)+.6);
-      frameMatch(this.camera,this.size.w,this.size.h,this.seat,this.focus.x,this.focus.depth);
+      frameMatch(this.camera,this.size.w,this.size.h,this.seat,this.focus.x,this.focus.depth,state.players[other(this.seat)]);
     }
     for(const seat of [0,1] as Seat[]){
       const p=state.players[seat];this.setCharacter(seat,p.characterId);this.athletes[seat].update(p,state.time,dt);

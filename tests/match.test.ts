@@ -24,9 +24,9 @@ test('receiver cannot volley a serve and cannot hit from across court', () => {
 test('two long serves produce a double fault', () => {
   const m = new Match();
   const bad = {...shot,depth:1,power:1,aim:1.2};
-  m.input(0,bad); advance(m,2);
+  m.input(0,bad); advance(m,2.5);
   assert.equal(m.state.fault,1);
-  advance(m,2); m.input(0,bad); advance(m,2);
+  advance(m,2); m.input(0,bad); advance(m,2.5);
   assert.equal(m.state.score[1],1);
   m.dispose();
 });
@@ -55,7 +55,7 @@ test('serve horizontal aim follows screen direction for both seats and service s
     for(const aim of [-.4,.4]){
       const m=new Match();m.state.score=[total,0];m.state.phase='point';m.state.pointTimer=0;m.step(1/60);
       const seat=m.state.server;m.input(seat,{...shot,aim});
-      for(let i=0;i<60&&m.state.rally===0;i++)m.step(1/60);
+      for(let i=0;i<90&&m.state.rally===0;i++)m.step(1/60);
       targets.push(m.state.ball.targetX*(seat===0?1:-1));m.dispose();
     }
     assert.ok(targets[1]>targets[0],`reversed screen direction at total ${total}`);

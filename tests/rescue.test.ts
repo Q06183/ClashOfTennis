@@ -57,7 +57,7 @@ test('rescue animation lifts both feet, meets the ball and returns to ground',()
 
 test('serve return cannot rescue before its legal first bounce',()=>{
  let draws=0;const m=new Match(['lin','lin'],()=>{draws++;return 0;});m.input(0,shot);
- for(let i=0;i<60&&m.state.phase==='serve';i++)m.step(1/60);
+ for(let i=0;i<90&&m.state.phase==='serve';i++)m.step(1/60);
  const p=m.state.players[1];Object.assign(p,{x:0,z:-10,tx:0,tz:-10,vx:0,vz:0});
  m.input(1,{type:'move',x:0,z:-10});m.physics.place({x:-2.1,y:1,z:-7.8},{x:0,y:.5,z:-10});Object.assign(m.state.ball,m.physics.read(),{bounces:0});
  m.input(1,shot);for(let i=0;i<12;i++)m.step(1/60);

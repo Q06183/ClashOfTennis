@@ -1,0 +1,18 @@
+{
+  "verifiedAt": "2026-09-22T07:10:12.739Z",
+  "endpoint": "ws://100.81.1.29:7470/ws",
+  "transport": "two independent WebSocket clients on this computer",
+  "fullMatchScore": [
+    7,
+    1
+  ],
+  "characters": [
+    "mei",
+    "leo"
+  ],
+  "maxRally": 7,
+  "rescueHits": 1,
+  "rematchReset": true,
+  "wallSeconds": 76,
+  "scope": "Protocol and authoritative simulation only. Not real phone or cross-network verification."
+}

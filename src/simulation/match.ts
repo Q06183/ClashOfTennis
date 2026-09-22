@@ -1,3 +1,4 @@
+import {SERVE_DURATION,serveBallHeight} from './serve-motion.js';
 import {flightGravity,spinAmount} from './flight.js';
 import {canSmash,canVolley,airInterception} from './skills.js';
 import {getCharacter,characterEffects} from './characters.js';
@@ -45,7 +46,7 @@ export class Match {
     const serveSide=side(s.server)*(total%2===0?1:-1);
     s.players.forEach((p,i) => {
       p.x=i===s.server?serveSide*1.5:-serveSide*1.5;
-      p.z=side(i as Seat)*(i===s.server?12.4:10.3); p.tx=p.x;p.tz=p.z;p.vx=0;p.vz=0;p.moving=false;p.swing=0;p.preparation=undefined;p.shotQueued=false;
+      p.z=side(i as Seat)*(i===s.server?12.4:10.3); p.tx=p.x;p.tz=p.z;p.vx=0;p.vz=0;p.moving=false;p.swing=0;p.strokeSpin=0;p.preparation=undefined;p.shotQueued=false;
       if(!this.faultReset) p.stamina=clamp(p.stamina+.2*characterEffects(p.characterId).recovery,0,1);
     });
     const p=s.players[s.server];
@@ -71,7 +72,7 @@ export class Match {
     if(cmd.directionX!==undefined)shot.directionX=clamp(cmd.directionX,-4,4);
     if(s.phase==='serve') { if(seat===s.server&&!this.serveMotion){this.serveMotion={shot,elapsed:0};p.stroke='serve';p.preparation={stroke:'serve',progress:0,contact:{x:p.x,y:2.65,z:p.z-.25*side(seat)}};} return; }
     if(s.ball.hitter===seat) return;
-    this.pending[seat]={shot,flight:s.rally};p.shotQueued=true;
+    this.pending[seat]={shot,flight:s.rally};p.shotQueued=true;p.strokeSpin=shot.topspin??0;
     const recent=this.recentContact;
     // Cover the presentation buffer and small delivery jitter without undoing
     // a bounce/point or extending physical racket reach at the current position.
@@ -133,7 +134,7 @@ export class Match {
     this.physics.place(start,velocity,topspin);
     Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ,critical,tier,rescue,topspin,slice,skill:smash?'smash':slice?'slice':volley?'volley':undefined});
     s.phase='rally';s.rally++;s.maxRally=Math.max(s.maxRally,s.rally);
-    p.swing=.44;p.backhand=(b.x-p.x)*sign<0;
+    p.swing=.44;p.strokeSpin=topspin;p.backhand=(b.x-p.x)*sign<0;
     p.stroke=serve?'serve':smash?'smash':slice?(p.backhand?'slice-backhand':'slice-forehand'):volley?'volley':shot.lob?'lob':p.backhand?'backhand':'forehand';
     p.preparation=undefined;p.shotQueued=false;
     p.contact={...start};if(rescue&&p.rescue){p.rescue.hit=true;p.rescue.contact={...start};}
@@ -170,9 +171,9 @@ export class Match {
     if(s.phase==='serve') {
       this.serveElapsed+=dt;
       if(this.serveMotion){
-        const motion=this.serveMotion;motion.elapsed+=dt;const u=clamp(motion.elapsed/.8,0,1),p=s.players[s.server];
+        const motion=this.serveMotion;motion.elapsed+=dt;const u=clamp(motion.elapsed/SERVE_DURATION,0,1),p=s.players[s.server];
         p.preparation={stroke:'serve',progress:u,contact:{x:p.x,y:2.65,z:p.z-.25*side(s.server)}};
-        this.physics.place({x:p.x,y:1.25+4.6*u-3.2*u*u,z:p.z-.25*side(s.server)});Object.assign(s.ball,this.physics.read());
+        this.physics.place({x:p.x,y:serveBallHeight(u),z:p.z-.25*side(s.server)});Object.assign(s.ball,this.physics.read());
         if(u>=1){this.serveMotion=null;this.hit(s.server,motion.shot,true);}return;
       }
       if(this.serveElapsed>12) this.award(other(s.server),'发球超时');
@@ -224,7 +225,7 @@ export class Match {
         if(soon<.65){
           const smash=air&&'smash' in receiving&&receiving.smash;
           const slice=this.pending[seat]?.shot.slice;
-          p.preparation={stroke:smash?'smash':slice?(receiving.backhand?'slice-backhand':'slice-forehand'):air?'volley':receiving.backhand?'backhand':'forehand',progress:clamp(1-soon/.65,0,1),contact:receiving.point};p.backhand=receiving.backhand;
+          p.preparation={stroke:smash?'smash':slice?(receiving.backhand?'slice-backhand':'slice-forehand'):air?'volley':this.pending[seat]?.shot.lob?'lob':receiving.backhand?'backhand':'forehand',progress:clamp(1-soon/.65,0,1),contact:receiving.point};p.backhand=receiving.backhand;
         }
       }
       if(!moveRescue(p,s.time,dt))movePlayer(p,seat,dt);

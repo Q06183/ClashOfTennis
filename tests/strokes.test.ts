@@ -10,8 +10,8 @@ test('groundstrokes prepare behind the body and finish across the opposite shoul
 test('volley has short preparation and follow-through while serve has a racket drop',()=>{
  const c=new Vector3(-.6,1.4,.65),volley=strokePose({...base,stroke:'volley',swing:.132},c);
  assert.ok(volley.tip.distanceTo(c)<.35);
- const serve=strokePose({...base,preparation:{stroke:'serve',progress:.64,contact:{x:0,y:2.65,z:.25}}},new Vector3(0,2.65,.25));
- assert.ok(serve.shaft.y<-.9);assert.ok(serve.tip.z<-.5);assert.ok(serve.toss>.9);
+ const serve=strokePose({...base,preparation:{stroke:'serve',progress:.72,contact:{x:0,y:2.65,z:.25}}},new Vector3(0,2.65,.25));
+ assert.ok(serve.shaft.y<-.9);assert.ok(serve.tip.z<-.5);assert.ok(strokePose({...base,preparation:{stroke:'serve',progress:.52,contact:{x:0,y:2.65,z:.25}}},new Vector3(0,2.65,.25)).toss>.9);
 });
 test('backhand uses both hands on the handle and the strings face forward at contact',()=>{
  const a=new Athlete(1);a.update({...base,stroke:'backhand',swing:.44,contact:{x:.7,y:1.1,z:.65}},1);a.root.updateMatrixWorld(true);

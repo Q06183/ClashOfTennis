@@ -5,7 +5,7 @@ before(initPhysics);
 const shot={type:'shot',aim:0,depth:.5,power:.5,lob:false} as const;
 test('serve shows a toss and windup before authoritative contact',()=>{
  const m=new Match();m.input(0,shot);m.step(.1);assert.equal(m.state.phase,'serve');assert.equal(m.state.rally,0);assert.ok(m.state.players[0].preparation?.progress);
- for(let i=0;i<60&&m.state.phase==='serve';i++)m.step(1/60);
+ for(let i=0;i<90&&m.state.phase==='serve';i++)m.step(1/60);
  assert.equal(m.state.rally,1);assert.equal(m.state.players[0].stroke,'serve');m.dispose();
 });
 test('reception waits beyond the landing point and leaves lateral and forward swing space',()=>{
@@ -14,7 +14,7 @@ test('reception waits beyond the landing point and leaves lateral and forward sw
  const r=reception(b,p,seat);assert.ok((r.z-r.point.z)*sign>.6);assert.ok(Math.abs(r.x-r.point.x)>.6);assert.ok(r.point.y>.6);assert.ok(r.time>.4);}
 });
 test('an early return gesture survives the full incoming flight and strikes after the bounce',()=>{
- const m=new Match();m.input(0,{...shot,lob:true});for(let i=0;i<60&&m.state.phase==='serve';i++)m.step(1/60);
+ const m=new Match();m.input(0,{...shot,lob:true});for(let i=0;i<90&&m.state.phase==='serve';i++)m.step(1/60);
  m.input(1,shot);let bounce:{x:number;z:number}|undefined;let elapsed=0;
  for(let i=0;i<220&&m.state.rally===1&&m.state.phase==='rally';i++){m.step(1/60);elapsed+=1/60;if(m.state.ball.bounces===1&&!bounce)bounce={...m.state.ball};}
  assert.equal(m.state.rally,2);assert.ok(elapsed>1.25);assert.ok(bounce);const c=m.state.players[1].contact!;assert.ok(c.y>.25,'contact occurs above ground after the legal first bounce');m.dispose();
