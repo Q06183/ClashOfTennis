@@ -10,7 +10,7 @@ export function canVolley(b:BallState,p:PlayerState,seat:Seat){
 }
 /** Meet the incoming flight in front of the chosen net position, never chase its bounce. */
 export function airInterception(b:BallState,p:PlayerState,seat:Seat){
- const sign=side(seat),depth=clamp(p.tz*sign,1.1,7.4),plane=(depth-.45)*sign;
+ const sign=side(seat),depth=clamp(p.tz*sign,1.1,16.5),plane=(depth-.45)*sign;
  const t=b.vz*sign>.1?clamp((plane-b.z)/b.vz,0,.55):0;
  const point={x:b.x+b.vx*t,y:b.y+b.vy*t-flightGravity(b)*t*t/2,z:b.z+b.vz*t};
  const backhand=(point.x-p.x)*sign<-.25,smash=point.y>=1.85&&point.y<2.7&&b.vy-flightGravity(b)*t<=1;
@@ -22,3 +22,9 @@ export function canReturnNormally(b:BallState,p:PlayerState,seat:Seat,slice=fals
  const sign=side(seat);
  return canSmash(b,p,seat)||(b.bounces===0?canVolley(b,p,seat):canReachContact(-(b.x-p.x)*sign,b.y,-(b.z-p.z)*sign,(b.x-p.x)*sign<0,slice));
 }
+
+/** A nearby airborne ball can be blocked anywhere; deeper automatic runs still
+ * use the bounce unless the current flight is already within racket reach. */
+export const wantsAirContact=(b:BallState,p:PlayerState,seat:Seat,serviceFlight:boolean)=>!serviceFlight&&b.bounces===0&&(Math.abs(p.z)<=7.4||canVolley(b,p,seat)||canSmash(b,p,seat));
+export const returnHeightLegal=(b:BallState)=>b.y>(b.bounces===0?.13:.25)&&b.y<3.1;
+export const volleyDifficulty=(b:BallState,p:PlayerState)=>Math.max(clamp((Math.abs(p.z)-6)/6,0,1),clamp((.8-b.y)/.65,0,1)*.65);

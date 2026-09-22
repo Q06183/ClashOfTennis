@@ -135,3 +135,14 @@ test('smash, volley, topspin and irregular slice bounce are identical on two rea
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
+
+test('both sockets receive the same weak low volley before its incoming ball touches the floor',async()=>{
+ const {Match}=await import('../src/simulation/match.js');const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{a.send({type:'create',name:'低球A'});const welcome=await a.wait('welcome');b.send({type:'join',code:welcome.code,name:'低球B'});await b.wait('welcome');a.send({type:'ready'});b.send({type:'ready'});await a.wait('state');const room=server.rooms.rooms.get(welcome.code)!;
+ for(const seat of [0,1] as const){room.match!.dispose();const m=room.match=new Match(['lin','lin'],()=>1),sign=seat===0?1:-1;m.state.phase='rally';m.state.rally=2;m.step(.08);Object.assign(m.state.players[seat],{x:0,z:11*sign,tx:0,tz:11*sign,vx:0,vz:0});m.physics.place({x:.3*sign,y:.18,z:10.95*sign},{x:0,y:-3,z:5*sign});Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:0});a.messages.length=0;b.messages.length=0;
+ // Deliver through the actual protocol before advancing this deterministic low window.
+ (seat===0?a:b).send({type:'input',command:{type:'shot',aim:0,depth:.8,power:1,critical:true,lob:false}});
+ const hit=await a.wait('state',v=>v.state.rally===3&&v.state.ball.skill==='volley'),peer=await b.wait('state',v=>v.seq===hit.seq);assert.deepEqual(hit.state,peer.state);assert.equal(hit.state.ball.critical,false);assert.ok(hit.state.players[seat].contact.y<.25);
+ }
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
+});

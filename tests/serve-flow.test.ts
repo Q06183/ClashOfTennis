@@ -5,7 +5,7 @@ const c=new Vector3(0,2.65,.25),base:PlayerState={x:0,z:0,tx:0,tz:0,stamina:1,mo
 function preparing(t:number){return strokePose({...base,preparation:{stroke:'serve',progress:t,contact:{x:c.x,y:c.y,z:c.z}}},c);}
 before(initPhysics);
 test('service racket flows through intermediate poses without stopping at every key',()=>{
- const e=.0001;
+ const e=.00001;
  for(const t of [.32,.52,.88]){const left=preparing(t).tip.sub(preparing(t-e).tip).multiplyScalar(1/(e*SERVE_DURATION)),right=preparing(t+e).tip.sub(preparing(t).tip).multiplyScalar(1/(e*SERVE_DURATION));assert.ok(left.length()>.2,`unintended full stop at ${t}`);assert.ok(left.distanceTo(right)<.03,`velocity discontinuity at ${t}`);}
 });
 test('ball release preserves upward velocity instead of launching from a stopped hand',()=>{

@@ -36,7 +36,7 @@ export class SnapshotPlayback {
   const out=this.draw,players=out.players,ball=out.ball;
   Object.assign(out,state,{players,ball});Object.assign(ball,state.ball);
   for(const key of ['tier','skill','topspin','slice'] as const)if(!(key in state.ball))delete ball[key];
-  for(let i=0;i<2;i++)Object.assign(players[i],state.players[i],{strokeSpin:state.players[i].strokeSpin,preparation:state.players[i].preparation,contact:state.players[i].contact,rescue:state.players[i].rescue});
+  for(let i=0;i<2;i++)Object.assign(players[i],state.players[i],{serveCourt:state.players[i].serveCourt,strokeSpin:state.players[i].strokeSpin,preparation:state.players[i].preparation,contact:state.players[i].contact,rescue:state.players[i].rescue});
   return out;
  }
  sample(now:number,frozen=false):MatchState|null{

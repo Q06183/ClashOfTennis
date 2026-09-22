@@ -14,10 +14,12 @@ export function strokeBody(p:PlayerState){
  const slice=stroke==='slice-forehand'||stroke==='slice-backhand',dir=bh?1:-1;
  let keys:BodyKey[];
  if(stroke==='serve'){
-  const stance=[[.22,.105,.18],[-.24,.105,-.23]],flight=[[.22,.305,.18],[-.24,.305,-.20]];
-  keys=[key(0),key(.25,{head:-.2,hips:-.55,lean:-.04,hand:[0,1.75,.25],feet:stance,yaw:[-.35,-1.25],elbow:[-1,.2,-.4]}),
-   key(.55,{head:-.62,drop:.18,hips:-.65,lean:-.1,bank:.18,hand:[.05,2.03,.25],feet:stance,yaw:[-.35,-1.25],face:-.65,elbow:[-1,.3,-.35]}),
-   key(.72,{head:-.75,drop:.1,hips:-.45,lean:-.07,bank:.12,hand:[0,1.3,.25],feet:stance,yaw:[-.35,-1.25],face:-1.2,elbow:[-1,.45,-.2]}),
+  const court=p.serveCourt==='ad'?1:-1,angle=court*.14;
+  const rotate=(x:number,y:number,z:number)=>new Vector3(x,y,z).applyAxisAngle(new Vector3(0,1,0),angle).toArray();
+  const stance=[rotate(.22+court*.025,.105,.18),rotate(-.24-court*.025,.105,-.23)],flight=[rotate(.22+court*.025,.305,.18),rotate(-.24-court*.025,.305,-.20)];
+  keys=[key(0),key(.25,{head:-.2,hips:-.7,lean:-.04,hand:[0,1.75,.25],feet:stance,yaw:[-.35+angle,-1.25+angle],elbow:[-1,.2,-.4]}),
+   key(.55,{head:-.62,drop:.18,hips:-1.05+court*.08,lean:-.1,bank:.18,hand:[.05,2.03,.25],feet:stance,yaw:[-.35+angle,-1.25+angle],face:-.65,elbow:[-1,.3,-.35]}),
+   key(.72,{head:-.75,drop:.1,hips:-.7+court*.06,lean:-.07,bank:.12,hand:[0,1.3,.25],feet:stance,yaw:[-.35+angle,-1.25+angle],face:-1.2,elbow:[-1,.45,-.2]}),
    key(1,{head:-.65,drop:.0045,hips:-.1,lift:.2,hand:[0,1.3,.25],feet:flight,yaw:[-.15,-.7],elbow:[-.8,.25,-.15]}),
    key(1.2,{head:-.12,drop:.085,hips:.32,lean:.18,bank:-.08,hand:[.46,1.2,.05],feet:[[.16,.105,.29],[-.25,.33,-.32]],yaw:[-.1,-.45],face:.95,elbow:[-.6,-.6,.35]}),
    key(1.42,{head:0,drop:.05,hips:.12,lean:.08,feet:[[.2,.105,.13],[-.24,.14,-.1]],face:.25}),key(1.6)];

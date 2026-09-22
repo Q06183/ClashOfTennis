@@ -14,6 +14,7 @@ export type PlayerState = {
   preparation?: {stroke:PlayerState['stroke'];progress:number;contact:Vec};
   shotQueued?: boolean;
   strokeSpin?: number;
+  serveCourt?: 'deuce'|'ad';
   rescue?: {startedAt:number;fromX:number;fromZ:number;toX:number;toZ:number;contact:Vec;hit:boolean};
 };
 export type BallState = Vec & { vx: number; vy: number; vz: number; bounces: number; hitter: Seat; targetX: number; targetZ: number; tier?: ShotTier; critical?: boolean; rescue?: boolean; topspin?: number; slice?: boolean; skill?: 'smash'|'volley'|'slice' };

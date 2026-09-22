@@ -231,6 +231,13 @@ export class Athlete {
       if(gripBlend){const grip=this.racket.localToWorld(new T.Vector3(0,-RACKET.secondHand,0));hand.lerp(grip,gripBlend);}
       const leftPole=serving?new T.Vector3(1,0,-.2).lerp(new T.Vector3(.7,-1,.35),gripBlend):new T.Vector3(.7,-.6,-.2);
       this.armTo(0,hand,leftPole,serving?1-gripBlend:0);
+      if(serving){
+        // Keep the open tossing palm steady instead of inheriting the IK
+        // forearm's axial twist; fold it toward the trunk after release.
+        const fold=T.MathUtils.smoothstep(p.preparation?.progress??1,.56,1);
+        const q=this.root.getWorldQuaternion(new T.Quaternion()).multiply(new T.Quaternion().setFromEuler(new T.Euler(-1.1+.65*fold,.3*fold,-.2)));
+        this.leftHand.quaternion.copy(this.elbows[0].getWorldQuaternion(new T.Quaternion()).invert().multiply(q));
+      }
       if(!tossing&&!serving)this.leftHand.rotation.y=-.5;
       if(gripBlend){const gripQ=this.elbows[0].getWorldQuaternion(new T.Quaternion()).invert().multiply(this.racket.getWorldQuaternion(new T.Quaternion()));this.leftHand.quaternion.slerp(gripQ,gripBlend);}
     }

@@ -1,6 +1,6 @@
 import {movePlayer} from './movement.js';
 import {reception} from './reception.js';
-import {airInterception,canReturnNormally} from './skills.js';
+import {airInterception,canReturnNormally,wantsAirContact,returnHeightLegal} from './skills.js';
 import {flightGravity} from './flight.js';
 import {contactCrouch} from './athlete.js';
 import {clamp,side,type BallState,type PlayerState,type Seat} from './types.js';
@@ -28,11 +28,11 @@ export function hasNormalReturnWindow(b:BallState,p:PlayerState,seat:Seat,option
    ball.x+=ball.vx*dt;ball.z+=ball.vz*dt;ball.y+=ball.vy*dt-G*dt*dt/2;ball.vy-=G*dt;
   }
   if(ball.y<=.12||ball.z*sign<=.35)break;
-  const air=!options.serviceFlight&&ball.bounces===0&&Math.abs(runner.z)<=7.4;
+  const air=wantsAirContact(ball,runner,seat,options.serviceFlight);
   const receiving=air?airInterception(ball,runner,seat):reception(ball,runner,seat);
   if(options.time+step*dt>options.manualUntil||air&&runner.shotQueued){runner.tx=receiving.x;runner.tz=receiving.z;}
   if(step)movePlayer(runner,seat,dt);
-  if(ball.y>.25&&ball.y<3.1&&(!options.serviceFlight||ball.bounces>0)&&canReturnNormally(ball,runner,seat,options.slice))return true;
+  if(returnHeightLegal(ball)&&(!options.serviceFlight||ball.bounces>0)&&canReturnNormally(ball,runner,seat,options.slice))return true;
  }
  return false;
 }
