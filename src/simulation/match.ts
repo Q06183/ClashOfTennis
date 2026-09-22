@@ -81,16 +81,18 @@ export class Match {
     if(swipeAim)shot.swipeAim=swipeAim;
     if(s.phase==='serve') { if(seat===s.server&&!this.serveMotion){this.serveMotion={shot,elapsed:0};p.stroke='serve';p.preparation={stroke:'serve',progress:0,contact:{x:p.x,y:2.65,z:p.z-.25*side(seat)}};} return; }
     if(s.ball.hitter===seat) return;
-    this.pending[seat]={shot,flight:s.rally,airRequested:s.ball.bounces===0&&canReturnNormally(s.ball,p,seat,!!shot.slice)};p.shotQueued=true;p.strokeSpin=shot.topspin??0;
-    // Do not let the next physics step bounce a currently reachable low volley.
-    if(s.ball.bounces===0&&this.returnLegal(seat)&&this.returnReachable(seat)){this.hit(seat,shot);return;}
+    // A fresh gesture takes the current legal contact immediately, regardless
+    // of automatic positioning preferences or a previously queued shot.
+    if(this.returnLegal(seat)&&this.returnReachable(seat,s.ball,!!shot.slice)){this.hit(seat,shot);return;}
     const recent=this.recentContact;
     // Cover the presentation buffer and small delivery jitter without undoing
     // a bounce/point or extending physical racket reach at the current position.
     if(recent&&recent.seat===seat&&recent.flight===s.rally&&s.time-recent.at<=.16&&
-       recent.ball.bounces===s.ball.bounces&&!p.rescue&&this.returnLegal(seat,recent.ball)&&this.returnReachable(seat,recent.ball)){
-      Object.assign(s.ball,recent.ball);this.hit(seat,shot);
+       recent.ball.bounces===s.ball.bounces&&!p.rescue&&this.returnLegal(seat,recent.ball)&&this.returnReachable(seat,recent.ball,!!shot.slice)){
+      Object.assign(s.ball,recent.ball);this.hit(seat,shot);return;
     }
+    // Only a gesture that cannot hit now becomes a future-contact instruction.
+    this.pending[seat]={shot,flight:s.rally,airRequested:s.ball.bounces===0&&canReturnNormally(s.ball,p,seat,!!shot.slice)};p.shotQueued=true;p.strokeSpin=shot.topspin??0;
   }
   private returnLegal(seat:Seat,b:BallState=this.state.ball){
     const p=this.state.players[seat];
@@ -98,9 +100,9 @@ export class Match {
       !p.rescue?.hit&&b.z*side(seat)>.35&&returnHeightLegal(b)&&
       (!this.serviceFlight||b.bounces>0);
   }
-  private returnReachable(seat:Seat,b:BallState=this.state.ball){
+  private returnReachable(seat:Seat,b:BallState=this.state.ball,slice=!!this.pending[seat]?.shot.slice){
     const p=this.state.players[seat];
-    return p.rescue?canReachRescue(b,p,seat,this.state.time):canReturnNormally(b,p,seat,!!this.pending[seat]?.shot.slice);
+    return p.rescue?canReachRescue(b,p,seat,this.state.time):canReturnNormally(b,p,seat,slice);
   }
   private hit(seat: Seat, shot: Shot, serve=false) {
     const s=this.state,p=s.players[seat],b=s.ball,sign=side(seat);
