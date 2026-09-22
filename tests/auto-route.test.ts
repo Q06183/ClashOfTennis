@@ -12,7 +12,7 @@ test('route selects a reachable airborne contact along the flight, beyond old ha
 });
 test('unreachable slow volley falls back to a point beyond the bounce and serves always bounce',()=>{
  const m=new Match(),p=m.state.players[0];Object.assign(p,{x:-5,z:13,tx:0,tz:3});const b={...m.state.ball,x:3,y:.7,z:6,vx:0,vy:-1,vz:3,bounces:0};
- assert.equal(returnPlan(b,p,0,false).air,false);const plan=returnPlan(b,p,0,true);assert.equal(plan.air,false);assert.ok(plan.z>plan.point.z+.6);m.dispose();
+ assert.equal(returnPlan(b,p,0,false).air,false);const plan=returnPlan(b,p,0,true);assert.equal(plan.air,false);assert.ok(plan.z>plan.point.z);assert.ok(canReturnNormally({...b,...plan.point,bounces:1},{...p,x:plan.x,z:plan.z},0));m.dispose();
 });
 test('new interception routes mirror across seats and handedness without changing the shot aim',()=>{
  const m=new Match();for(const seat of [0,1] as Seat[]){const sign=side(seat),p={...m.state.players[seat],characterId:'lin',x:-1,z:9*sign,tx:0,tz:12*sign,vx:.2,vz:0},b={...m.state.ball,x:1,y:2.2,z:2*sign,vx:.1,vy:4,vz:6*sign,bounces:0};
