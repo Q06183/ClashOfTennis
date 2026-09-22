@@ -1,3 +1,4 @@
+import {directionAtContact,validateSwipeAim} from './shot-aim.js';
 import {prefersBounce,ReturnPlanner,shouldAssist} from './return-plan.js';
 import {handedness} from './characters.js';
 import {SERVE_DURATION,SERVE_RECOVERY,serveBallHeight} from './serve-motion.js';
@@ -73,8 +74,11 @@ export class Match {
     if(cmd.topspin!==undefined&&(typeof cmd.topspin!=='number'||!Number.isFinite(cmd.topspin)))return;
     if(cmd.critical!==undefined&&typeof cmd.critical!=='boolean')return;
     if(cmd.directionX!==undefined&&!Number.isFinite(cmd.directionX))return;
+    const swipeAim=cmd.swipeAim===undefined?undefined:validateSwipeAim(cmd.swipeAim);
+    if(cmd.swipeAim!==undefined&&!swipeAim)return;
     const shot:Shot={type:'shot',aim:clamp(cmd.aim,-1.2,1.2),depth:clamp(cmd.depth,0,1),power:clamp(cmd.power,0,1),lob:cmd.lob&&!cmd.slice,slice:cmd.slice===true,topspin:cmd.lob||cmd.slice?0:spinAmount(cmd.topspin),critical:cmd.critical===true&&cmd.power>=.9&&!cmd.lob&&!cmd.slice};
     if(cmd.directionX!==undefined)shot.directionX=clamp(cmd.directionX,-4,4);
+    if(swipeAim)shot.swipeAim=swipeAim;
     if(s.phase==='serve') { if(seat===s.server&&!this.serveMotion){this.serveMotion={shot,elapsed:0};p.stroke='serve';p.preparation={stroke:'serve',progress:0,contact:{x:p.x,y:2.65,z:p.z-.25*side(seat)}};} return; }
     if(s.ball.hitter===seat) return;
     this.pending[seat]={shot,flight:s.rally,airRequested:s.ball.bounces===0&&canReturnNormally(s.ball,p,seat,!!shot.slice)};p.shotQueued=true;p.strokeSpin=shot.topspin??0;
@@ -118,7 +122,8 @@ export class Match {
       targetX+=Math.sign(targetX||1)*stretch*.25;
     }
     const start={x:b.x,y:serve?2.65:b.y,z:b.z};
-    if(shot.directionX!==undefined)targetX=start.x+shot.directionX*Math.abs(targetZ-start.z)*sign;
+    const direction=!serve&&shot.swipeAim?directionAtContact(shot.swipeAim,start,shot.directionX??0,sign):shot.directionX;
+    if(direction!==undefined)targetX=start.x+direction*Math.abs(targetZ-start.z)*sign;
     if(slice){const spread=.4+.65*shot.power;targetX+=(this.random()*2-1)*spread;targetZ+=(this.random()*2-1)*(.5+.45*shot.power);}
     if(rescue){targetX+=(this.random()*2-1)*1.6;targetZ+=(this.random()*2-1)*1.8;}
     const power=shot.power*(.65+.35*p.stamina)*(1-.2*stretch);

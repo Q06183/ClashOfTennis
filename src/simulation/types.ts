@@ -1,7 +1,8 @@
 export type ShotTier = 'normal'|'fast'|'power'|'critical'|'lob'|'topspin'|'smash'|'slice';
 export type Seat = 0 | 1;
 export type Vec = { x: number; y: number; z: number };
-export type Shot = { type: 'shot'; aim: number; depth: number; power: number; lob: boolean; critical?: boolean; directionX?: number; topspin?: number; slice?: boolean };
+export type SwipeAim = {projection:number[];dx:number;dy:number};
+export type Shot = { type: 'shot'; aim: number; depth: number; power: number; lob: boolean; critical?: boolean; directionX?: number; swipeAim?: SwipeAim; topspin?: number; slice?: boolean };
 export type Input = Shot | { type: 'move'; x: number; z: number };
 export type PlayerState = {
   characterId?: string;

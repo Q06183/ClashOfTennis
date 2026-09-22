@@ -178,3 +178,18 @@ test('queued swipe at an automatic waiting spot returns a low bounce identically
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
+
+test('a running receiver queues screen aim over sockets and uses actual contact for the return',async()=>{
+ const {Match}=await import('../src/simulation/match.js'),{captureSwipeAim,shotDirection}=await import('../src/input/aim.js'),{PerspectiveCamera}=await import('three'),{frameMatch}=await import('../src/render/camera.js');
+ const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{
+  a.send({type:'create',name:'提前滑动'});const welcome=await a.wait('welcome');b.send({type:'join',code:welcome.code,name:'对侧'});await b.wait('welcome');a.send({type:'ready'});b.send({type:'ready'});await a.wait('state');const room=server.rooms.rooms.get(welcome.code)!;
+  for(const seat of [0,1] as const){
+   room.match!.dispose();const m=room.match=new Match(['lin','lin'],()=>1),sign=seat===0?1:-1;m.state.phase='rally';m.state.rally=2;const p=m.state.players[seat];Object.assign(p,{x:-2*sign,z:10*sign,tx:-4*sign,tz:12*sign,vx:-sign,vz:0});m.physics.place({x:1.2*sign,y:2.8,z:-2*sign},{x:.3*sign,y:4,z:7*sign});Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:0});
+   const camera=new PerspectiveCamera();frameMatch(camera,390,844,seat,p.x,10);const shot={type:'shot' as const,aim:0,depth:.6,power:.4,lob:false},aim=captureSwipeAim(camera,shot,24,-150,390,844);a.messages.length=0;b.messages.length=0;
+   (seat===0?a:b).send({type:'input',command:{...shot,swipeAim:aim}});
+   const queued=await a.wait('state',v=>v.state.rally===2&&v.state.players[seat].shotQueued);assert.equal(queued.state.players[seat].moving,true);
+   const hit=await a.wait('state',v=>v.state.rally===3),peer=await b.wait('state',v=>v.seq===hit.seq);assert.deepEqual(hit.state,peer.state);const c=hit.state.players[seat].contact,dir=shotDirection(camera,c,shot,24,-150,390,844,sign);assert.ok(Math.abs(hit.state.ball.vx/hit.state.ball.vz+dir)<1e-6);assert.equal(hit.state.players[seat].shotQueued,false);
+  }
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
+});

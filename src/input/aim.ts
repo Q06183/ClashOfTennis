@@ -1,8 +1,8 @@
 import {flightGravity,flightTime} from '../simulation/flight.js';
 import {characterEffects} from '../simulation/characters.js';
 import {shotDepth,shotTier} from '../simulation/shot-profile.js';
-import {PerspectiveCamera,Vector2,Vector3,Raycaster,Plane} from 'three';
-import type {Vec,Shot,PlayerState} from '../simulation/types.js';
+import {PerspectiveCamera,Vector2,Vector3,Raycaster,Plane,Matrix4} from 'three';
+import type {Vec,Shot,PlayerState,SwipeAim} from '../simulation/types.js';
 /** Convert a screen-space direction at the ball into a court-space heading. */
 export function swipeDirection(camera:PerspectiveCamera,ball:Vec,dx:number,dy:number,width:number,height:number,sign:number,landingZ?:number){
   if(landingZ!==undefined){
@@ -47,4 +47,10 @@ export function serveDirection(camera:PerspectiveCamera,ball:Vec,player:PlayerSt
  if(elo*ehi>0)return Math.abs(elo)<Math.abs(ehi)?lo:hi;
  for(let i=0;i<36;i++){const mid=(lo+hi)/2,e=error(mid);if(e*elo>0){lo=mid;elo=e;}else hi=mid;}
  return (lo+hi)/2;
+}
+
+/** Keep the gesture and input camera basis until the authority knows contact. */
+export function captureSwipeAim(camera:PerspectiveCamera,shot:Shot,dx:number,dy:number,width:number,height:number):SwipeAim{
+ const e=new Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse).elements,reverse=shot.slice?-1:1;
+ return {projection:[e[0],e[8],e[12],e[1],e[9],e[13],e[3],e[11],e[15]],dx:dx/width*reverse,dy:-dy/height*reverse};
 }

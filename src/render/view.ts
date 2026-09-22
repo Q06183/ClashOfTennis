@@ -5,7 +5,7 @@ import { Athlete } from './player.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {clone} from 'three/addons/utils/SkeletonUtils.js';
 import { clamp, side, other, type MatchState, type Seat, type Shot, type Vec } from '../simulation/types.js';
-import { shotDirection,serveDirection } from '../input/aim.js';
+import { shotDirection,serveDirection,captureSwipeAim } from '../input/aim.js';
 import { FlightGuide } from './trajectory.js';
 import {disposeTree} from './dispose.js';
 import {SHOT_PROFILES} from '../simulation/shot-profile.js';
@@ -111,7 +111,7 @@ export class CourtView {
     const serve=state.phase==='serve'&&state.server===this.seat;
     const ball=serve?{...state.ball,y:2.65}:state.ball;
     if(serve)this.aimLock=1.3;
-    return {...shot,directionX:serve?serveDirection(this.camera,ball,state.players[this.seat],shot,dx,dy,this.size.w,this.size.h,side(this.seat)):shotDirection(this.camera,ball,shot,dx,dy,this.size.w,this.size.h,side(this.seat))};
+    return {...shot,swipeAim:serve?undefined:captureSwipeAim(this.camera,shot,dx,dy,this.size.w,this.size.h),directionX:serve?serveDirection(this.camera,ball,state.players[this.seat],shot,dx,dy,this.size.w,this.size.h,side(this.seat)):shotDirection(this.camera,ball,shot,dx,dy,this.size.w,this.size.h,side(this.seat))};
   }
   courtPoint(x:number,y:number){
     const rect=this.container.getBoundingClientRect();
