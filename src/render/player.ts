@@ -212,9 +212,10 @@ export class Athlete {
     const body=strokeBody(p),gait=this.footwork.update(this.root.position,this.root.quaternion,dt),movement=gait.localDirection;
     const stride=Math.sin(gait.phase*Math.PI*2)*Math.min(1,gait.speed/2);
     const running=T.MathUtils.smoothstep(gait.speed,2.2,4.5)*(p.rescue||p.swing>0?0:p.preparation?1-T.MathUtils.smoothstep(p.preparation.progress,.2,.55):1);
+    const runTurn=gait.turn*.65;
     if(running>0){
-      pose.tip.lerp(new T.Vector3(-.3,1.38+stride*.07,.74+stride*.06),running);
-      pose.shaft.lerp(new T.Vector3(-.25,.9,.25).normalize(),running).normalize();
+      pose.tip.lerp(new T.Vector3(-.4,1.28+stride*.035,.66+stride*.10).applyAxisAngle(new T.Vector3(0,1,0),runTurn),running);
+      pose.shaft.lerp(new T.Vector3(-.25,.9,.25).normalize().applyAxisAngle(new T.Vector3(0,1,0),runTurn),running).normalize();
       pose.twoHands=false;pose.support=1-running;
     }
     const speedBlend=1-T.MathUtils.smoothstep(gait.speed,1.5,4.5);
@@ -233,7 +234,7 @@ export class Athlete {
     }
     this.torso.position.y=-hipDrop;
     const motionStrength=p.rescue?contactWeight:action;
-    const lean=Math.min(.12,gait.speed*.022)*(1-motionStrength);
+    const lean=Math.min(.18,gait.speed*.028)*(1-motionStrength);
     this.torso.rotation.set(T.MathUtils.lerp(.035,body.lean,action)+movement.z*lean,pose.turn+gait.turn*.65*(1-motionStrength)+stride*.045*running,body.sideBend*action-movement.x*lean*.65);
     const serving=(p.preparation?.stroke??p.stroke)==='serve';
     this.head.rotation.set(serving?body.headPitch*action:T.MathUtils.clamp(Math.atan2(1.7-contact.y,Math.max(.7,contact.z)), -.55,.4)*action, -pose.turn*.55*action,0);
@@ -248,13 +249,16 @@ export class Athlete {
       if(p.rescue){
         const direction=new T.Vector3(p.rescue.toX-p.rescue.fromX,0,p.rescue.toZ-p.rescue.fromZ).applyQuaternion(this.root.quaternion.clone().invert()).normalize();
         free.set(.46-direction.x*.18,1.08,.14-direction.z*.25);
-      }else if(running>0)free.lerp(new T.Vector3(.42,1.12,.27-stride*.16),running);
+      }else if(running>0)free.lerp(new T.Vector3(.36,1.13+stride*.045,.18-stride*.22).applyAxisAngle(new T.Vector3(0,1,0),runTurn),running);
       const hand=this.root.localToWorld(free);
       const tossing=p.preparation?.stroke==='serve';
       const gripBlend=p.swing>0&&!p.rescue?1-T.MathUtils.smoothstep(p.swing,0,serving?.24:.12):0;
       const support=Math.max(gripBlend,pose.support??0);
       if(support){const grip=this.racket.localToWorld(new T.Vector3(0,-RACKET.secondHand,0));hand.lerp(grip,support);}
       const leftPole=serving?new T.Vector3(1,0,-.2).lerp(new T.Vector3(.7,-1,.35),gripBlend):new T.Vector3(.7,-.6,-.2);
+      // Keep the running elbow tucked beside the ribcage rather than flared
+      // sideways like a stroke's counterbalance arm.
+      if(running>0&&!serving)leftPole.lerp(new T.Vector3(.2,-1,-.3),running);
       this.armTo(0,hand,leftPole,serving?1-gripBlend:0);
       if(serving){
         // Keep the open tossing palm steady instead of inheriting the IK

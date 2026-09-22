@@ -35,3 +35,9 @@ test('stopping adjusts one foot with lift while the other remains planted',()=>{
  }
  assert.ok(airborne>0);assert.ok(previous.feet.every(f=>Math.abs(f.y-.105)<.001));
 });
+test('sprint swing feet stay within a compact leg-sized stride instead of marching',()=>{
+ for(const [vx,vz] of [[0,6],[6,0],[0,-5]]){const gait=new Footwork(),q=new Quaternion();let maxSpan=0,maxHeight=0;
+ for(let i=0;i<240;i++){const p=new Vector3(vx*i/60,0,vz*i/60),g=gait.update(p,q,1/60);maxSpan=Math.max(maxSpan,g.feet[0].distanceTo(g.feet[1]));maxHeight=Math.max(maxHeight,...g.feet.map(f=>f.y));}
+ assert.ok(maxSpan<.95,`wide scissor step ${vx}/${vz}: ${maxSpan}`);assert.ok(maxHeight<.28,'sprint should not become high-knee marching');
+ }
+});

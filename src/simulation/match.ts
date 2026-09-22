@@ -1,11 +1,11 @@
+import {ReturnPlanner,shouldAssist} from './return-plan.js';
 import {handedness} from './characters.js';
 import {SERVE_DURATION,SERVE_RECOVERY,serveBallHeight} from './serve-motion.js';
 import {flightGravity,flightTime,spinAmount} from './flight.js';
-import {canSmash,canReturnNormally,airInterception,wantsAirContact,returnHeightLegal,volleyDifficulty} from './skills.js';
+import {canSmash,canReturnNormally,returnHeightLegal,volleyDifficulty} from './skills.js';
 import {getCharacter,characterEffects} from './characters.js';
 import { BallPhysics } from './physics.js';
 import {shotDepth,shotTier,SHOT_PROFILES} from './shot-profile.js';
-import {reception} from './reception.js';
 import {RESCUE,rescueTarget,hasNormalReturnWindow,moveRescue,canReachRescue} from './rescue.js';
 import {movePlayer} from './movement.js';
 import { COURT, isInCourt, isInServiceBox, serverForPoint, winnerForScore } from './rules.js';
@@ -19,6 +19,7 @@ export class Match {
   private recentContact:{at:number;flight:number;seat:Seat;ball:BallState}|null=null;
   private rescueAttempt=[-1,-1];
   private manualUntil = [0,0];
+  private returnPlanners = [new ReturnPlanner(),new ReturnPlanner()];
   private serveElapsed = 0;
   private serveMotion:{shot:Shot;elapsed:number}|null=null;
   private bouncePoint:{x:number;z:number}|null=null;
@@ -34,11 +35,13 @@ export class Match {
   }
   private announce(event: string) { this.state.event=event; this.state.eventId++; }
   private clearPreparation() {
+    for(const planner of this.returnPlanners)planner.clear();
     this.pending=[null,null];this.serveMotion=null;this.recentContact=null;
     for(const p of this.state.players)p.rescue=undefined;
     for(const p of this.state.players){p.preparation=undefined;p.shotQueued=false;}
   }
   private resetPoint() {
+    for(const planner of this.returnPlanners)planner.clear();
     const s=this.state, total=s.score[0]+s.score[1];
     this.recentContact=null;this.rescueAttempt=[-1,-1];for(const p of s.players)p.rescue=undefined;
     s.phase='serve'; s.server=serverForPoint(total); s.rally=0; s.pointTimer=0;
@@ -62,6 +65,7 @@ export class Match {
     if(cmd.type==='move') {
       if(!Number.isFinite(cmd.x)||!Number.isFinite(cmd.z)||s.phase==='serve') return;
       p.tx=clamp(cmd.x,-6,6);p.tz=side(seat)*clamp(cmd.z*side(seat),.9,14.7);
+      this.returnPlanners[seat].clear();
       this.manualUntil[seat]=s.time+.8; return;
     }
     if(cmd.type!=='shot'||![cmd.aim,cmd.depth,cmd.power].every(Number.isFinite)||typeof cmd.lob!=='boolean') return;
@@ -216,15 +220,17 @@ export class Match {
     for(const seat of [0,1] as Seat[]) {
       const p=s.players[seat],ownSide=side(seat);
       if(seat===receiver&&!p.rescue){
-        const air=wantsAirContact(b,p,seat,this.serviceFlight);
-        const receiving=air?airInterception(b,p,seat):reception(b,p,seat);
-        if(s.time>this.manualUntil[seat]||air&&p.shotQueued){p.tx=receiving.x;p.tz=receiving.z;}
+        const assist=shouldAssist(b,p,s.time,this.manualUntil[seat]);
+        if(!assist)this.returnPlanners[seat].clear();
+        const receiving=this.returnPlanners[seat].update(b,p,seat,this.serviceFlight,s.time,s.rally),air=receiving.air;
+        if(assist){p.tx=receiving.x;p.tz=receiving.z;}
+        else this.returnPlanners[seat].clear();
         const soon=receiving.time;
         if(soon<.65){
           const smash=air&&'smash' in receiving&&receiving.smash;
           const slice=this.pending[seat]?.shot.slice;
           p.preparation={stroke:smash?'smash':slice?(receiving.backhand?'slice-backhand':'slice-forehand'):air?'volley':this.pending[seat]?.shot.lob?'lob':receiving.backhand?'backhand':'forehand',progress:clamp(1-soon/.65,0,1),contact:receiving.point};p.backhand=receiving.backhand;
-        }
+        }else p.preparation=undefined;
       }
       if(!moveRescue(p,s.time,dt))movePlayer(p,seat,dt);
       const endurance=characterEffects(p.characterId);
@@ -237,7 +243,7 @@ export class Match {
         if(reachable){this.hit(seat,pending.shot);break;}
         if(!p.rescue&&this.rescueAttempt[seat]!==s.rally){
           const target=rescueTarget(b,p,seat);
-          if(target&&!hasNormalReturnWindow(b,p,seat,{time:s.time,manualUntil:this.manualUntil[seat],serviceFlight:this.serviceFlight,slice:!!pending.shot.slice})){
+          if(target&&!hasNormalReturnWindow(b,p,seat,{time:s.time,manualUntil:this.manualUntil[seat],serviceFlight:this.serviceFlight,slice:!!pending.shot.slice,planner:this.returnPlanners[seat],flight:s.rally})){
             this.rescueAttempt[seat]=s.rally;
             if(this.random()<RESCUE.chance){
               p.rescue={startedAt:s.time,fromX:p.x,fromZ:p.z,toX:target.x,toZ:target.z,contact:target.contact,hit:false};

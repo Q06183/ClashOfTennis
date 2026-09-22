@@ -1,3 +1,4 @@
+import {returnPlan} from '../src/simulation/return-plan.js';
 import {test,before} from 'node:test';import assert from 'node:assert/strict';
 import {Match} from '../src/simulation/match.js';import {initPhysics} from '../src/simulation/physics.js';import {reception} from '../src/simulation/reception.js';
 import {driveAI} from '../src/simulation/ai.js';
@@ -35,7 +36,7 @@ test('recovery movement from the previous shot does not delay reading the next i
  const m=new Match();m.input(0,shot);
  for(let i=0;i<260&&m.state.rally<2;i++){driveAI(m,0,'standard');driveAI(m,1,'standard');m.step(1/60);}assert.equal(m.state.rally,2);
  const receiver=m.state.players[0];m.step(1/60);
- const expected=reception(m.state.ball,receiver,0);
+ const expected=returnPlan(m.state.ball,receiver,0,false);
  assert.ok(Math.abs(receiver.tx-expected.x)<.05,'new flight must replace the stale recovery destination');
  m.input(0,{type:'move',x:2,z:10});m.step(1/60);
  assert.equal(receiver.tx,2,'a fresh manual move during this flight still takes precedence');m.dispose();

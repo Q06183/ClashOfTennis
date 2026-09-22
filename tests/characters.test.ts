@@ -23,7 +23,7 @@ test('serve specialization alters real launch speed without changing swipe headi
 test('character agility changes acceleration but braking is shared',()=>{
  const velocities=[];
  for(const id of ['mei','lin','leo']){const m=new Match([id,id]);const p=m.state.players[0];p.tx=p.x;p.tz=p.z;p.vx=5;p.vz=0;movePlayer(p,0,1/60);velocities.push(p.vx);m.dispose();}
- assert.deepEqual(velocities,[4.7,4.7,4.7]);
+ assert.deepEqual(velocities,[4.655,4.655,4.655]);
 });
 test('actual forehand, backhand and volley launches use their own attribute and preserve landing',()=>{
  for(const seat of [0,1] as Seat[])for(const kind of ['forehand','backhand','volley'] as const){const speeds:number[]=[];

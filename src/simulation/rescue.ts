@@ -1,7 +1,7 @@
+import {ReturnPlanner,shouldAssist} from './return-plan.js';
 import {handedness} from './characters.js';
 import {movePlayer} from './movement.js';
-import {reception} from './reception.js';
-import {airInterception,canReturnNormally,wantsAirContact,returnHeightLegal} from './skills.js';
+import {canReturnNormally,returnHeightLegal} from './skills.js';
 import {flightGravity} from './flight.js';
 import {contactCrouch} from './athlete.js';
 import {clamp,side,type BallState,type PlayerState,type Seat} from './types.js';
@@ -21,17 +21,20 @@ export function rescueTarget(b:BallState,p:PlayerState,seat:Seat){
 /** Wait for any ordinary contact on the approaching flight, not one sample at
  * the end of a jump. Predict the same acceleration, stamina and move target
  * as the live player, without mutating authoritative state or drawing RNG. */
-export function hasNormalReturnWindow(b:BallState,p:PlayerState,seat:Seat,options:{time:number;manualUntil:number;serviceFlight:boolean;slice:boolean}){
+export function hasNormalReturnWindow(b:BallState,p:PlayerState,seat:Seat,options:{time:number;manualUntil:number;serviceFlight:boolean;slice:boolean;planner?:ReturnPlanner;flight?:number}){
  const runner={...p},ball={...b},sign=side(seat),dt=1/120,G=flightGravity(b);
+ const planner=options.planner?.clone()??new ReturnPlanner();
  for(let step=0;step<=72;step++){
   if(step){
    // Match.step advances the ball before updating the player's move target.
    ball.x+=ball.vx*dt;ball.z+=ball.vz*dt;ball.y+=ball.vy*dt-G*dt*dt/2;ball.vy-=G*dt;
   }
   if(ball.y<=.12||ball.z*sign<=.35)break;
-  const air=wantsAirContact(ball,runner,seat,options.serviceFlight);
-  const receiving=air?airInterception(ball,runner,seat):reception(ball,runner,seat);
-  if(options.time+step*dt>options.manualUntil||air&&runner.shotQueued){runner.tx=receiving.x;runner.tz=receiving.z;}
+  const time=options.time+step*dt,assist=shouldAssist(ball,runner,time,options.manualUntil);
+  if(!assist)planner.clear();
+  const receiving=planner.update(ball,runner,seat,options.serviceFlight,time,options.flight??0);
+  if(assist){runner.tx=receiving.x;runner.tz=receiving.z;}
+  else planner.clear();
   if(step)movePlayer(runner,seat,dt);
   if(returnHeightLegal(ball)&&(!options.serviceFlight||ball.bounces>0)&&canReturnNormally(ball,runner,seat,options.slice))return true;
  }
