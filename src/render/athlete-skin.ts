@@ -19,6 +19,7 @@ export class AthleteSkin {
           q.premultiply(new T.Quaternion().setFromUnitVectors(axis,new T.Vector3(0,-1,0)));
         }
         offset=new T.Matrix4().makeRotationFromQuaternion(q);
+        if(o.name==='Head'||o.name==='Neck'){offset.copy(bind);offset.elements[13]-=1.5;}
       }
       this.joints.push({bone:o,anchor:anchor??torso,offset});o.matrixAutoUpdate=false;
     });

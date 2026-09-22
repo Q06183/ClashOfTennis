@@ -1,3 +1,4 @@
+import {SERVE_RECOVERY} from '../src/simulation/serve-motion.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Vector3} from 'three';
@@ -7,7 +8,7 @@ test('racket sweet spot meets the authoritative ball contact at impact for both 
   for(const seat of [0,1] as Seat[])for(const stroke of ['forehand','backhand','serve'] as const){
     const sign=seat===0?1:-1;
     const contact={x:stroke==='serve'?.15:stroke==='backhand'?-.6:.65,y:stroke==='serve'?2.65:1.15,z:10*sign-.2*sign};
-    const player={x:0,z:10*sign,tx:0,tz:10*sign,stamina:1,moving:false,swing:.44,stroke,contact} as PlayerState;
+    const player={x:0,z:10*sign,tx:0,tz:10*sign,stamina:1,moving:false,swing:stroke==='serve'?SERVE_RECOVERY:.44,stroke,contact} as PlayerState;
     const athlete=new Athlete(seat);athlete.update(player,1);athlete.root.updateMatrixWorld(true);
     const sweet=athlete.root.getObjectByName('racket-sweet-spot');assert.ok(sweet,'racket needs a named contact anchor');
     const actual=sweet.getWorldPosition(new Vector3());assert.ok(actual.distanceTo(new Vector3(contact.x,contact.y,contact.z))<.09,`${seat}/${stroke}: ${actual.toArray()}`);
@@ -23,7 +24,7 @@ test('natural AI rally contacts remain within racket reach, including wide low b
     const rally=match.state.rally;driveAI(match,0,'standard');driveAI(match,1,'standard');match.step(1/60);
     if(match.state.rally<=rally)continue;
     const seat=match.state.ball.hitter,p=match.state.players[seat];if(!p.contact)continue;
-    const a=athletes[seat];a.update({...p,swing:.44},match.state.time);a.root.updateMatrixWorld(true);
+    const a=athletes[seat];a.update({...p,swing:p.stroke==='serve'?SERVE_RECOVERY:.44},match.state.time);a.root.updateMatrixWorld(true);
     const actual=a.root.getObjectByName('racket-sweet-spot')!.getWorldPosition(new Vector3());
     assert.ok(actual.distanceTo(new Vector3(p.contact.x,p.contact.y,p.contact.z))<.09,`natural contact: ${JSON.stringify(p)}`);contacts++;
   }

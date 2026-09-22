@@ -13,6 +13,7 @@ export class Athlete {
   readonly root=new T.Group();
   private torso=new T.Group();
   private hips=new T.Group();
+  private head=new T.Group();
   private arms=[new T.Group(),new T.Group()];
   private elbows=[new T.Group(),new T.Group()];
   private legs=[new T.Group(),new T.Group()];
@@ -31,7 +32,7 @@ export class Athlete {
     const mesh=(g:T.BufferGeometry,m:T.Material,parent:T.Object3D,x:number,y:number,z:number)=>{
       const o=new T.Mesh(g,m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;o.userData.fallbackBody=true;parent.add(o);return o;
     };
-    this.root.add(this.torso);
+    this.root.add(this.torso);this.head.name='head-tracking';this.head.position.y=1.5;this.torso.add(this.head);
     this.hips.position.y=.85;this.root.add(this.hips);
     mesh(new T.CapsuleGeometry(.255,.37,6,16),shirt,this.torso,0,1.19,0).scale.set(1.15,1,.65);
     mesh(new T.SphereGeometry(.26,16,12),shorts,this.torso,0,.88,0).scale.set(1.08,.65,.78);
@@ -46,6 +47,7 @@ export class Athlete {
       mesh(new T.SphereGeometry(.023,10,8),white,this.torso,x,1.79,.169);
       mesh(new T.SphereGeometry(.012,8,6),hair,this.torso,x,1.79,.189);
     }
+    for(const part of [...this.torso.children])if(part instanceof T.Mesh&&part.position.y>=1.56){part.position.y-=1.5;this.head.add(part);}
     for(let i=0;i<2;i++){
       const sign=i?-1:1,arm=this.arms[i],elbow=this.elbows[i];arm.position.set(sign*.31,1.39,0);this.torso.add(arm);
       mesh(new T.CapsuleGeometry(.107,.10,5,12),shirt,arm,0,-.07,0);
@@ -85,7 +87,7 @@ export class Athlete {
   attachModel(scene:T.Object3D){
     this.clearModel();
     const anchors:Record<string,T.Object3D>={};
-    anchors.Hips=this.hips;
+    anchors.Hips=this.hips;anchors.Head=this.head;anchors.Neck=this.head;
     for(let i=0;i<2;i++){
       const suffix=i?'R':'L';
       anchors['UpperArm_'+suffix]=this.arms[i];anchors['LowerArm_'+suffix]=this.elbows[i];
@@ -98,10 +100,13 @@ export class Athlete {
     this.root.traverse(o=>{if(o.userData.fallbackBody)o.visible=false;});
     this.root.add(scene);this.modelSource='lux3d';
   }
-  private armTo(index:number,hand:T.Vector3,elbowPole?:T.Vector3){
+  private armTo(index:number,hand:T.Vector3,elbowPole?:T.Vector3,softReach=0){
     this.root.updateMatrixWorld(true);
     const arm=this.arms[index],elbow=this.elbows[index],target=this.torso.worldToLocal(hand.clone()).sub(arm.position);
-    const d=T.MathUtils.clamp(target.length(),.051,.669),axis=target.normalize();
+    const reach=target.length(),extension=T.MathUtils.clamp(reach-.56,0,.218);
+    // Ease into full extension instead of snapping a bent elbow straight at the reach limit.
+    const eased=reach<=.56?reach:.56+extension-extension*extension/.436;
+    const d=T.MathUtils.clamp(T.MathUtils.lerp(reach,eased,softReach),.051,.669),axis=target.normalize();
     const pole=elbowPole?.clone()??new T.Vector3(index?-.7:.7,-1,.35);pole.addScaledVector(axis,-pole.dot(axis)).normalize();
     const along=(.36**2+d*d-.31**2)/(2*d),height=Math.sqrt(Math.max(0,.36**2-along*along));
     const upper=axis.clone().multiplyScalar(along).addScaledVector(pole,height);
@@ -210,6 +215,8 @@ export class Athlete {
     const motionStrength=p.rescue?contactWeight:action;
     const lean=Math.min(.12,gait.speed*.022)*(1-motionStrength);
     this.torso.rotation.set(T.MathUtils.lerp(.035,body.lean,action)+movement.z*lean,pose.turn+gait.turn*.65*(1-motionStrength),body.sideBend*action-movement.x*lean*.65);
+    const serving=(p.preparation?.stroke??p.stroke)==='serve';
+    this.head.rotation.set(serving?body.headPitch*action:0,serving?-pose.turn*.55*action:0,0);
     if(p.rescue){
       const direction=new T.Vector3(p.rescue.toX-p.rescue.fromX,0,p.rescue.toZ-p.rescue.fromZ).applyQuaternion(this.root.quaternion.clone().invert()).normalize();
       this.torso.rotation.x+=direction.z*rescue.lean;this.torso.rotation.z-=direction.x*rescue.lean;
@@ -220,8 +227,12 @@ export class Athlete {
     if(active&&!pose.twoHands){
       const hand=this.root.localToWorld((p.rescue?new T.Vector3(.38,1.15,.36):body.freeHand).clone());
       const tossing=p.preparation?.stroke==='serve';
-      this.armTo(0,hand,tossing?undefined:new T.Vector3(.7,-.6,-.2));
-      if(!tossing)this.leftHand.rotation.y=-.5;
+      const gripBlend=serving&&!tossing?1-T.MathUtils.smoothstep(p.swing,0,.24):0;
+      if(gripBlend){const grip=this.racket.localToWorld(new T.Vector3(0,-RACKET.secondHand,0));hand.lerp(grip,gripBlend);}
+      const leftPole=serving?new T.Vector3(1,0,-.2).lerp(new T.Vector3(.7,-1,.35),gripBlend):new T.Vector3(.7,-.6,-.2);
+      this.armTo(0,hand,leftPole,serving?1-gripBlend:0);
+      if(!tossing&&!serving)this.leftHand.rotation.y=-.5;
+      if(gripBlend){const gripQ=this.elbows[0].getWorldQuaternion(new T.Quaternion()).invert().multiply(this.racket.getWorldQuaternion(new T.Quaternion()));this.leftHand.quaternion.slerp(gripQ,gripBlend);}
     }
     if(this.generated){this.root.updateMatrixWorld(true);this.generated.update();}
   }

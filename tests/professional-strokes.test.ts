@@ -6,7 +6,7 @@ test('serve preparation actually loads the legs before the upward drive',()=>{
 });
 test('serve sets a staggered stance and lands on the front foot before the trailing leg',()=>{
  const a=new Athlete(1);a.update(prepared('serve',.5),.5,1/60);const feet=()=>[0,1].map(i=>a.root.getObjectByName(`foot-${i}`)!.getWorldPosition(new Vector3()));let f=feet();assert.ok(Math.abs(f[0].z-f[1].z)>.25,'serve feet must not remain parallel');
- a.update({...base,stroke:'serve',swing:.18,contact:{x:0,y:2.65,z:.25}},1.5,1/60);f=feet();assert.ok(f[1].y-f[0].y>.08,'right back leg trails above a landed left foot');
+ a.update({...base,stroke:'serve',swing:.48,contact:{x:0,y:2.65,z:.25}},1.5,1/60);f=feet();assert.ok(f[1].y-f[0].y>.08,'right back leg trails above a landed left foot');
 });
 test('serve and overhead have different loading paths and only serve extends a tossing arm',()=>{
  const c=new Vector3(0,2.65,.25);let difference=0;for(const t of [.2,.4,.6,.8]){const serve=strokePose(prepared('serve',t),c),smash=strokePose(prepared('smash',t),c);difference+=serve.tip.distanceTo(smash.tip);assert.equal(smash.toss,0);}assert.ok(difference>1.1,'overhead must not reuse the complete service windup');

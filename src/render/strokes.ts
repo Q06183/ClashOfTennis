@@ -1,3 +1,5 @@
+import {motionValue} from './motion-curve.js';
+import {servePhase} from '../simulation/serve-motion.js';
 import {contactTurn} from '../simulation/athlete.js';
 import {Vector3} from 'three';
 import type {PlayerState} from '../simulation/types.js';
@@ -11,9 +13,32 @@ function interpolate(keys:Key[],t:number){
  const u=ease(Math.max(0,Math.min(1,(t-a.t)/Math.max(.0001,b.t-a.t))));
  return {tip:v(a.tip).lerp(v(b.tip),u),shaft:v(a.shaft).lerp(v(b.shaft),u).normalize(),turn:a.turn+(b.turn-a.turn)*u,knee:a.knee+(b.knee-a.knee)*u};
 }
+
+function servicePose(p:PlayerState,contact:Vector3){
+ const keys:Key[]=[ready,
+  {t:.16,tip:[-.75,1.02,.22],shaft:[-.55,.35,.4],turn:-.4,knee:.25},
+  {t:.32,tip:[-.8,1.8,-.05],shaft:[-.25,.95,.02],turn:-.72,knee:.4},
+  {t:.52,tip:[-.65,2.14,-.25],shaft:[.02,1,.02],turn:-.9,knee:.7},
+  {t:.64,tip:[-.78,1.6,-.66],shaft:[.15,.12,-.98],turn:-.85,knee:.63},
+  {t:.74,tip:[-.68,1.23,-.7],shaft:[.12,-1,.01],turn:-.7,knee:.5},
+  {t:.80,tip:[-.85,1.65,-.5],shaft:[-.4,0,-.92],turn:-.55,knee:.35},
+  {t:.88,tip:[-.45,2.28,.05],shaft:[.5,.85,.1],turn:-.3,knee:.2},
+  {t:.96,tip:[-.16,2.59,.05],shaft:[.65,.74,.1],turn:-.08,knee:.08},
+  {t:1,tip:contact.toArray(),shaft:[0,1,0],turn:0,knee:.05},
+  {t:1.08,tip:[-.65,2.12,.9],shaft:[-.15,.98,.15],turn:.12,knee:.1},
+  {t:1.2,tip:[.45,.85,.85],shaft:[.7,-.6,.2],turn:.38,knee:.18},
+  {t:1.36,tip:[.22,1.03,.72],shaft:[.25,.45,.4],turn:.18,knee:.25},
+  {...ready,t:1.6}];
+ const t=servePhase(p.preparation?.progress,p.swing),n=(f:(k:Key)=>number)=>motionValue(keys,t,f);
+ const tip=new Vector3(...[0,1,2].map(i=>n(k=>k.tip[i])) as [number,number,number]);
+ const shaft=new Vector3(...[0,1,2].map(i=>n(k=>k.shaft[i])) as [number,number,number]).normalize();
+ return {tip,shaft,turn:n(k=>k.turn),knee:n(k=>k.knee),twoHands:false,toss:p.preparation?ease(Math.max(0,Math.min(1,t/.32,(1-t)/.4))):0};
+}
+
 /** Body-local key poses: +Z faces the net, -X is the athlete's right side. */
 export function strokePose(p:PlayerState,contact:Vector3):StrokePose{
  const preparing=p.preparation,stroke=preparing?.stroke??p.stroke;
+ if(stroke==='serve'&&(preparing||p.swing>0))return servicePose(p,contact);
  const slice=stroke==='slice-forehand'||stroke==='slice-backhand';
  const bh=stroke==='backhand'||stroke==='slice-backhand'||((stroke==='volley'||stroke==='lob')&&!!p.backhand),dir=bh?1:-1;
  const lob=stroke==='lob',volley=stroke==='volley',smash=stroke==='smash',serve=stroke==='serve'||smash;
@@ -36,7 +61,7 @@ export function strokePose(p:PlayerState,contact:Vector3):StrokePose{
   const sliceKeys:Key[]=[ready,{t:.48,tip:[dir*.7,1.85,.12],shaft:[dir*.6,.75,-.05],turn:dir*.7,knee:.3},{t:.78,tip:[contact.x,contact.y+.25,contact.z-.12],shaft:impact.shaft,turn:dir*.4,knee:.25},impact];
   const smashKeys:Key[]=[ready,{t:.32,tip:[-.75,1.98,.08],shaft:[-.2,.96,.05],turn:-.45,knee:.25},{t:.68,tip:[-.55,1.75,-.26],shaft:[-.2,.9,-.25],turn:-.4,knee:.28},impact];
   const lobKeys:Key[]=[ready,{t:.45,tip:[dir*.65,1.3,.6],shaft:[dir*.6,.3,.15],turn:dir*.45,knee:.4},{t:.78,tip:[dir*.7,.55,.4],shaft:[dir*.65,.1,.2],turn:dir*.25,knee:.5},impact];
-  const keys=lob?lobKeys:slice?sliceKeys:smash?smashKeys:serve?[ready,{t:.16,tip:[-.75,1.02,.22],shaft:[-.55,.35,.4],turn:-.45,knee:.25},{t:.32,tip:[-.8,1.8,-.05],shaft:[-.25,.95,.02],turn:-.8,knee:.4},{t:.52,tip:[-.65,2.14,-.25],shaft:[.02,1,.02],turn:-.95,knee:.7},{t:.72,tip:[-.68,1.23,-.7],shaft:[.12,-1,.01],turn:-.8,knee:.55},{t:.88,tip:[-.45,2.28,.05],shaft:[.5,.85,.1],turn:-.3,knee:.2},{t:.96,tip:[-.16,2.59,.28],shaft:[.35,.92,.05],turn:-.08,knee:.08},impact]:volley?[ready,back,impact]:bh?bhKeys:[ready,outside,back,forward,impact];
+  const keys=lob?lobKeys:slice?sliceKeys:smash?smashKeys:volley?[ready,back,impact]:bh?bhKeys:[ready,outside,back,forward,impact];
   pose=interpolate(keys,serve?t:p.shotQueued?t:Math.min(t,.6));
  }else if(p.swing>0){
   const t=Math.max(0,Math.min(1,1-p.swing/.44));

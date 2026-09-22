@@ -1,5 +1,5 @@
 import {clamp,type MatchState,type PlayerState} from '../simulation/types.js';
-import {SERVE_DURATION} from '../simulation/serve-motion.js';
+import {SERVE_DURATION,serveBallHeight} from '../simulation/serve-motion.js';
 import {flightGravity} from '../simulation/flight.js';
 import {COURT} from '../simulation/rules.js';
 type Snapshot={state:MatchState;at:number};
@@ -66,6 +66,13 @@ export class SnapshotPlayback {
    const dt=Math.min(age,.05);
    if(a.phase==='rally')for(let i=0;i<2;i++){const p=out.players[i];p.x+=(p.vx??0)*dt;p.z+=(p.vz??0)*dt;this.animate(p,a.players[i],dt);}
    this.advanceBall(out,dt);
+  }
+  // Keep the toss moving up to the known hit packet, without predicting a hit
+  // or carrying a service animation through a score/reset boundary.
+  const serveBoundary=b&&b.phase==='rally'&&b.rally===a.rally+1&&b.server===a.server&&a.score.every((score,i)=>score===b!.score[i])&&a.players.every((p,i)=>p.characterId===b!.players[i].characterId);
+  if(a.phase==='serve'&&a.players[a.server].preparation?.stroke==='serve'&&(!b||continuous||serveBoundary)){
+   const from=a.players[a.server],player=out.players[a.server];this.animate(player,from,Math.min(age,.05));
+   out.ball.y=serveBallHeight(player.preparation!.progress);
   }
   return out;
  }

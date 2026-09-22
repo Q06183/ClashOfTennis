@@ -1,4 +1,4 @@
-import {SERVE_DURATION,serveBallHeight} from './serve-motion.js';
+import {SERVE_DURATION,SERVE_RECOVERY,serveBallHeight} from './serve-motion.js';
 import {flightGravity,spinAmount} from './flight.js';
 import {canSmash,canReturnNormally,airInterception} from './skills.js';
 import {getCharacter,characterEffects} from './characters.js';
@@ -133,7 +133,7 @@ export class Match {
     this.physics.place(start,velocity,topspin);
     Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ,critical,tier,rescue,topspin,slice,skill:smash?'smash':slice?'slice':volley?'volley':undefined});
     s.phase='rally';s.rally++;s.maxRally=Math.max(s.maxRally,s.rally);
-    p.swing=.44;p.strokeSpin=topspin;p.backhand=(b.x-p.x)*sign<0;
+    p.swing=serve?SERVE_RECOVERY:.44;p.strokeSpin=topspin;p.backhand=(b.x-p.x)*sign<0;
     p.stroke=serve?'serve':smash?'smash':slice?(p.backhand?'slice-backhand':'slice-forehand'):volley?'volley':shot.lob?'lob':p.backhand?'backhand':'forehand';
     p.preparation=undefined;p.shotQueued=false;
     p.contact={...start};if(rescue&&p.rescue){p.rescue.hit=true;p.rescue.contact={...start};}

@@ -1,3 +1,4 @@
+import {SERVE_RECOVERY} from '../src/simulation/serve-motion.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -21,8 +22,8 @@ for(const id of variants)test(`generated ${id} loads a real skin and animates wi
   const gltf=await model(id),a=new Athlete(0);a.attachModel(gltf.scene);
   assert.equal(a.modelSource,'lux3d');
   a.root.traverse(o=>{if(o instanceof SkinnedMesh){const p=o.geometry.attributes.position,w=o.geometry.attributes.skinWeight;for(let i=0;i<p.count;i++){const sum=w.getX(i)+w.getY(i)+w.getZ(i)+w.getW(i);assert.ok(Math.abs(sum-1)<1e-5);if(Math.abs(p.getX(i))<.2&&p.getY(i)<1.2){const joints:BufferAttribute|InterleavedBufferAttribute=o.geometry.attributes.skinIndex;for(let k=0;k<4;k++)if(w.getComponent(i,k)>.001)assert.ok(!/Arm|Hand/.test(o.skeleton.bones[joints.getComponent(i,k)].name),'arm weights must not pull torso or shorts');}}}});
-  for(const stroke of ['forehand','backhand','serve','volley','smash','slice-forehand','slice-backhand'] as const)for(const frame of [0,.32,.52,.64,.85,.99,1,1.14,1.34]){
-    const swing=frame>=1?1.44-frame:0,contact={x:1.3,y:stroke==='serve'||stroke==='smash'?2.65:1.2,z:9.8};
+  for(const stroke of ['forehand','backhand','serve','volley','smash','slice-forehand','slice-backhand'] as const)for(const frame of stroke==='serve'?[0,.32,.52,.64,.8,.9,.99,1,1.14,1.34,1.52,1.7]:[0,.32,.52,.64,.85,.99,1,1.14,1.34]){
+    const swing=frame>=1?(stroke==='serve'?SERVE_RECOVERY:.44)-(frame-1):0,contact={x:1.3,y:stroke==='serve'||stroke==='smash'?2.65:1.2,z:9.8};
     a.update({x:1,z:10,tx:1,tz:10,stamina:1,moving:false,stroke,swing,contact,shotQueued:true,preparation:frame<1?{stroke,progress:frame,contact}:undefined},1);
     a.root.updateMatrixWorld(true);
     let skins=0;const box=new Box3();
