@@ -31,8 +31,10 @@ test('two long serves produce a double fault', () => {
   m.dispose();
 });
 test('AI uses the same simulation, rallies and finishes a match', () => {
-  const m = new Match();
-  for(let i=0;i<60*480 && m.state.phase!=='over';i++) {
+  const m = new Match(['lin','lin'],()=>1);
+  // Baseline-first defenders sustain longer rallies; simulate a full match
+  // budget without imposing the old aggressive-volley match duration.
+  for(let i=0;i<60*3600 && m.state.phase!=='over';i++) {
     driveAI(m,0,'standard'); driveAI(m,1,'standard'); m.step(1/60);
   }
   assert.equal(m.state.phase,'over');

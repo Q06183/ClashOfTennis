@@ -1,4 +1,4 @@
-import {ReturnPlanner,shouldAssist} from './return-plan.js';
+import {prefersBounce,ReturnPlanner,shouldAssist} from './return-plan.js';
 import {handedness} from './characters.js';
 import {SERVE_DURATION,SERVE_RECOVERY,serveBallHeight} from './serve-motion.js';
 import {flightGravity,flightTime,spinAmount} from './flight.js';
@@ -15,7 +15,7 @@ const player = (seat: Seat, characterId: string): PlayerState => ({characterId:g
 export class Match {
   readonly physics = new BallPhysics();
   readonly state: MatchState;
-  private pending: [{shot:Shot;flight:number}|null,{shot:Shot;flight:number}|null] = [null,null];
+  private pending: [{shot:Shot;flight:number;airRequested:boolean}|null,{shot:Shot;flight:number;airRequested:boolean}|null] = [null,null];
   private recentContact:{at:number;flight:number;seat:Seat;ball:BallState}|null=null;
   private rescueAttempt=[-1,-1];
   private manualUntil = [0,0];
@@ -77,7 +77,7 @@ export class Match {
     if(cmd.directionX!==undefined)shot.directionX=clamp(cmd.directionX,-4,4);
     if(s.phase==='serve') { if(seat===s.server&&!this.serveMotion){this.serveMotion={shot,elapsed:0};p.stroke='serve';p.preparation={stroke:'serve',progress:0,contact:{x:p.x,y:2.65,z:p.z-.25*side(seat)}};} return; }
     if(s.ball.hitter===seat) return;
-    this.pending[seat]={shot,flight:s.rally};p.shotQueued=true;p.strokeSpin=shot.topspin??0;
+    this.pending[seat]={shot,flight:s.rally,airRequested:s.ball.bounces===0&&canReturnNormally(s.ball,p,seat,!!shot.slice)};p.shotQueued=true;p.strokeSpin=shot.topspin??0;
     // Do not let the next physics step bounce a currently reachable low volley.
     if(s.ball.bounces===0&&this.returnLegal(seat)&&this.returnReachable(seat)){this.hit(seat,shot);return;}
     const recent=this.recentContact;
@@ -182,7 +182,7 @@ export class Match {
     this.sinceHit+=dt;
     const before={...s.ball},gravity=flightGravity(s.ball);
     const receiverBefore=other(before.hitter),queued=this.pending[receiverBefore];
-    if(before.bounces===0&&queued?.flight===s.rally&&this.returnLegal(receiverBefore)&&this.returnReachable(receiverBefore)){this.hit(receiverBefore,queued.shot);return;}
+    if(before.bounces===0&&queued?.flight===s.rally&&this.returnLegal(receiverBefore)&&this.returnReachable(receiverBefore)&&(s.players[receiverBefore].rescue||queued.airRequested||this.returnPlanners[receiverBefore].committed(s.time,s.rally)||!prefersBounce(before,s.players[receiverBefore],receiverBefore))){this.hit(receiverBefore,queued.shot);return;}
     // Rapier CCD can report restitution one frame after contact. Preserve the
     // continuous contact point before the ball travels past a court line.
     if(before.vy<0&&!this.impact&&before.y+before.vy*dt-(gravity/2)*dt*dt<=COURT.ballRadius){
@@ -222,7 +222,7 @@ export class Match {
       if(seat===receiver&&!p.rescue){
         const assist=shouldAssist(b,p,s.time,this.manualUntil[seat]);
         if(!assist)this.returnPlanners[seat].clear();
-        const receiving=this.returnPlanners[seat].update(b,p,seat,this.serviceFlight,s.time,s.rally),air=receiving.air;
+        const receiving=this.returnPlanners[seat].update(b,p,seat,this.serviceFlight,s.time,s.rally,!!this.pending[seat]?.airRequested),air=receiving.air;
         if(assist){p.tx=receiving.x;p.tz=receiving.z;}
         else this.returnPlanners[seat].clear();
         const soon=receiving.time;
@@ -240,10 +240,10 @@ export class Match {
       const pending=this.pending[seat];
       if(pending&&pending.flight!==s.rally){this.pending[seat]=null;p.shotQueued=false;}
       if(pending&&pending.flight===s.rally&&legal){
-        if(reachable){this.hit(seat,pending.shot);break;}
+        if(reachable&&(p.rescue||pending.airRequested||this.returnPlanners[seat].committed(s.time,s.rally)||!prefersBounce(b,p,seat))){this.hit(seat,pending.shot);break;}
         if(!p.rescue&&this.rescueAttempt[seat]!==s.rally){
           const target=rescueTarget(b,p,seat);
-          if(target&&!hasNormalReturnWindow(b,p,seat,{time:s.time,manualUntil:this.manualUntil[seat],serviceFlight:this.serviceFlight,slice:!!pending.shot.slice,planner:this.returnPlanners[seat],flight:s.rally})){
+          if(target&&!hasNormalReturnWindow(b,p,seat,{time:s.time,manualUntil:this.manualUntil[seat],serviceFlight:this.serviceFlight,slice:!!pending.shot.slice,planner:this.returnPlanners[seat],flight:s.rally,airRequested:pending.airRequested})){
             this.rescueAttempt[seat]=s.rally;
             if(this.random()<RESCUE.chance){
               p.rescue={startedAt:s.time,fromX:p.x,fromZ:p.z,toX:target.x,toZ:target.z,contact:target.contact,hit:false};
