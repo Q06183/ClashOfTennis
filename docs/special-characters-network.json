@@ -1,0 +1,18 @@
+{
+  "verifiedAt": "2026-09-22T11:01:51.698Z",
+  "endpoint": "ws://100.81.1.29:7470/ws",
+  "transport": "two independent WebSocket clients on this computer",
+  "fullMatchScore": [
+    7,
+    5
+  ],
+  "characters": [
+    "luca",
+    "adrian"
+  ],
+  "maxRally": 7,
+  "rescueHits": 0,
+  "rematchReset": true,
+  "wallSeconds": 100,
+  "scope": "Protocol and authoritative simulation only. Not real phone or cross-network verification."
+}

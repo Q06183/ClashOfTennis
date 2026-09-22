@@ -2,8 +2,8 @@ import {test,before} from 'node:test';import assert from 'node:assert/strict';
 import {CHARACTERS,getCharacter,characterEffects} from '../src/simulation/characters.js';
 import {Match} from '../src/simulation/match.js';import {movePlayer} from '../src/simulation/movement.js';import {initPhysics} from '../src/simulation/physics.js';import {predictFlight} from '../src/simulation/trajectory.js';import type {Seat,BallState} from '../src/simulation/types.js';
 before(initPhysics);
-test('roster has six distinct balanced budgets with strengths, weaknesses and a neutral default',()=>{
- assert.equal(CHARACTERS.length,6);assert.equal(new Set(CHARACTERS.map(c=>c.id)).size,6);
+test('roster has nine distinct balanced budgets with strengths, weaknesses and a neutral default',()=>{
+ assert.equal(CHARACTERS.length,9);assert.equal(new Set(CHARACTERS.map(c=>c.id)).size,9);
  for(const c of CHARACTERS){const stats=Object.values(c.stats);assert.equal(stats.reduce((a,b)=>a+b,0),360);assert.ok(stats.every(n=>n>=40&&n<=85));if(c.id!=='lin'){assert.ok(Math.max(...stats)>=78);assert.ok(Math.min(...stats)<=52);}}
  assert.equal(getCharacter('bad').id,'lin');assert.deepEqual(characterEffects('lin'),{movement:1,forehand:1,backhand:1,volley:1,serve:1,drain:1,recovery:1});
 });

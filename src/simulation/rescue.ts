@@ -1,3 +1,4 @@
+import {handedness} from './characters.js';
 import {movePlayer} from './movement.js';
 import {reception} from './reception.js';
 import {airInterception,canReturnNormally,wantsAirContact,returnHeightLegal} from './skills.js';
@@ -13,7 +14,7 @@ export function rescueTarget(b:BallState,p:PlayerState,seat:Seat){
  if(closest<-.03||closest>.18)return null;
  const t=RESCUE.travel,contact={x:b.x+b.vx*t,y:b.y+b.vy*t-flightGravity(b)*t*t/2,z:b.z+b.vz*t};
  if(contact.y<.5||contact.y>1.65||contact.z*sign<1)return null;
- const x=contact.x-sign*.6,z=contact.z+sign*.4,distance=Math.hypot(x-p.x,z-p.z);
+ const x=contact.x-sign*handedness(p.characterId)*.6,z=contact.z+sign*.4,distance=Math.hypot(x-p.x,z-p.z);
  if(distance<.7||distance>RESCUE.reach||Math.abs(x)>6.4||z*sign>16.5)return null;
  return {x,z,contact};
 }
@@ -52,6 +53,6 @@ export function moveRescue(p:PlayerState,time:number,dt:number){
 
 /** Extra reach margin for the airborne, one-handed pose instead of a grounded torso turn. */
 export function canReachRescue(b:BallState,p:PlayerState,seat:Seat,time:number){
- const sign=side(seat),x=-(b.x-p.x)*sign,z=-(b.z-p.z)*sign,y=b.y-rescuePose(p,time).lift;
+ const sign=side(seat),x=-(b.x-p.x)*sign*handedness(p.characterId),z=-(b.z-p.z)*sign,y=b.y-rescuePose(p,time).lift;
  return Math.hypot(x+.31,y-(1.385-contactCrouch(y)),z-.05)<.88;
 }

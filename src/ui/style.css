@@ -41,3 +41,5 @@
 .lob-button[aria-pressed="true"]{background:#c7b9ff;color:#2c2450}
 .match-bottom .hint,.serve-notice{max-width:calc(100% - 70px)}
 @media(max-height:500px){.court-actions{flex-direction:row;width:102px;gap:6px}.match-bottom .hint,.serve-notice{max-width:calc(100% - 112px)}}
+
+.character-card small{display:block;font-size:10px;line-height:1.4;color:#52645d;white-space:nowrap;margin-top:3px}

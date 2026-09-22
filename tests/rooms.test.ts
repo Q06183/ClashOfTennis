@@ -146,3 +146,21 @@ test('both sockets receive the same weak low volley before its incoming ball tou
  }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
+
+test('left-hand single-backhand picks and real backhand contacts agree on both sockets',async()=>{
+ const {Match}=await import('../src/simulation/match.js');const {handedness}=await import('../src/simulation/characters.js');
+ const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{
+  a.send({type:'create',name:'左手单反',characterId:'luca'});const welcome=await a.wait('welcome');
+  b.send({type:'join',code:welcome.code,name:'右手单反',characterId:'adrian'});await b.wait('welcome');
+  a.send({type:'ready'});b.send({type:'ready'});const initial=await a.wait('state');assert.deepEqual(initial.state.players.map((p:any)=>p.characterId),['luca','adrian']);
+  const room=server.rooms.rooms.get(welcome.code)!;
+  for(const seat of [0,1] as const){
+   room.match!.dispose();const m=room.match=new Match(['luca','adrian'],()=>1),sign=seat===0?1:-1;m.state.phase='rally';m.state.rally=2;m.step(.08);
+   const p=m.state.players[seat];Object.assign(p,{x:0,z:10*sign,tx:0,tz:10*sign,vx:0,vz:0});m.input(seat,{type:'move',x:0,z:10*sign});
+   m.physics.place({x:-.6*sign*handedness(p.characterId),y:1.3,z:9.6*sign},{x:0,y:0,z:3*sign});Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});a.messages.length=0;b.messages.length=0;
+   (seat===0?a:b).send({type:'input',command:{type:'shot',aim:0,depth:.5,power:.5,lob:false}});
+   const hit=await a.wait('state',v=>v.state.rally===3),peer=await b.wait('state',v=>v.seq===hit.seq);assert.deepEqual(hit.state,peer.state);assert.equal(hit.state.players[seat].stroke,'backhand');assert.ok(hit.state.players[seat].backhand);
+  }
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
+});

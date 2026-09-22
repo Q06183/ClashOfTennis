@@ -6,7 +6,7 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {Box3,SkinnedMesh,Vector3,Quaternion,type BufferAttribute,type InterleavedBufferAttribute} from 'three';
 import {disposeTree} from '../src/render/dispose.js';
 import {Athlete} from '../src/render/player.js';
-const variants=['athlete','characters/mei','characters/rafa','characters/sora','characters/ines','characters/leo'];
+const variants=['athlete','characters/mei','characters/rafa','characters/sora','characters/ines','characters/leo','characters/noah','characters/adrian','characters/luca'];
 async function model(id='athlete'){
   const raw=await readFile(new URL(`../public/models/${id}.glb`,import.meta.url));
   const length=raw.readUInt32LE(12),json=JSON.parse(raw.toString('utf8',20,20+length));
@@ -22,9 +22,10 @@ for(const id of variants)test(`generated ${id} loads a real skin and animates wi
   const gltf=await model(id),a=new Athlete(0);a.attachModel(gltf.scene);
   assert.equal(a.modelSource,'lux3d');
   a.root.traverse(o=>{if(o instanceof SkinnedMesh){const p=o.geometry.attributes.position,w=o.geometry.attributes.skinWeight;for(let i=0;i<p.count;i++){const sum=w.getX(i)+w.getY(i)+w.getZ(i)+w.getW(i);assert.ok(Math.abs(sum-1)<1e-5);if(Math.abs(p.getX(i))<.2&&p.getY(i)<1.2){const joints:BufferAttribute|InterleavedBufferAttribute=o.geometry.attributes.skinIndex;for(let k=0;k<4;k++)if(w.getComponent(i,k)>.001)assert.ok(!/Arm|Hand/.test(o.skeleton.bones[joints.getComponent(i,k)].name),'arm weights must not pull torso or shorts');}}}});
-  for(const stroke of ['forehand','backhand','serve','volley','smash','slice-forehand','slice-backhand'] as const)for(const frame of stroke==='serve'?[0,.32,.52,.64,.8,.9,.99,1,1.14,1.34,1.52,1.7]:[0,.32,.52,.64,.85,.99,1,1.14,1.34]){
+  const characterId=id==='athlete'?'lin':id.split('/')[1];
+  for(const stroke of ['forehand','backhand','serve','volley','smash','slice-forehand','slice-backhand','lob'] as const)for(const frame of stroke==='serve'?[0,.32,.52,.64,.8,.9,.99,1,1.14,1.34,1.52,1.7]:[0,.32,.52,.64,.85,.99,1,1.14,1.34]){
     const swing=frame>=1?(stroke==='serve'?SERVE_RECOVERY:.44)-(frame-1):0,contact={x:1.3,y:stroke==='serve'||stroke==='smash'?2.65:1.2,z:9.8};
-    a.update({x:1,z:10,tx:1,tz:10,stamina:1,moving:false,stroke,swing,contact,shotQueued:true,preparation:frame<1?{stroke,progress:frame,contact}:undefined},1);
+    a.update({characterId,x:1,z:10,tx:1,tz:10,stamina:1,moving:false,stroke,swing,contact,shotQueued:true,preparation:frame<1?{stroke,progress:frame,contact}:undefined},1);
     a.root.updateMatrixWorld(true);
     let skins=0;const box=new Box3();
     a.root.traverse(o=>{if(o instanceof SkinnedMesh){skins++;o.skeleton.update();o.computeBoundingBox();
@@ -51,7 +52,7 @@ test('generated skin disposal releases shared PBR textures and each skeleton exa
 
 for(const id of variants)test(`running ${id} skin stays grounded and bounded through side runs, backpedal, and cuts`,async()=>{
   const {scene}=await model(id),a=new Athlete(1);a.attachModel(scene);
-  const p={x:0,z:-9,tx:0,tz:-9,stamina:1,moving:true,stroke:'forehand' as const,swing:0};
+  const p={characterId:id==='athlete'?'lin':id.split('/')[1],x:0,z:-9,tx:0,tz:-9,stamina:1,moving:true,stroke:'forehand' as const,swing:0};
   let frame=0;
   for(const [vx,vz] of [[4,0],[-4,0],[0,3],[0,-3],[0,0]])for(let i=0;i<45;i++){
     p.x+=vx/60;p.z+=vz/60;a.update(p,++frame/60,1/60);a.root.updateMatrixWorld(true);
@@ -71,7 +72,7 @@ test('all generated characters stay finite and bounded through rescue leap and l
  const {moveRescue}=await import('../src/simulation/rescue.js');
  for(const id of variants){
   const {scene}=await model(id),a=new Athlete(0);a.attachModel(scene);
-  const p:import('../src/simulation/types.js').PlayerState={x:0,z:10,tx:1.5,tz:10,stamina:.8,moving:true,stroke:'forehand',swing:0,rescue:{startedAt:0,fromX:0,fromZ:10,toX:1.5,toZ:10.4,hit:false,contact:{x:2.1,y:1,z:10}}};
+  const p:import('../src/simulation/types.js').PlayerState={characterId:id==='athlete'?'lin':id.split('/')[1],x:0,z:10,tx:1.5,tz:10,stamina:.8,moving:true,stroke:'forehand',swing:0,rescue:{startedAt:0,fromX:0,fromZ:10,toX:1.5,toZ:10.4,hit:false,contact:{x:2.1,y:1,z:10}}};
   for(let i=1;i<=45;i++){
    moveRescue(p,i/60,1/60);a.update(p,i/60,1/60);a.root.updateMatrixWorld(true);
    if(i%5)continue;

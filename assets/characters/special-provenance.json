@@ -1,0 +1,32 @@
+[
+  {
+    "id": "noah",
+    "derivedFrom": "public/models/characters/rafa.glb",
+    "model": "public/models/characters/noah.glb",
+    "editable": "assets/characters/noah/athlete-rig.blend",
+    "portrait": "public/portraits/noah.png",
+    "fabricFaces": 1509,
+    "changes": "Locally authored central uniform panel and accent stripe; source geometry, skin weights and original textures preserved",
+    "externalCredits": 0
+  },
+  {
+    "id": "adrian",
+    "derivedFrom": "public/models/characters/leo.glb",
+    "model": "public/models/characters/adrian.glb",
+    "editable": "assets/characters/adrian/athlete-rig.blend",
+    "portrait": "public/portraits/adrian.png",
+    "fabricFaces": 1733,
+    "changes": "Locally authored central uniform panel and accent stripe; source geometry, skin weights and original textures preserved",
+    "externalCredits": 0
+  },
+  {
+    "id": "luca",
+    "derivedFrom": "public/models/characters/mei.glb",
+    "model": "public/models/characters/luca.glb",
+    "editable": "assets/characters/luca/athlete-rig.blend",
+    "portrait": "public/portraits/luca.png",
+    "fabricFaces": 2177,
+    "changes": "Locally authored central uniform panel and accent stripe; source geometry, skin weights and original textures preserved",
+    "externalCredits": 0
+  }
+]

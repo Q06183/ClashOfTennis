@@ -1,3 +1,4 @@
+import {handedness} from '../simulation/characters.js';
 import * as T from 'three';
 import {AthleteSkin} from './athlete-skin.js';
 import {strokeBody} from './stroke-body.js';
@@ -185,6 +186,18 @@ export class Athlete {
     foot.quaternion.copy(leg.quaternion).multiply(knee.quaternion).invert().multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),turn));
   }
   update(p:PlayerState,time:number,deltaTime?:number){
+    const hand=handedness(p.characterId),worldX=p.x;
+    // Solve IK with a proper (non-reflected) transform. Reflect the finished
+    // skeleton as one unit, so wrist/ankle quaternions never see negative scale.
+    this.root.scale.x=1;
+    if(hand===-1){
+      const point=(v:{x:number;y:number;z:number})=>({...v,x:-v.x});
+      p={...p,x:-p.x,tx:-p.tx,vx:-(p.vx??0),
+        serveCourt:p.serveCourt===undefined?undefined:p.serveCourt==='ad'?'deuce':'ad',
+        contact:p.contact?point(p.contact):undefined,
+        preparation:p.preparation?{...p.preparation,contact:point(p.preparation.contact)}:undefined,
+        rescue:p.rescue?{...p.rescue,fromX:-p.rescue.fromX,toX:-p.rescue.toX,contact:point(p.rescue.contact)}:undefined};
+    }
     const rescue=rescuePose(p,time);
     this.root.position.set(p.x,rescue.lift,p.z);this.root.updateMatrixWorld(true);
     const actual=p.rescue?.contact??p.preparation?.contact??p.contact;
@@ -197,6 +210,13 @@ export class Athlete {
     }
     const dt=deltaTime??Math.max(1/60,Math.min(.08,time-this.lastTime));this.lastTime=time;
     const body=strokeBody(p),gait=this.footwork.update(this.root.position,this.root.quaternion,dt),movement=gait.localDirection;
+    const stride=Math.sin(gait.phase*Math.PI*2)*Math.min(1,gait.speed/2);
+    const running=T.MathUtils.smoothstep(gait.speed,2.2,4.5)*(p.rescue||p.swing>0?0:p.preparation?1-T.MathUtils.smoothstep(p.preparation.progress,.2,.55):1);
+    if(running>0){
+      pose.tip.lerp(new T.Vector3(-.3,1.38+stride*.07,.74+stride*.06),running);
+      pose.shaft.lerp(new T.Vector3(-.25,.9,.25).normalize(),running).normalize();
+      pose.twoHands=false;pose.support=1-running;
+    }
     const speedBlend=1-T.MathUtils.smoothstep(gait.speed,1.5,4.5);
     // Whole-body loading must run during the serve, even though it has no queued return.
     const action=active&&!p.rescue?body.blend:0;
@@ -214,21 +234,26 @@ export class Athlete {
     this.torso.position.y=-hipDrop;
     const motionStrength=p.rescue?contactWeight:action;
     const lean=Math.min(.12,gait.speed*.022)*(1-motionStrength);
-    this.torso.rotation.set(T.MathUtils.lerp(.035,body.lean,action)+movement.z*lean,pose.turn+gait.turn*.65*(1-motionStrength),body.sideBend*action-movement.x*lean*.65);
+    this.torso.rotation.set(T.MathUtils.lerp(.035,body.lean,action)+movement.z*lean,pose.turn+gait.turn*.65*(1-motionStrength)+stride*.045*running,body.sideBend*action-movement.x*lean*.65);
     const serving=(p.preparation?.stroke??p.stroke)==='serve';
-    this.head.rotation.set(serving?body.headPitch*action:0,serving?-pose.turn*.55*action:0,0);
+    this.head.rotation.set(serving?body.headPitch*action:T.MathUtils.clamp(Math.atan2(1.7-contact.y,Math.max(.7,contact.z)), -.55,.4)*action, -pose.turn*.55*action,0);
     if(p.rescue){
       const direction=new T.Vector3(p.rescue.toX-p.rescue.fromX,0,p.rescue.toZ-p.rescue.fromZ).applyQuaternion(this.root.quaternion.clone().invert()).normalize();
       this.torso.rotation.x+=direction.z*rescue.lean;this.torso.rotation.z-=direction.x*rescue.lean;
     }
-    const stride=Math.sin(gait.phase*Math.PI*2)*Math.min(1,gait.speed/2);
     this.arms[0].rotation.set(-.45-stride*.3,0,-.3);this.elbows[0].rotation.set(-.6,0,0);this.leftHand.quaternion.identity();
     this.racketTo(pose.tip,pose.shaft,pose.twoHands,0,body.faceRoll*action,action?body.elbow:undefined);
-    if(active&&!pose.twoHands){
-      const hand=this.root.localToWorld((p.rescue?new T.Vector3(.38,1.15,.36):body.freeHand).clone());
+    if((active||running>0)&&!pose.twoHands){
+      const free=body.freeHand.clone();
+      if(p.rescue){
+        const direction=new T.Vector3(p.rescue.toX-p.rescue.fromX,0,p.rescue.toZ-p.rescue.fromZ).applyQuaternion(this.root.quaternion.clone().invert()).normalize();
+        free.set(.46-direction.x*.18,1.08,.14-direction.z*.25);
+      }else if(running>0)free.lerp(new T.Vector3(.42,1.12,.27-stride*.16),running);
+      const hand=this.root.localToWorld(free);
       const tossing=p.preparation?.stroke==='serve';
-      const gripBlend=serving&&!tossing?1-T.MathUtils.smoothstep(p.swing,0,.24):0;
-      if(gripBlend){const grip=this.racket.localToWorld(new T.Vector3(0,-RACKET.secondHand,0));hand.lerp(grip,gripBlend);}
+      const gripBlend=p.swing>0&&!p.rescue?1-T.MathUtils.smoothstep(p.swing,0,serving?.24:.12):0;
+      const support=Math.max(gripBlend,pose.support??0);
+      if(support){const grip=this.racket.localToWorld(new T.Vector3(0,-RACKET.secondHand,0));hand.lerp(grip,support);}
       const leftPole=serving?new T.Vector3(1,0,-.2).lerp(new T.Vector3(.7,-1,.35),gripBlend):new T.Vector3(.7,-.6,-.2);
       this.armTo(0,hand,leftPole,serving?1-gripBlend:0);
       if(serving){
@@ -239,8 +264,9 @@ export class Athlete {
         this.leftHand.quaternion.copy(this.elbows[0].getWorldQuaternion(new T.Quaternion()).invert().multiply(q));
       }
       if(!tossing&&!serving)this.leftHand.rotation.y=-.5;
-      if(gripBlend){const gripQ=this.elbows[0].getWorldQuaternion(new T.Quaternion()).invert().multiply(this.racket.getWorldQuaternion(new T.Quaternion()));this.leftHand.quaternion.slerp(gripQ,gripBlend);}
+      if(support){const gripQ=this.elbows[0].getWorldQuaternion(new T.Quaternion()).invert().multiply(this.racket.getWorldQuaternion(new T.Quaternion()));this.leftHand.quaternion.slerp(gripQ,support);}
     }
     if(this.generated){this.root.updateMatrixWorld(true);this.generated.update();}
+    this.root.position.x=worldX;this.root.scale.x=hand;this.root.updateMatrixWorld(true);
   }
 }

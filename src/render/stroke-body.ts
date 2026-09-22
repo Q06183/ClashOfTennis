@@ -1,3 +1,4 @@
+import {singleBackhand} from '../simulation/characters.js';
 import {motionValue} from './motion-curve.js';
 import {servePhase,serveTossHand} from '../simulation/serve-motion.js';
 import {Vector3} from 'three';
@@ -31,9 +32,21 @@ export function strokeBody(p:PlayerState){
  }else if(slice){
   const stance=bh?[[.27,.105,-.16],[-.25,.105,.2]]:[[.26,.105,.19],[-.28,.105,-.17]];
   keys=[key(0),key(.5,{drop:.09,hips:dir*.45,lean:.02,hand:bh?[.5,1.48,.02]:[.6,1.35,.5],feet:stance,face:-dir*.28}),key(.8,{drop:.06,hips:dir*.35,hand:bh?[.83,1.3,-.43]:[.45,1.35,.4],feet:stance,face:-dir*.22}),key(1,{drop:.0045,hips:dir*.25,hand:bh?[.88,1.28,-.52]:[.4,1.25,.32],feet:stance,face:-dir*.22}),key(1.65,{drop:.055,hips:dir*.28,lean:.08,hand:bh?[.9,1.3,-.55]:[.48,1.35,.15],feet:stance,face:-dir*.15}),key(2)];
+ }else if(bh&&singleBackhand(p.characterId)&&stroke!=='lob'){
+  const stance=[[.27,.105,-.15],[-.29,.105,.23]];
+  keys=[key(0),key(.5,{drop:.13,hips:.6,feet:stance,hand:[.4,1.36,.15]}),
+   key(.75,{drop:.08,hips:.42,feet:stance,hand:[.68,1.32,-.2]}),
+   key(1,{drop:.0045,hips:.28,feet:stance,hand:[.86,1.3,-.35]}),
+   key(1.45,{drop:.045,hips:.16,feet:stance,hand:[.86,1.35,-.4],face:-.25}),key(2)];
+ }else if(stroke==='lob'){
+  const stance=[[.28,.105,.07],[-.28,.105,-.07]];
+  keys=[key(0),key(.55,{drop:.16,hips:dir*.3,feet:stance,hand:[.6,1.2,.45]}),
+   key(.8,{drop:.12,hips:dir*.2,feet:stance,hand:[.5,1.18,.42]}),
+   key(1,{drop:.0045,hips:dir*.08,feet:stance,hand:[.3,1.28,.36]}),
+   key(1.5,{drop:.025,hips:-dir*.14,feet:stance,hand:[.45,1.35,.25]}),key(2)];
  }else{
   const stance=bh?[[.27,.105,-.13],[-.3,.105,.15]]:[[.3,.105,.12],[-.32,.105,-.12]];
   keys=[key(0),key(.5,{drop:bh?.13:.115,hips:dir*.48,lean:.055,hand:[.7,1.38,.65],feet:stance}),key(.8,{drop:.075,hips:dir*.2,hand:[.46,1.4,.42],feet:stance}),key(1,{drop:.0045,hips:dir*.08,hand:[.3,1.28,.36],feet:stance}),key(1.5,{drop:.04,hips:-dir*.36,lean:.07,hand:[.26,1.4,.38],feet:stance,face:-dir*.45}),key(2)];
  }
- const pose=sample(keys,t,stroke==='serve');if(stroke==='serve'&&prep)pose.freeHand.set(0,serveTossHand(prep.progress),.25);return {...pose,blend:active?(stroke==='serve'&&!prep?smooth(p.swing/.16):1):0};
+ const pose=sample(stroke==='serve'?keys:keys.map(k=>({...k,t:k.t<=1?k.t:1+(k.t-1)*.44/.65})),stroke==='serve'||t<=1?t:1+(t-1)*.44/.65,true);if(stroke==='serve'&&prep)pose.freeHand.set(0,serveTossHand(prep.progress),.25);return {...pose,blend:active?(!prep?smooth(p.swing/.16):1):0};
 }
