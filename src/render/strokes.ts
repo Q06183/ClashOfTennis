@@ -1,4 +1,4 @@
-import {handedness,singleBackhand} from '../simulation/characters.js';
+import {singleBackhand} from '../simulation/characters.js';
 import {motionValue} from './motion-curve.js';
 import {servePhase} from '../simulation/serve-motion.js';
 import {contactTurn} from '../simulation/athlete.js';
@@ -54,7 +54,7 @@ export function strokePose(p:PlayerState,contact:Vector3):StrokePose{
  if(stroke==='serve'&&(preparing||p.swing>0))return servicePose(p,contact);
  const slice=stroke==='slice-forehand'||stroke==='slice-backhand';
  const bh=stroke==='backhand'||stroke==='slice-backhand'||((stroke==='volley'||stroke==='lob')&&!!p.backhand),dir=bh?1:-1;
- const one=bh&&singleBackhand(p.characterId),left=handedness(p.characterId)===-1;
+ const one=bh&&singleBackhand(p.characterId);
  const lob=stroke==='lob',volley=stroke==='volley',smash=stroke==='smash',serve=stroke==='serve'||smash;
  const impact:Key={t:1,tip:contact.toArray(),shaft:serve?[0,1,0]:volley?[dir*.4,.85,.1]:[dir*.96,.2,-.25],turn:serve?0:contactTurn(contact.x,contact.z,bh),knee:serve?.05:.22};
  if(!serve&&!volley){
@@ -65,54 +65,41 @@ export function strokePose(p:PlayerState,contact:Vector3):StrokePose{
  const back:Key={t:.52,tip:volley?[dir*.65,1.65,.2]:[dir*.98,1.18,-.18],shaft:volley?[dir*.35,.9,0]:[dir*.85,.15,-.5],turn:dir*(volley?.24:.78),knee:volley?.24:.38};
  let pose;
  {
-  const outside:Key={t:.26,tip:[dir*.85,1.5,.52],shaft:[dir*.65,.6,.1],turn:dir*.35,knee:.3};
-  const forward:Key={t:.78,tip:[dir*1.02,.98,.4],shaft:[dir*.98,.1,.05],turn:dir*.32,knee:.3};
-  const bhKeys:Key[]=[ready,
-   {t:.26,tip:[.58,1.62,.35],shaft:[.45,.86,-.12],turn:.65,knee:.3},
-   {t:.52,tip:[.72,1.22,-.20],shaft:[.85,.05,-.5],turn:1.10,knee:.38},
-   {t:.78,tip:[.78,.86,.28],shaft:[.97,-.18,.05],turn:.85,knee:.34},impact];
   const sliceKeys:Key[]=[ready,{t:.48,tip:[dir*.7,1.85,.12],shaft:[dir*.6,.75,-.05],turn:dir*.7,knee:.3},{t:.78,tip:[contact.x,contact.y+.25,contact.z-.12],shaft:impact.shaft,turn:dir*.4,knee:.25},impact];
   const smashKeys:Key[]=[ready,{t:.32,tip:[-.75,1.98,.08],shaft:[-.2,.96,.05],turn:-.45,knee:.25},{t:.55,tip:[-.66,2.18,-.22],shaft:[-.1,.97,-.2],turn:-.8,knee:.3},{t:.78,tip:[-.44,1.5,-.52],shaft:[.1,-.8,-.6],turn:-.5,knee:.18},{t:.9,tip:[-.45,2.1,.08],shaft:[.1,.96,.22],turn:-.18,knee:.08},impact];
   const lobKeys:Key[]=[ready,{t:.45,tip:[dir*.65,1.3,.6],shaft:[dir*.6,.3,.15],turn:dir*.45,knee:.4},{t:.78,tip:[dir*.7,.55,.4],shaft:[dir*.65,.1,.2],turn:dir*.25,knee:.5},impact];
-  const singleKeys:Key[]=[ready,
-   {t:.26,tip:[.58,1.62,.35],shaft:[.45,.86,-.12],turn:.65,knee:.3},
-   {t:.52,tip:[.72,1.35,-.18],shaft:[.7,.42,-.45],turn:1.12,knee:.4},
-   {t:.78,tip:[.88,.78,.28],shaft:[.95,-.12,.12],turn:.9,knee:.32},impact];
   // These are still canonical right-handed coordinates. Athlete reflects the
   // complete skeleton once; never reflect individual wrists or contact again.
-  const leftForehand:Key[]=[ready,
+  const forehandKeys:Key[]=[ready,
    {t:.26,tip:[-.78,1.65,.48],shaft:[-.5,.82,.08],turn:-.48,knee:.3},
    {t:.52,tip:[-.94,1.34,-.25],shaft:[-.7,.38,-.6],turn:-1.02,knee:.42},
    {t:.76,tip:[-1.02,.78,.25],shaft:[-.91,-.18,-.25],turn:-.60,knee:.34},impact];
-  const leftBackhand:Key[]=[ready,
+  const doubleKeys:Key[]=[ready,
    {t:.26,tip:[.62,1.48,.37],shaft:[.65,.7,-.08],turn:.65,knee:.3},
    {t:.52,tip:[.70,1.16,-.16],shaft:[.85,.05,-.5],turn:1.14,knee:.41},
    {t:.76,tip:[.78,.83,.26],shaft:[.97,-.18,.05],turn:.83,knee:.34},impact];
-  const leftSingle:Key[]=[ready,
+  const singleKeys:Key[]=[ready,
    {t:.26,tip:[.62,1.7,.38],shaft:[.4,.9,-.1],turn:.72,knee:.3},
    {t:.52,tip:[.78,1.55,-.26],shaft:[.62,.7,-.35],turn:1.22,knee:.42},
    {t:.76,tip:[.9,.74,.22],shaft:[.95,-.2,-.12],turn:.96,knee:.34},impact];
-  const keys=lob?lobKeys:slice?sliceKeys:smash?smashKeys:volley?[ready,back,impact]:bh?(left?(one?leftSingle:leftBackhand):(one?singleKeys:bhKeys)):left?leftForehand:[ready,outside,back,forward,impact];
+  const keys=lob?lobKeys:slice?sliceKeys:smash?smashKeys:volley?[ready,back,impact]:bh?(one?singleKeys:doubleKeys):forehandKeys;
   const finish:Key={t:serve?.4:.7,tip:serve?[.45,.85,.85]:volley?contact.clone().add(new Vector3(0,.07,.3)).toArray():[-dir*.5,1.92,.65],shaft:serve?[.7,-.6,.2]:volley?impact.shaft:[-dir*.75,.6,-.12],turn:serve?.38:volley?-dir*.15:-dir*.6,knee:.18};
   const extension:Key={t:.23,tip:[contact.x-.10,Math.min(1.85,contact.y+.18),contact.z+.20],shaft:[.85,.42,.08],turn:.35,knee:.2};
-  const bhFinish:Key={t:.7,tip:[-.43,2.02,.6],shaft:[-.35,.9,-.2],turn:-.7,knee:.18};
   const sliceFinish:Key={t:.7,tip:[dir*.95,.82,Math.max(.98,contact.z+.42)],shaft:[dir*.8,-.35,.2],turn:dir*.18,knee:.28};
   const lobFinish:Key={t:.65,tip:[dir*.5,2.05,.9],shaft:[dir*.4,.8,.3],turn:-dir*.15,knee:.15};
   const serveExtension:Key={t:.16,tip:[-.65,2.12,.9],shaft:[-.15,.98,.15],turn:.12,knee:.1};
   const oneExtension:Key={t:.25,tip:[contact.x-.1,contact.y+.22,contact.z+.3],shaft:[.85,.5,.1],turn:impact.turn,knee:.17};
-  const oneFinish:Key={t:.68,tip:[-.65,1.95,.85],shaft:[-.4,.9,.2],turn:.2,knee:.18};
-  const foreExtension:Key={t:.32,tip:[-.05,Math.min(1.85,contact.y+.3),Math.max(1.05,contact.z+.3)],shaft:[-.25,.65,.55],turn:.15,knee:.18};
-  const leftForeFollow:Key[]=[
+  const forehandFollow:Key[]=[
    {t:.3,tip:[-.35,Math.min(1.8,contact.y+.35),Math.max(1.1,contact.z+.35)],shaft:[-.55,.6,.35],turn:.08,knee:.17},
    {t:.65,tip:[.65,2.06,.48],shaft:[.68,.7,-.12],turn:.68,knee:.18},
    {t:.82,tip:[.45,1.86,.46],shaft:[.5,.8,.08],turn:.42,knee:.2},{...ready,t:1}];
-  const leftSingleFollow:Key[]=[oneExtension,
+  const singleFollow:Key[]=[oneExtension,
    {t:.65,tip:[-.88,2.12,.6],shaft:[-.58,.79,.18],turn:.12,knee:.18},
    {t:.82,tip:[-.78,1.94,.68],shaft:[-.5,.84,.15],turn:.08,knee:.2},{...ready,t:1}];
-  const leftDoubleFollow:Key[]=[extension,
+  const doubleFollow:Key[]=[extension,
    {t:.67,tip:[-.43,2.0,.6],shaft:[-.35,.9,-.2],turn:-.75,knee:.18},
    {t:.83,tip:[-.35,1.8,.62],shaft:[-.35,.9,.1],turn:-.45,knee:.2},{...ready,t:1}];
-  const follow=serve?[serveExtension,finish,{...ready,t:1}]:lob?[lobFinish,{...ready,t:1}]:slice?[sliceFinish,{...ready,t:1}]:bh&&!volley?(left?(one?leftSingleFollow:leftDoubleFollow):(one?[oneExtension,oneFinish,{...ready,t:1}]:[extension,bhFinish,{...ready,t:1}])):volley?[finish,{...ready,t:1}]:left?leftForeFollow:[foreExtension,finish,{...ready,t:1}];
+  const follow=serve?[serveExtension,finish,{...ready,t:1}]:lob?[lobFinish,{...ready,t:1}]:slice?[sliceFinish,{...ready,t:1}]:bh&&!volley?(one?singleFollow:doubleFollow):volley?[finish,{...ready,t:1}]:forehandFollow;
   // One curve crosses impact. .65 s preparation and .44 s recovery share a
   // clock, so the racket no longer brakes to a stop at every pose or impact.
   const recovery=.44/.65;

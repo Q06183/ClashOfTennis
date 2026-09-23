@@ -1,6 +1,7 @@
 import {handedness} from '../simulation/characters.js';
 import * as T from 'three';
 import {AthleteSkin} from './athlete-skin.js';
+import {solveGrip} from './grip.js';
 import {strokeBody} from './stroke-body.js';
 import {strokePose} from './strokes.js';
 import {RACKET,contactCrouch} from '../simulation/athlete.js';
@@ -88,7 +89,9 @@ export class Athlete {
   attachModel(scene:T.Object3D){
     this.clearModel();
     const anchors:Record<string,T.Object3D>={};
-    anchors.Hips=this.hips;anchors.Head=this.head;anchors.Neck=this.head;
+    anchors.Hips=this.hips;anchors.Head=this.head;
+    // The source Neck also weights the collar and shoulder seam. Keep it on
+    // the trunk; ball-tracking head rotation must not pull those vertices.
     for(let i=0;i<2;i++){
       const suffix=i?'R':'L';
       anchors['UpperArm_'+suffix]=this.arms[i];anchors['LowerArm_'+suffix]=this.elbows[i];
@@ -121,37 +124,10 @@ export class Athlete {
     const tip=this.root.localToWorld(tipLocal.clone()),rootQ=this.root.getWorldQuaternion(new T.Quaternion());
     const shoulder=this.arms[1].getWorldPosition(new T.Vector3()),axis=tip.clone().sub(shoulder),d=axis.length();axis.normalize();
     let shaft=shaftLocal.clone().applyQuaternion(rootQ).normalize(),hand=tip.clone().addScaledVector(shaft,-RACKET.sweet);
-    // Choose a wrist on the intersection of arm reach and racket-length spheres.
-    // This keeps the racket head on the ball without folding the wrist backwards.
-    const preferred=hand.clone(),minReach=Math.min(.667,Math.abs(d-RACKET.sweet)+.0001);
-    const preferredReach=T.MathUtils.clamp(hand.distanceTo(shoulder),minReach,.667);
-    const leftShoulder=this.arms[0].getWorldPosition(new T.Vector3());
-    const fraction=RACKET.secondHand/RACKET.sweet;
-    // The upper hand is on the same shaft. Its reach forms a second sphere
-    // for the lower-hand position; solve both arms instead of letting it detach.
-    const leftCentre=leftShoulder.clone().addScaledVector(tip,-fraction).multiplyScalar(1/(1-fraction));
-    const leftRadius=.665/(1-fraction);
-    let best=Infinity;
-    for(const armReach of twoHands?[preferredReach,.667,.63,.59,.55,.51,.47,.43,.39,.35,.31]:[preferredReach]){
-      if(armReach<minReach||d>armReach+RACKET.sweet||d<Math.abs(armReach-RACKET.sweet))continue;
-      const along=(d*d+armReach*armReach-RACKET.sweet**2)/(2*Math.max(d,.001));
-      const centre=shoulder.clone().addScaledVector(axis,along),radius=Math.sqrt(Math.max(0,armReach*armReach-along*along));
-      let radial=preferred.clone().sub(centre);radial.addScaledVector(axis,-radial.dot(axis));
-      if(radial.lengthSq()<1e-6)radial.set(0,-1,0).addScaledVector(axis,axis.y);radial.normalize();
-      if(twoHands&&radius>1e-6){
-        const toLeft=leftCentre.clone().sub(centre),onPlane=toLeft.clone().addScaledVector(axis,-toLeft.dot(axis)),span=onPlane.length();
-        const bound=(toLeft.lengthSq()+radius*radius-leftRadius*leftRadius)/(2*radius*Math.max(span,1e-9));
-        if(bound>1)continue;
-        if(span>1e-6&&bound>-1){
-          const towards=onPlane.multiplyScalar(1/span),cos=radial.dot(towards);
-          if(cos<bound){const tangent=radial.clone().addScaledVector(towards,-cos);if(tangent.lengthSq()<1e-8)tangent.crossVectors(axis,towards);radial=towards.multiplyScalar(bound).addScaledVector(tangent.normalize(),Math.sqrt(1-bound*bound));}
-        }
-      }
-      const candidate=centre.addScaledVector(radial,radius),cost=candidate.distanceToSquared(preferred);
-      if(twoHands&&candidate.distanceTo(leftCentre)>leftRadius+.00001)continue;
-      if(cost<best){best=cost;hand.copy(candidate);}
-    }
-    if(!Number.isFinite(best)){
+    // Solve continuous arm-reach constraints while keeping the head on the ball.
+    const solved=solveGrip(tip,shaft,shoulder,twoHands?this.arms[0].getWorldPosition(new T.Vector3()):undefined);
+    if(solved)hand.copy(solved);
+    if(!solved){
       if(twoHands&&adjustment<8){
         // Beyond reach during preparation/follow-through, preserve the shared
         // grip by bringing the racket back towards the two-hand ready space.
