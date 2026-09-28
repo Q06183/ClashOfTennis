@@ -85,8 +85,8 @@ test('match fatigue still slows movement and shots when the fresh point bar is f
   }finally{m.dispose();}
  }
  for(let i=0;i<2;i++)assert.ok(samples[0][i]>samples[1][i]&&samples[1][i]>samples[2][i]);
- near(rescueChance(effectiveStamina({...player(),totalStamina:1/3})),.05);
- near(rescueChance(effectiveStamina({...player(),stamina:.5,totalStamina:.5})),.05);
+ near(rescueChance(1/3),.1);
+ near(rescueChance(1),.9);
 });
 test('earned last point settles both players once even when it ends the match',()=>{
  const m=new Match(['lin','wuming']);

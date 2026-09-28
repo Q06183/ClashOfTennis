@@ -256,22 +256,23 @@ export class App {
     <div class="rally-count" id="rally-count">FIRST TO 7</div><div id="point-slot"></div><div id="reconnect-slot"></div>
     <div class="match-bottom"><div class="serve-notice" id="serve-notice" role="status" aria-live="polite" hidden><strong id="serve-title"></strong><span id="serve-detail"></span></div><div class="hint" id="rally-hint"><strong id="match-hint">斜向滑动，发进对角发球区</strong><small id="match-subhint">绿普通 · 蓝快速 · 橙强力 · 玫红暴击</small></div><div class="court-actions">${this.cameraChoice.button()}<button class="lob-button" id="lob-mode" data-action="lob" aria-label="选择下一拍高吊球" aria-pressed="false">高吊</button><button class="help-button" data-action="help" aria-label="查看操作帮助">?</button></div></div>`;}
   private helpPanel(){return this.panel(`<div class="panel-top"><span>JUST THREE MOVES</span><button class="icon-button" data-action="close-help" aria-label="关闭帮助">×</button></div><h2>好球，从这一拍开始。</h2><p>${this.net?'线上对局仍在进行，请尽快回到球场。':'先记住三个动作，马上就能打出回合。'}</p>
-    <div class="tutorial-steps"><div class="tutorial-step"><b>1</b><div><strong>轻点球场，移动到位</strong><span>普通球员优先接落地球，退后也赶不上时才辅助截击；伊内丝会主动上前截击。回球后，点地面选择下一个站位。本分体力的消耗按20%折算到总体力，一分最多扣总体力20%；分末按角色返还本分消耗的一部分，最多90%。下一分只重置本分条，二发不重置。跑动、击球与跳接概率使用“本分×总体”的有效体力。</span></div></div>
-    <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>从屏幕下方向上滑。滑动控制从实际触球点指向落点的屏幕方向，球在途中仍有高低弧线。瞄准和本方出球落地前，镜头保持稳定。发球请斜向对角发球区。滑得越长、越快，落点越深，也更容易出界。极快且较长的甩动才会触发暴击，同样距离比强力球更深。跑动时也可提前滑动：会记住方向和力度，辅助赶到可达击球点后回击。再次滑动可修改下一拍；够不到的球仍可能漏接。</span></div></div>
-    <div class="tutorial-step"><b>3</b><div><strong>认颜色，控制速度与深度</strong><span>绿普通、蓝快速、橙强力、玫红暴击、青绿上旋、金色高压、冰白切削、紫色高吊。按住350毫秒开始蓄力上旋，约900毫秒充满，再向上滑动释放；弧线更明显、落地前冲。高吊请先点“高吊”按钮，再滑动，下一拍生效。上网迎击未落地球自动截击；头顶可达的下降高球自动高压。接发球仍须先落地。回球时向下划是切削，球向手势反方向飞出；按来球侧自动选正手或反手，落点更难控制，落地后有低弹跳和随机侧偏。发球向下划只改变瞄准方向。已滑动、正常跑动也接不到但跳身可及的球，会按起跳前体力抽签：满体力60%，剩1/3或更低为5%，中间平滑变化；每次来球只抽一次，重复滑动不能重抽。正手、反手、截击、高压有不同跳接动作；能正常接到的球不触发，救回的球较慢且可能随机偏出界。</span></div></div></div>
+    <div class="tutorial-steps"><div class="tutorial-step"><b>1</b><div><strong>轻点球场，移动到位</strong><span>发球前可以点按调整站位，发球者限当前半区底线后，开始抛球后锁定位置。普通球员优先接落地球，伊内丝主动上前截击。本分消耗按20%折算到总体力，一分最多扣总体力20%；分末按角色返还部分消耗，最多90%。下一分仅重置本分条，二发不重置。跑动和击球使用“本分×总体”的有效体力，跳接概率只看总体力。</span></div></div>
+    <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>瞄准以角色身体中心为起点，直划瞄准身体正前方；正手和反手的触球偏移不改变目标，球仍从球拍实际触球点飞出。发球同样如此，请斜划发进对角区。近景和远景只缩放，不改变场地比例。滑得越长、越快，落点越深，也更容易出界。跑动时可提前滑动，保存最后一次方向和球质，后续在可及窗口回击或跳接。</span></div></div>
+    <div class="tutorial-step"><b>3</b><div><strong>认颜色，控制速度与深度</strong><span>绿普通、蓝快速、橙强力、玫红暴击、青绿上旋、金色高压、冰白切削、紫色高吊。长按蓄力上旋，下划反向切削，右侧按钮选择高吊。滑动时立即检查跳接，暂时不可及则在后续来球中继续检查；总体力满时90%，1/3及以下10%，中间平滑变化。每记来球只抽一次，重复滑动不能刷签。跳接使用最后手势的方向、深度和球种，保留救球减速及散布。当前已能正常触球时优先直接击球；接发仍必须落地，出界或二跳后不能救。</span></div></div></div>
     <p>右下角“近景 / 远景”可切换镜头距离，默认近景并记住选择；正在瞄准时会等当前击球结束再切换。跳身后先落地屈膝缓冲，再起身；从起跳到约 1.18 秒恢复期间不能再次移动或击球，可以提前输入下一拍。</p>
     <p id="performance-stats" class="small-note"></p><p id="performance-sync" class="small-note"></p><button class="primary" data-action="close-help">知道了，上场 →</button><p class="small-note">先到 7 分且领先 2 分获胜 · 发球限时 12 秒</p>`);}
   private result(){
     const s=this.remote??this.local.state,won=s.winner===this.seat;
     const me=this.room?.seats[this.seat]?.name??this.name,them=this.room?.seats[other(this.seat)]?.name??'练习搭档';
     const ready=this.room?.seats[this.seat]?.ready;
-    return this.panel(`<div class="panel-top"><span>THAT WAS A GOOD RALLY</span>${close}</div><div class="panel-heading">${won?'Well played.':'One more?'}</div><h2>${won?'好球，这场属于你。':'再来一场，找回手感。'}</h2><p>${escape(s.event)}</p>
+    const winner=s.winner===null?null:s.players[s.winner],winnerName=s.winner===this.seat?me:them;
+    return `<div class="victory-overlay"><div class="victory-title"><span>MATCH WINNER</span><h2>${escape(winnerName)} · ${winner?getCharacter(winner.characterId).name:''}</h2><p>${won?'你赢了！':'获胜方庆祝中'} · 持拍庆祝</p></div><section class="panel victory-panel"><div class="panel-top"><span>THAT WAS A GOOD RALLY</span>${close}</div><h2>${won?'好球，这场属于你。':'再来一场，找回手感。'}</h2><p>${escape(s.event)}</p>
       <div class="result-score">${s.score[this.seat]} <span style="color:#a4af98">:</span> ${s.score[other(this.seat)]}</div><div class="result-names">${escape(me)} &nbsp; / &nbsp; ${escape(them)}</div>
       <div class="result-stats"><div><strong>${s.maxRally}</strong>最长回合</div><div><strong>${Math.floor(s.time/60)}:${String(Math.floor(s.time%60)).padStart(2,'0')}</strong>对局时间</div></div>
-      <button class="primary" data-action="rematch" ${ready?'disabled':''}>${ready?'已准备，等待朋友…':'再来一场 ↗'}</button><button class="secondary" data-action="back">回到首页</button>`);
+      <button class="primary" data-action="rematch" ${ready?'disabled':''}>${ready?'已准备，等待朋友…':'再来一场 ↗'}</button><button class="secondary" data-action="back">回到首页</button></section></div>`;
   }
   private renderScreen(){
-    this.view.setMode(this.screen==='playing'||this.screen==='result'?'match':'home',this.seat);
+    this.view.setMode(this.screen==='result'?'result':this.screen==='playing'?'match':'home',this.seat);
     this.controls.enabled=this.screen==='playing'&&!this.help;
     if(this.screen==='characters')this.ui.innerHTML=characterPicker(this.choosingOpponent?this.opponentId:this.characterId,this.choosingOpponent,this.hiddenMaster.unlocked);
     else if(this.screen==='home')this.ui.innerHTML=this.home();
@@ -290,7 +291,7 @@ export class App {
     document.getElementById('rally-hint')!.hidden=!serveNotice.hidden;
     serveNotice.classList.toggle('your-serve',s.server===me);
     text('serve-title',s.server===me?(s.fault?'二发 · 轮到你发球':'轮到你发球'):'对手发球');
-    text('serve-detail',s.server===me?'向上斜划，将球发进对角发球区':'请准备接球，可以在球发出后提前滑动');
+    text('serve-detail',s.server===me?'点按底线后调整站位，滑动发进对角区':'可点按调整接发位置，球发出后提前滑动');
     text('name-me',`${s.server===me?'● ':''}${this.room?.seats[me]?.name??this.name} · 你`);
     text('name-them',`${s.server===them?'● ':''}${this.room?.seats[them]?.name??'练习搭档'}`);
     text('score-me',String(s.score[me]));text('score-them',String(s.score[them]));
@@ -314,7 +315,7 @@ export class App {
     text('match-subhint',this.controls.lobMode?'下一拍：高吊球 · 再点按钮可取消':s.ball.topspin?'上旋球 · 注意落地前冲':'长按上旋 · 下划切削 · 右侧选高吊');
     if(s.phase==='rally'){
       const jump=rescueHint(s,me);if(jump)text('match-hint',jump);
-      if(!this.controls.lobMode&&!s.ball.topspin)text('match-subhint',rescueChanceText(effectiveStamina(s.players[me])));
+      if(!this.controls.lobMode&&!s.ball.topspin)text('match-subhint',rescueChanceText(s.players[me].totalStamina??1));
     }
     const phaseKey=`${s.phase}-${s.eventId}`;
     if(this.lastPhase!==phaseKey){

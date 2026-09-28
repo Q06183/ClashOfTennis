@@ -12,6 +12,7 @@ import {SHOT_PROFILES} from '../simulation/shot-profile.js';
 import {frameMatch,type CameraDistance} from './camera.js';
 import {FrameQuality,QUALITY,type QualityLevel} from './quality.js';
 import {AimCameraLock} from './aim-camera.js';
+import {victoryPlayer} from './victory.js';
 export class CourtView {
   readonly renderer:T.WebGLRenderer;
   readonly camera=new T.PerspectiveCamera(43,1,.1,130);
@@ -29,7 +30,8 @@ export class CourtView {
   private modelCache=new Map<string,Promise<T.Group>>();
   private characterIds=['',''];
   private loadedModels:T.Group[]=[];
-  private mode:'home'|'match'='home';
+  private mode:'home'|'match'|'result'='home';
+  private celebrationTime=0;
   private seat:Seat=0;
   private aimCamera=new AimCameraLock();
   private cameraDistance:CameraDistance='near';
@@ -97,9 +99,10 @@ export class CourtView {
       athlete.attachModel(clone(model));canvas.dataset[`athlete${seat}`]=character.id;canvas.dataset.athleteSource='lux3d';
     }).catch(()=>{if(this.characterIds[seat]===character.id){canvas.dataset[`athlete${seat}`]='fallback';canvas.dataset.athleteSource='fallback';}this.modelCache.delete(character.model);});
   }
-  setMode(mode:'home'|'match',seat:Seat=0){
+  setMode(mode:'home'|'match'|'result',seat:Seat=0){
     if(this.mode===mode&&this.seat===seat)return;
     this.aimCamera.reset();
+    this.celebrationTime=0;
     this.mode=mode;this.seat=seat;this.focus={x:0,depth:11};
     this.stadiumEnds.forEach((end,i)=>{end.visible=mode==='home'||i!==seat;});this.resize(true);
   }
@@ -112,6 +115,7 @@ export class CourtView {
     this.size={w,h};this.camera.aspect=w/h;
     if(this.mode==='home'){
       this.camera.clearViewOffset();
+      this.camera.zoom=1;
       this.camera.fov=w>h?39:49;this.camera.position.set(19,23,25);this.camera.lookAt(w>h?-4:0,0,0);
     } else {
       this.appliedCameraDistance=this.cameraDistance;
@@ -141,14 +145,27 @@ export class CourtView {
     const v=new T.Vector3();return this.ray.ray.intersectPlane(this.plane,v)?{x:v.x,z:v.z}:null;
   }
   render(state:MatchState,dt:number,authoritative:MatchState=state){
+    const winner=this.mode==='result'?victoryPlayer(authoritative):null;
+    if(winner){
+      this.celebrationTime+=dt;
+      const p=winner.player;
+      this.camera.clearViewOffset();this.camera.zoom=1;this.camera.aspect=this.size.w/this.size.h;this.camera.fov=38;
+      const sign=side(winner.seat);
+      this.camera.position.set(p.x,2.5,p.z-7*sign);
+      this.camera.lookAt(p.x,1.35,p.z);
+      this.camera.updateProjectionMatrix();this.camera.updateMatrixWorld();
+    }
     if(this.mode==='match'){
       this.updateCamera(state,dt);
     }
     for(const seat of [0,1] as Seat[]){
-      const p=state.players[seat];this.setCharacter(seat,p.characterId);this.athletes[seat].update(p,state.time,dt);
+      const source=state.players[seat],p=winner?{...source,preparation:undefined,rescue:undefined,swing:0,moving:false,tx:source.x,tz:source.z}:source;
+      this.setCharacter(seat,p.characterId);this.athletes[seat].root.visible=!winner||winner.seat===seat;
+      this.athletes[seat].update(p,state.time,dt,winner?.seat===seat?this.celebrationTime:undefined);
       this.contactShadows[seat].position.set(p.x,.065,p.z);this.contactShadows[seat].visible=this.quality.level==='low';
     }
     const b=state.ball;
+    this.ball.visible=!winner;this.shadow.visible=!winner;
     this.flight.update(state,this.seat,this.mode==='match',authoritative);
     for(let i=this.trail.length-1;i>0;i--)this.trail[i].position.copy(this.trail[i-1].position);
     this.trail[0].position.copy(this.ball.position);
@@ -158,7 +175,7 @@ export class CourtView {
     this.target.visible=false;
     this.marker.position.set(state.players[this.seat].tx,.08,state.players[this.seat].tz);
     this.marker.visible=this.mode==='match'&&state.phase==='rally';
-    const trailVisible=state.phase==='rally';for(const t of this.trail){t.visible=trailVisible;(t.material as T.MeshBasicMaterial).color.setHex(SHOT_PROFILES[b.tier??(b.critical?'critical':'normal')].color);}
+    const trailVisible=!winner&&state.phase==='rally';for(const t of this.trail){t.visible=trailVisible;(t.material as T.MeshBasicMaterial).color.setHex(SHOT_PROFILES[b.tier??(b.critical?'critical':'normal')].color);}
     this.renderer.render(this.scene,this.camera);
   }
   dispose(){

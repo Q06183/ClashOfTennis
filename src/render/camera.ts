@@ -7,23 +7,7 @@ export const cameraDistance=(value:unknown):CameraDistance=>value==='far'?'far':
  * Physical player/court scale is unchanged; only perspective and framing change. */
 export function frameMatch(camera:PerspectiveCamera,w:number,h:number,seat:Seat,x:number,depth:number,opponent?:{x:number;z:number},distance:CameraDistance='far'){
  const sign=side(seat),d=clamp(depth,1.1,16.5);
- camera.clearViewOffset();camera.aspect=w/h;camera.fov=35;
- if(distance==='near'){
-  const follow=clamp(x,-6.4,6.4)*.8;
-  camera.fov=32;
-  camera.position.set(follow,8.5,(d+17)*sign);
-  camera.lookAt(follow,1,(d-8)*sign);
-  camera.updateProjectionMatrix();camera.updateMatrixWorld();
-  let fit=1;
-  for(const player of [{x,z:d*sign},...(opponent?[opponent]:[])]){
-   for(const y of [0,2.2]){
-    const p=new Vector3(player.x,y,player.z).project(camera);
-    fit=Math.max(fit,Math.abs(p.x)/.9,Math.abs(p.y)/.78);
-   }
-  }
-  if(fit>1){camera.fov=2*Math.atan(Math.tan(camera.fov*Math.PI/360)*fit)*180/Math.PI;camera.updateProjectionMatrix();}
-  return;
- }
+ camera.clearViewOffset();camera.zoom=1;camera.aspect=w/h;camera.fov=35;
  camera.position.set(0,17,34*sign);
  camera.lookAt(0,.6,(2+(d-12.4)*.025)*sign);
  camera.updateProjectionMatrix();camera.updateMatrixWorld();
@@ -42,4 +26,11 @@ export function frameMatch(camera:PerspectiveCamera,w:number,h:number,seat:Seat,
  // Shift vertically for framing, never sideways: the net stays level and the
  // centre service line remains on screen centre even when players run wide.
  camera.setViewOffset(w,h,0,-cy*h/2,w,h);
+ if(distance==='near'){
+  // Uniform zoom/crop, not a second camera angle. Every projected length has
+  // the same factor, so player/court proportions match the far preset.
+  camera.zoom=1.9;camera.updateProjectionMatrix();
+  const player=new Vector3(x,.8,d*sign).project(camera);
+  camera.setViewOffset(w,h,player.x*w/(2*camera.zoom),-cy*h/2,w,h);
+ }
 }

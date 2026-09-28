@@ -11,6 +11,7 @@ import {Match} from '../src/simulation/match.js';
 import {initPhysics} from '../src/simulation/physics.js';
 import {predictFlight} from '../src/simulation/trajectory.js';
 import {side,type Seat} from '../src/simulation/types.js';
+import {projectedLandingAngle} from './helpers/projected-shot.js';
 
 before(initPhysics);
 test('the whole flight destination follows real gesture intent everywhere, not only its first 100 ms',()=>{
@@ -30,9 +31,8 @@ test('the whole flight destination follows real gesture intent everywhere, not o
    const aimed=CourtView.prototype.aimShot.call({camera,seat,size:{w,h},aimCamera:new AimCameraLock()} as any,shot,m.state,dx,dy);
    m.input(seat,aimed);assert.equal(m.state.rally,3);
    const b=m.state.ball,contact=p.contact!,flight=predictFlight(b);
-   const from=new Vector3(contact.x,contact.y,contact.z).project(camera);
-   const to=new Vector3(flight.landing.x,flight.landing.y,flight.landing.z).project(camera);
-   const angle=Math.atan2((to.x-from.x)*w,(to.y-from.y)*h),error=angle-Math.atan(ratio);
+   assert.ok(Math.abs(flight.landing.x-b.targetX)<.02);
+   const angle=projectedLandingAngle(camera,contact,b,w,h),error=angle-Math.atan(ratio);
    assert.ok(Math.abs(error)<.001,`${c.id}/${seat}/${w}x${h}/${x}/${depth}: ${error*180/Math.PI} degrees`);
    assert.equal(flight.hitNet,false);
   }finally{m.dispose();}
@@ -104,8 +104,8 @@ test('pointer-to-match pipeline preserves the input camera and landing direction
    p.x+=.5*sign;view.updateCamera(m.state,.08);
    assert.deepEqual(camera.matrixWorld.elements,inputMatrix);
    const landing=predictFlight(m.state.ball).landing,c=p.contact!;
-   const from=new Vector3(c.x,c.y,c.z).project(camera),to=new Vector3(landing.x,landing.y,landing.z).project(camera);
-   assert.ok(Math.abs(Math.atan2((to.x-from.x)*390,(to.y-from.y)*844)-Math.atan(1/3))<.001);
+   assert.ok(Math.abs(landing.x-m.state.ball.targetX)<.02);
+   assert.ok(Math.abs(projectedLandingAngle(camera,c,m.state.ball,390,844)-Math.atan(1/3))<.001);
   }finally{controls.dispose();m.dispose();}
  }
 });

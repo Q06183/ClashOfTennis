@@ -5,6 +5,7 @@ import { createGameServer } from '../server/app.js';
 import {projectedLandingAngle} from './helpers/projected-shot.js';
 import {AimCameraLock} from '../src/render/aim-camera.js';
 import {effectiveStamina,beginPointStamina,spendStamina,settlePointStamina,pointRecoveryRate} from '../src/simulation/stamina.js';
+import {bodyAimTarget} from '../src/simulation/shot-aim.js';
 
 async function client(url:string) {
   const ws=new WebSocket(url);const messages:any[]=[];
@@ -154,7 +155,7 @@ test('authoritative rescue animation, slow ball and scatter arrive identically a
   a.send({type:'input',command:{type:'shot',aim:.25,depth:.6,power:1,lob:false,critical:true,rescue:true}});
   const jump=await a.wait('state',v=>!!v.state.players[0].rescue);const jumpB=await b.wait('state',v=>v.seq===jump.seq);assert.deepEqual(jump.state,jumpB.state);
   const hit=await a.wait('state',v=>v.state.ball.rescue===true);const hitB=await b.wait('state',v=>v.seq===hit.seq);
-  assert.deepEqual(hit.state,hitB.state);assert.equal(hit.state.ball.critical,false);assert.ok(Math.hypot(hit.state.ball.vx,hit.state.ball.vz)<14);assert.equal(hit.state.event,'极限救球');
+  assert.deepEqual(hit.state,hitB.state);assert.equal(hit.state.ball.critical,true);assert.ok(Math.hypot(hit.state.ball.vx,hit.state.ball.vz)<22);assert.equal(hit.state.event,'极限救球');
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
 
@@ -169,11 +170,11 @@ test('stamina-driven four-style jumps are chosen by the server and shared with b
   for(const seat of [0,1] as const)for(const kind of ['forehand','backhand','volley','smash'] as const){
    room.match!.dispose();let draws=0,chance=0;
    const m=room.match=new Match(['lin','lin'],()=>{
-    if(draws++===0){chance=rescueChance(effectiveStamina(m.state.players[seat]));return chance-1e-6;}
+    if(draws++===0){chance=rescueChance(m.state.players[seat].totalStamina??1);return chance-1e-6;}
     return .5;
    }),sign=seat===0?1:-1,depth=kind==='volley'?4:10;
    m.state.phase='rally';m.state.rally=2;m.step(.08);
-   const p=m.state.players[seat];Object.assign(p,{x:0,z:depth*sign,tx:0,tz:depth*sign,vx:0,vz:0,stamina:seat===0?1:1/3});
+   const p=m.state.players[seat];Object.assign(p,{x:0,z:depth*sign,tx:0,tz:depth*sign,vx:0,vz:0,stamina:seat===0?1:1/3,totalStamina:seat===0?1:1/3});
    m.physics.place({x:(kind==='backhand'?-2.65:2.65)*sign,y:kind==='smash'?2.9:kind==='volley'?1.9:1.2,z:(depth-1.8)*sign},{x:0,y:0,z:10*sign});
    Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:kind==='forehand'||kind==='backhand'?1:0});
    a.messages.length=0;b.messages.length=0;
@@ -183,7 +184,7 @@ test('stamina-driven four-style jumps are chosen by the server and shared with b
    const hit=await a.wait('state',v=>v.state.rally===3&&v.state.ball.rescue);
    assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
    assert.equal(hit.state.players[seat].stroke,kind);assert.equal(draws,3);
-   assert.ok(seat===0?chance>.59:chance===.05);
+   assert.ok(seat===0?chance>.89:chance===.1);
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
@@ -363,6 +364,72 @@ test('both sockets retain landing recovery and reject movement or hits until the
    assert.equal(locked.state.rally,4);
    const recovered=await a.wait('state',v=>v.state.time>RESCUE.duration&&!v.state.players[seat].rescue);
    assert.deepEqual((await b.wait('state',v=>v.seq===recovered.seq)).state,recovered.state);
+  }
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
+});
+
+test('serve positioning, body-centred straight aim and winning state agree on two real sockets',async()=>{
+ const {captureSwipeAim}=await import('../src/input/aim.js'),{frameMatch}=await import('../src/render/camera.js');
+ const {PerspectiveCamera}=await import('three');
+ const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{
+  a.send({type:'create',name:'站位A'});const welcome=await a.wait('welcome');
+  b.send({type:'join',code:welcome.code,name:'站位B'});await b.wait('welcome');
+  a.send({type:'ready'});b.send({type:'ready'});await a.wait('state');
+  a.send({type:'input',command:{type:'move',x:3,z:15}});
+  b.send({type:'input',command:{type:'move',x:-2,z:-8}});
+  const ready=await a.wait('state',v=>Math.abs(v.state.players[0].x-3)<.04&&Math.abs(v.state.players[0].z-15)<.04&&Math.abs(v.state.players[1].z+8)<.04);
+  assert.deepEqual((await b.wait('state',v=>v.seq===ready.seq)).state,ready.state);
+  const camera=new PerspectiveCamera();frameMatch(camera,390,844,0,3,15,ready.state.players[1],'near');
+  const shot={type:'shot' as const,aim:0,depth:.5,power:.5,lob:false};
+  a.send({type:'input',command:{...shot,swipeAim:captureSwipeAim(camera,shot,0,-150,390,844)}});
+  const hit=await a.wait('state',v=>v.state.rally===1),same=await b.wait('state',v=>v.seq===hit.seq);
+  assert.deepEqual(hit.state,same.state);
+  assert.ok(hit.state.players[0].contact.z>14,'serve is launched from the adjusted station');
+  assert.ok(Math.abs(hit.state.ball.targetX-hit.state.ball.aimOrigin.x)<1e-6);
+  const room=server.rooms.rooms.get(welcome.code)!;room.match!.finish(1,'获胜庆祝');
+  const over=await a.wait('state',v=>v.state.phase==='over');
+  assert.deepEqual((await b.wait('state',v=>v.seq===over.seq)).state,over.state);assert.equal(over.state.winner,1);
+  a.send({type:'ready'});b.send({type:'ready'});
+  const rematch=await a.wait('state',v=>v.state.phase==='serve'&&v.state.winner===null&&v.state.rally===0);
+  assert.deepEqual(rematch.state.score,[0,0]);
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
+});
+
+test('immediate rescue uses total stamina and a later swipe replaces saved quality over sockets',async t=>{
+ const {Match}=await import('../src/simulation/match.js'),{captureSwipeAim}=await import('../src/input/aim.js');
+ const {PerspectiveCamera}=await import('three'),{frameMatch}=await import('../src/render/camera.js');
+ const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{
+  a.send({type:'create',name:'即时救球A'});const welcome=await a.wait('welcome');
+  b.send({type:'join',code:welcome.code,name:'即时救球B'});await b.wait('welcome');
+  a.send({type:'ready'});b.send({type:'ready'});await a.wait('state');
+  const room=server.rooms.rooms.get(welcome.code)!;
+  for(const seat of [0,1] as const){
+   room.match!.dispose();let rolls=0;
+   const m=room.match=new Match(['lin','lin'],()=>++rolls===1?.8:.5),sign=seat===0?1:-1,p=m.state.players[seat];
+   m.state.phase='rally';m.state.rally=2;m.step(.08);
+   Object.assign(p,{x:0,z:10*sign,tx:0,tz:10*sign,vx:0,vz:0,stamina:.1,totalStamina:1});
+   m.physics.place({x:2.65*sign,y:1.2,z:8.2*sign},{x:0,y:0,z:10*sign});
+   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});
+   const pause=t.mock.method(m,'step',()=>{});
+   const camera=new PerspectiveCamera();frameMatch(camera,390,844,seat,0,10,undefined,'near');
+   const first={type:'shot' as const,aim:-.2,depth:.4,power:.2,lob:false};
+   a.messages.length=0;b.messages.length=0;
+   (seat===0?a:b).send({type:'input',command:{...first,swipeAim:captureSwipeAim(camera,first,-30,-150,390,844)}});
+   const jump=await a.wait('state',v=>!!v.state.players[seat].rescue);
+   assert.equal(jump.state.time,.08,'input starts the jump without advancing time');
+   assert.equal(rolls,1);assert.deepEqual((await b.wait('state',v=>v.seq===jump.seq)).state,jump.state);
+   const latest={type:'shot' as const,aim:.3,depth:.7,power:1,lob:false,critical:true,topspin:.6};
+   const aim=captureSwipeAim(camera,latest,45,-150,390,844);
+   (seat===0?a:b).send({type:'input',command:{...latest,swipeAim:aim}});
+   await a.wait('state',v=>v.seq>jump.seq&&v.state.players[seat].strokeSpin===.6);
+   pause.mock.restore();
+   const hit=await a.wait('state',v=>v.state.rally===3&&v.state.ball.rescue);
+   assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
+   assert.equal(hit.state.ball.topspin,.6);assert.equal(hit.state.ball.tier,'topspin');assert.equal(rolls,3);
+   const target=bodyAimTarget(aim,hit.state.ball.aimOrigin,hit.state.ball.targetZ,sign);
+   assert.ok(Math.abs(hit.state.ball.targetX-target)<1e-6,'latest body-centred direction survives the rescue');
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });

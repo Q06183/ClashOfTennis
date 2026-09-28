@@ -24,7 +24,7 @@ export type PlayerState = {
   serveCourt?: 'deuce'|'ad';
   rescue?: {startedAt:number;fromX:number;fromZ:number;toX:number;toZ:number;contact:Vec;hit:boolean;stroke?:RescueStroke;backhand?:boolean;travel?:number};
 };
-export type BallState = Vec & { vx: number; vy: number; vz: number; bounces: number; hitter: Seat; targetX: number; targetZ: number; tier?: ShotTier; critical?: boolean; rescue?: boolean; topspin?: number; slice?: boolean; skill?: 'smash'|'volley'|'slice' };
+export type BallState = Vec & { vx: number; vy: number; vz: number; bounces: number; hitter: Seat; targetX: number; targetZ: number; aimOrigin?:Vec; tier?: ShotTier; critical?: boolean; rescue?: boolean; topspin?: number; slice?: boolean; skill?: 'smash'|'volley'|'slice' };
 export type MatchState = {
   time: number; phase: 'serve' | 'rally' | 'point' | 'over';
   score: [number, number]; players: [PlayerState, PlayerState]; ball: BallState;

@@ -36,7 +36,8 @@ test('changing camera distance waits until the current swipe/flight lock has fin
   view.updateCamera(m.state,.016);
   assert.deepEqual(camera.projectionMatrix.elements,before);assert.deepEqual(camera.matrixWorld.elements,world);
   view.setAiming(false);view.updateCamera(m.state,.016);
-  assert.equal(view.appliedCameraDistance,'far');assert.notDeepEqual(camera.matrixWorld.elements,world);
+  assert.equal(view.appliedCameraDistance,'far');assert.notDeepEqual(camera.projectionMatrix.elements,before);
+  assert.deepEqual(camera.matrixWorld.elements,world,'zoom changes crop, not perspective');
  }finally{m.dispose();}
 });
 test('both presets retain actual screen-to-landing direction for each seat',()=>{

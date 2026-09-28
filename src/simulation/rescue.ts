@@ -6,8 +6,8 @@ import {canReturnNormally,returnHeightLegal} from './skills.js';
 import {flightGravity} from './flight.js';
 import {contactCrouch} from './athlete.js';
 import {clamp,side,type BallState,type PlayerState,type Seat,type RescueStroke} from './types.js';
-export const RESCUE={minChance:.05,maxChance:.60,lowStamina:1/3,travel:.20,landAt:.48,riseAt:.68,duration:1.18,reach:2.5,slowdown:1.7};
-/** Smoothstep joins the 5% low-stamina floor and 60% full-stamina ceiling. */
+export const RESCUE={minChance:.10,maxChance:.90,lowStamina:1/3,travel:.20,landAt:.48,riseAt:.68,duration:1.18,reach:2.5,slowdown:1.7};
+/** Total-match stamina drives the smooth 10%–90% rescue lottery. */
 export function rescueChance(stamina:number){
  const s=Number.isFinite(stamina)?clamp(stamina,0,1):0;
  if(s<=RESCUE.lowStamina)return RESCUE.minChance;

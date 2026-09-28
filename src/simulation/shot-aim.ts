@@ -35,6 +35,16 @@ export function directionToLanding(aim:SwipeAim,start:Vec,targetZ:number,fallbac
  };
  return Number.isFinite(raw)&&aligned(raw)&&aligned(direction)?direction:0;
 }
+/** Body-centred directional control. Remove the screen motion of a straight
+ * court-forward shot before adding the user's lateral intent. This prevents
+ * perspective convergence and forehand/backhand contact offsets from steering
+ * a vertical swipe sideways. The physical ball still starts at racket contact. */
+export function bodyAimTarget(aim:SwipeAim,body:{x:number;z:number},targetZ:number,sign:number){
+ const bodyPoint={x:body.x,y:1.1,z:body.z};
+ const aimed=directionToLanding(aim,bodyPoint,targetZ,0,sign);
+ const forward=directionToLanding({...aim,dx:0,dy:Math.abs(aim.dy)||1},bodyPoint,targetZ,0,sign);
+ return body.x+(aimed-forward)*Math.abs(targetZ-body.z)*sign;
+}
 /** Projective ground-plane direction at the actual contact x/z. This preserves
  * the user's screen-space aim as the receiving position changes before impact. */
 export function directionAtContact(aim:SwipeAim,contact:Vec,fallback:number,sign:number){

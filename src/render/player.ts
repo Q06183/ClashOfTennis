@@ -8,6 +8,7 @@ import {RACKET,contactCrouch} from '../simulation/athlete.js';
 import {rescuePose} from '../simulation/rescue.js';
 import {rescueStroke} from './rescue-strokes.js';
 import {Footwork} from './footwork.js';
+import {victoryPose} from './victory.js';
 import {type PlayerState,type Seat} from '../simulation/types.js';
 const material=(color:number)=>new T.MeshStandardMaterial({color,roughness:.72});
 const down=new T.Vector3(0,-1,0);
@@ -162,7 +163,7 @@ export class Athlete {
     // Keep the ankle level independently of the bending knee.
     foot.quaternion.copy(leg.quaternion).multiply(knee.quaternion).invert().multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),turn));
   }
-  update(p:PlayerState,time:number,deltaTime?:number){
+  update(p:PlayerState,time:number,deltaTime?:number,celebrationTime?:number){
     const hand=handedness(p.characterId),worldX=p.x;
     // Solve IK with a proper (non-reflected) transform. Reflect the finished
     // skeleton as one unit, so wrist/ankle quaternions never see negative scale.
@@ -175,13 +176,15 @@ export class Athlete {
         preparation:p.preparation?{...p.preparation,contact:point(p.preparation.contact)}:undefined,
         rescue:p.rescue?{...p.rescue,fromX:-p.rescue.fromX,toX:-p.rescue.toX,contact:point(p.rescue.contact)}:undefined};
     }
+    const celebration=celebrationTime===undefined?undefined:victoryPose(celebrationTime);
     const rescue=rescuePose(p,time);
-    this.root.position.set(p.x,rescue.lift,p.z);this.root.updateMatrixWorld(true);
+    this.root.position.set(p.x,celebration?.lift??rescue.lift,p.z);this.root.updateMatrixWorld(true);
     const actual=p.rescue?.contact??p.preparation?.contact??p.contact;
     const contact=actual?this.root.worldToLocal(new T.Vector3(actual.x,actual.y,actual.z)):new T.Vector3(-.85,1.1,.65);
-    const pose=strokePose(p,contact),active=!!p.rescue||!!p.preparation||p.swing>0;
+    const pose=strokePose(p,contact),active=!!celebration||!!p.rescue||!!p.preparation||p.swing>0;
     const jump=p.rescue?rescueStroke(p,time,contact):undefined;
     if(jump)Object.assign(pose,jump);
+    if(celebration)Object.assign(pose,{tip:celebration.tip,shaft:celebration.shaft,turn:celebration.turn,twoHands:false,support:0});
     const dt=deltaTime??Math.max(1/60,Math.min(.08,time-this.lastTime));this.lastTime=time;
     const body=strokeBody(p),gait=this.footwork.update(this.root.position,this.root.quaternion,dt),movement=gait.localDirection;
     const stride=Math.sin(gait.phase*Math.PI*2)*Math.min(1,gait.speed/2);
@@ -192,19 +195,21 @@ export class Athlete {
       pose.shaft.lerp(new T.Vector3(-.25,.9,.25).normalize().applyAxisAngle(new T.Vector3(0,1,0),runTurn),running).normalize();
       pose.twoHands=false;pose.support=1-running;
     }
-    const speedBlend=1-T.MathUtils.smoothstep(gait.speed,1.5,4.5);
+    // Don't freeze the legs in an almost-complete preparation pose while the
+    // player is still travelling; even slow adjustment steps need a gait.
+    const speedBlend=1-T.MathUtils.smoothstep(gait.speed,.12,.65);
     // Whole-body loading must run during the serve, even though it has no queued return.
     const action=active&&!p.rescue?body.blend:0;
-    const lower=action*(p.stroke==='serve'||p.preparation?.stroke==='serve'?1:speedBlend);
+    const lower=action*(p.preparation?.stroke==='serve'?1:speedBlend);
     const contactWeight=p.rescue?T.MathUtils.smoothstep(time-p.rescue.startedAt,0,.10):p.swing>0?Math.min(1,p.swing/.15):p.preparation?T.MathUtils.smoothstep(p.preparation.progress,.8,1):0;
     const contactCrouching=contactCrouch(contact.y)*contactWeight*(p.rescue?1-rescue.recovery:1);
-    const hipDrop=(p.rescue?T.MathUtils.lerp(gait.hipDrop,.74*(1-Math.cos(pose.knee/2)),contactWeight):T.MathUtils.lerp(gait.hipDrop,body.hipDrop-body.lift,action))+contactCrouching+rescue.crouch;
+    const hipDrop=celebration?.drop??((p.rescue?T.MathUtils.lerp(gait.hipDrop,.74*(1-Math.cos(pose.knee/2)),contactWeight):T.MathUtils.lerp(gait.hipDrop,body.hipDrop-body.lift,action))+contactCrouching+rescue.crouch);
     const hipTurn=T.MathUtils.lerp(gait.turn,body.hipTurn,lower);
     this.hips.position.y=.85-hipDrop;this.hips.rotation.y=hipTurn;
     for(let i=0;i<2;i++){
       this.legs[i].position.set((i?-1:1)*.15,.85-hipDrop,0).applyAxisAngle(new T.Vector3(0,1,0),hipTurn);
       const posed=this.root.localToWorld(body.feet[i].clone());
-      const foot=jump?this.root.localToWorld(jump.feet[i].clone()):
+      const foot=celebration?this.root.localToWorld(celebration.feet[i].clone()):jump?this.root.localToWorld(jump.feet[i].clone()):
         gait.feet[i].lerp(posed,lower).add(new T.Vector3(0,rescue.lift+rescue.air*(i?.05:.1),0));
       this.legTo(i,foot,T.MathUtils.lerp(hipTurn*.6,body.footYaw[i],lower));
     }
@@ -224,7 +229,9 @@ export class Athlete {
     this.racketTo(pose.tip,pose.shaft,pose.twoHands,0,body.faceRoll*action,action?body.elbow:undefined);
     if((active||running>0)&&!pose.twoHands){
       const free=body.freeHand.clone();
-      if(jump){
+      if(celebration){
+        free.copy(celebration.hand);
+      }else if(jump){
         free.copy(jump.free);
       }else if(running>0)free.lerp(new T.Vector3(.36,1.13+stride*.045,.18-stride*.22).applyAxisAngle(new T.Vector3(0,1,0),runTurn),running);
       const hand=this.root.localToWorld(free);

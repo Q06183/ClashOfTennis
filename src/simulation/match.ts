@@ -1,4 +1,4 @@
-import {directionAtContact,directionToLanding,validateSwipeAim} from './shot-aim.js';
+import {directionAtContact,bodyAimTarget,validateSwipeAim} from './shot-aim.js';
 import {prefersBounce,ReturnPlanner,shouldAssist} from './return-plan.js';
 import {handedness} from './characters.js';
 import {SERVE_DURATION,SERVE_RECOVERY,serveBallHeight} from './serve-motion.js';
@@ -7,7 +7,7 @@ import {canSmash,canReturnNormally,returnHeightLegal,volleyDifficulty} from './s
 import {getCharacter,characterEffects} from './characters.js';
 import { BallPhysics } from './physics.js';
 import {shotDepth,shotTier,SHOT_PROFILES} from './shot-profile.js';
-import {RESCUE,rescueChance,rescueTarget,hasNormalReturnWindow,moveRescue,canReachRescue} from './rescue.js';
+import {RESCUE,rescueChance,rescueTarget,moveRescue,canReachRescue} from './rescue.js';
 import {movePlayer} from './movement.js';
 import {beginPointStamina,spendStamina,recoverPointStamina,settlePointStamina,effectiveStamina,STAMINA} from './stamina.js';
 import { COURT, isInCourt, isInServiceBox, serverForPoint, winnerForScore } from './rules.js';
@@ -57,7 +57,7 @@ export class Match {
     });
     const p=s.players[s.server];
     this.physics.place({x:p.x,y:1.25,z:p.z-.25*side(s.server)});
-    Object.assign(s.ball,this.physics.read(),{bounces:0,hitter:s.server,targetX:-serveSide*2,targetZ:-side(s.server)*4.8,critical:false,tier:undefined,rescue:false,topspin:0,slice:false,skill:undefined});
+    Object.assign(s.ball,this.physics.read(),{bounces:0,hitter:s.server,targetX:-serveSide*2,targetZ:-side(s.server)*4.8,aimOrigin:undefined,critical:false,tier:undefined,rescue:false,topspin:0,slice:false,skill:undefined});
     this.announce(s.fault?'二发 · 稳一点':'滑动发球');
     this.faultReset=false;
   }
@@ -65,8 +65,13 @@ export class Match {
     if(seat!==0&&seat!==1 || !cmd || this.state.phase==='over'||this.state.phase==='point') return;
     const s=this.state,p=s.players[seat];
     if(cmd.type==='move') {
-      if(!Number.isFinite(cmd.x)||!Number.isFinite(cmd.z)||s.phase==='serve') return;
-      p.tx=clamp(cmd.x,-6,6);p.tz=side(seat)*clamp(cmd.z*side(seat),.9,14.7);
+      if(!Number.isFinite(cmd.x)||!Number.isFinite(cmd.z)) return;
+      if(s.phase==='serve'&&seat===s.server){
+        if(this.serveMotion)return;
+        const half=side(seat)*((s.score[0]+s.score[1])%2===0?1:-1);
+        p.tx=half*clamp(cmd.x*half,.25,COURT.halfWidth-.15);
+        p.tz=side(seat)*clamp(cmd.z*side(seat),COURT.halfLength+.25,16.3);
+      }else{p.tx=clamp(cmd.x,-6,6);p.tz=side(seat)*clamp(cmd.z*side(seat),.9,16.3);}
       this.returnPlanners[seat].clear();
       this.manualUntil[seat]=s.time+.8; return;
     }
@@ -80,7 +85,10 @@ export class Match {
     const shot:Shot={type:'shot',aim:clamp(cmd.aim,-1.2,1.2),depth:clamp(cmd.depth,0,1),power:clamp(cmd.power,0,1),lob:cmd.lob&&!cmd.slice,slice:cmd.slice===true,topspin:cmd.lob||cmd.slice?0:spinAmount(cmd.topspin),critical:cmd.critical===true&&cmd.power>=.9&&!cmd.lob&&!cmd.slice};
     if(cmd.directionX!==undefined)shot.directionX=clamp(cmd.directionX,-4,4);
     if(swipeAim)shot.swipeAim=swipeAim;
-    if(s.phase==='serve') { if(seat===s.server&&!this.serveMotion){this.serveMotion={shot,elapsed:0};p.stroke='serve';p.preparation={stroke:'serve',progress:0,contact:{x:p.x,y:2.65,z:p.z-.25*side(seat)}};} return; }
+    if(s.phase==='serve') { if(seat===s.server&&!this.serveMotion){
+      p.tx=p.x;p.tz=p.z;p.vx=0;p.vz=0;p.moving=false;
+      this.serveMotion={shot,elapsed:0};p.stroke='serve';p.preparation={stroke:'serve',progress:0,contact:{x:p.x,y:2.65,z:p.z-.25*side(seat)}};
+    } return; }
     if(s.ball.hitter===seat) return;
     // A fresh gesture takes the current legal contact immediately, regardless
     // of automatic positioning preferences or a previously queued shot.
@@ -94,6 +102,21 @@ export class Match {
     }
     // Only a gesture that cannot hit now becomes a future-contact instruction.
     this.pending[seat]={shot,flight:s.rally,airRequested:s.ball.bounces===0&&canReturnNormally(s.ball,p,seat,!!shot.slice)};p.shotQueued=true;p.strokeSpin=shot.topspin??0;
+    this.tryRescue(seat);
+  }
+  private tryRescue(seat:Seat){
+    const s=this.state,p=s.players[seat],pending=this.pending[seat],b=s.ball;
+    if(!pending||pending.flight!==s.rally||p.rescue||this.rescueAttempt[seat]===s.rally||
+       s.phase!=='rally'||seat!==other(b.hitter)||this.sinceHit<=.06||b.z*side(seat)<=.35||
+       b.y<=COURT.ballRadius||b.bounces>=2||(this.serviceFlight&&b.bounces===0)||
+       this.returnLegal(seat)&&canReturnNormally(b,p,seat,!!pending.shot.slice))return false;
+    const target=rescueTarget(b,p,seat);if(!target)return false;
+    this.rescueAttempt[seat]=s.rally;
+    if(this.random()>=rescueChance(p.totalStamina??1))return false;
+    p.rescue={startedAt:s.time,fromX:p.x,fromZ:p.z,toX:target.x,toZ:target.z,contact:target.contact,
+      hit:false,stroke:target.stroke,backhand:target.backhand,travel:target.travel};
+    p.stroke=target.stroke;p.backhand=target.backhand;p.preparation=undefined;spendStamina(p,.1);
+    return true;
   }
   private returnLegal(seat:Seat,b:BallState=this.state.ball){
     const p=this.state.players[seat];
@@ -112,8 +135,9 @@ export class Match {
     let targetX=shot.aim*4.45*sign;
     const rescue=!serve&&!!p.rescue&&!p.rescue.hit;
     const smash=!serve&&!rescue&&canSmash(b,p,seat),volley=!serve&&!rescue&&!smash&&b.bounces===0;
-    if(rescue)shot={...shot,power:.25,critical:false,lob:false,topspin:0,slice:false};
-    else if(smash)shot={...shot,power:Math.max(.75,shot.power),critical:false,lob:false,topspin:0,slice:false};
+    // Preserve the latest swipe's intended depth, heading, spin and pace tier.
+    // Rescue still applies its physical slowdown and scatter below.
+    if(smash)shot={...shot,power:Math.max(.75,shot.power),critical:false,lob:false,topspin:0,slice:false};
     else if(volley){const difficulty=volleyDifficulty(b,p);shot={...shot,topspin:0,power:shot.power*(1-.48*difficulty),critical:difficulty>.05?false:shot.critical,depth:shot.depth*(1-.32*difficulty)};}
     if(serve)shot={...shot,slice:false};
     const slice=shot.slice===true;
@@ -138,14 +162,13 @@ export class Match {
     const slowdown=(volley?1+.32*volleyDifficulty(b,p):1)*(slice?1.15:1)*(rescue?RESCUE.slowdown:1);
     const flightAt=(x:number)=>flightTime(start,{x,y:.12,z:targetZ},power,strokeSpeed,gravity,{smash,critical,lob:shot.lob})*slowdown;
     if(shot.swipeAim?.elevation){
-      const corrected=directionToLanding(shot.swipeAim,start,targetZ,direction??0,sign);
-      targetX=start.x+corrected*Math.abs(targetZ-start.z)*sign;
+      targetX=bodyAimTarget(shot.swipeAim,p,targetZ,sign);
     }
     targetX+=scatterX;
     const flight=flightAt(targetX);
     const velocity={x:(targetX-start.x)/flight,y:(.12-start.y+(gravity/2)*flight*flight)/flight,z:(targetZ-start.z)/flight};
     this.physics.place(start,velocity,topspin);
-    Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ,critical,tier,rescue,topspin,slice,skill:smash?'smash':slice?'slice':volley?'volley':undefined});
+    Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ,aimOrigin:{x:p.x,y:1.1,z:p.z},critical,tier,rescue,topspin,slice,skill:smash?'smash':slice?'slice':volley?'volley':undefined});
     s.phase='rally';s.rally++;s.maxRally=Math.max(s.maxRally,s.rally);
     p.swing=serve?SERVE_RECOVERY:.44;p.strokeSpin=topspin;p.backhand=(b.x-p.x)*sign*handedness(p.characterId)<0;
     p.stroke=serve?'serve':smash?'smash':slice?(p.backhand?'slice-backhand':'slice-forehand'):volley?'volley':shot.lob?'lob':p.backhand?'backhand':'forehand';
@@ -195,12 +218,26 @@ export class Match {
     }
     if(s.phase==='serve') {
       this.serveElapsed+=dt;
+      for(const seat of [0,1] as Seat[]){
+        if(seat===s.server&&this.serveMotion)continue;
+        const p=s.players[seat];movePlayer(p,seat,dt);
+        if(seat===s.server){
+          const half=side(seat)*((s.score[0]+s.score[1])%2===0?1:-1);
+          const x=half*clamp(p.x*half,.25,COURT.halfWidth-.15);
+          const z=side(seat)*clamp(p.z*side(seat),COURT.halfLength+.25,16.3);
+          if(x!==p.x)p.vx=0;if(z!==p.z)p.vz=0;p.x=x;p.z=z;
+        }
+        if(p.moving)spendStamina(p,.013*characterEffects(p.characterId).drain*dt);
+      }
       if(this.serveMotion){
         const motion=this.serveMotion;motion.elapsed+=dt;const u=clamp(motion.elapsed/SERVE_DURATION,0,1),p=s.players[s.server];
         p.preparation={stroke:'serve',progress:u,contact:{x:p.x,y:2.65,z:p.z-.25*side(s.server)}};
         this.physics.place({x:p.x,y:serveBallHeight(u),z:p.z-.25*side(s.server)});Object.assign(s.ball,this.physics.read());
         if(u>=1){this.serveMotion=null;this.hit(s.server,motion.shot,true);}return;
       }
+      const server=s.players[s.server];
+      this.physics.place({x:server.x,y:1.25,z:server.z-.25*side(s.server)});
+      Object.assign(s.ball,this.physics.read());
       if(this.serveElapsed>12) this.award(other(s.server),'发球超时');
       return;
     }
@@ -208,6 +245,7 @@ export class Match {
     const before={...s.ball},gravity=flightGravity(s.ball);
     const receiverBefore=other(before.hitter),queued=this.pending[receiverBefore];
     if(before.bounces===0&&queued?.flight===s.rally&&this.returnLegal(receiverBefore)&&this.returnReachable(receiverBefore)&&(s.players[receiverBefore].rescue||queued.airRequested||this.returnPlanners[receiverBefore].committed(s.time,s.rally)||!prefersBounce(before,s.players[receiverBefore],receiverBefore))){this.hit(receiverBefore,queued.shot);return;}
+    this.tryRescue(receiverBefore);
     // Rapier CCD can report restitution one frame after contact. Preserve the
     // continuous contact point before the ball travels past a court line.
     if(before.vy<0&&!this.impact&&before.y+before.vy*dt-(gravity/2)*dt*dt<=COURT.ballRadius){
@@ -267,18 +305,7 @@ export class Match {
       if(pending&&pending.flight!==s.rally){this.pending[seat]=null;p.shotQueued=false;}
       if(pending&&pending.flight===s.rally&&legal){
         if(reachable&&(p.rescue||pending.airRequested||this.returnPlanners[seat].committed(s.time,s.rally)||!prefersBounce(b,p,seat))){this.hit(seat,pending.shot);break;}
-        if(!p.rescue&&this.rescueAttempt[seat]!==s.rally){
-          const target=rescueTarget(b,p,seat);
-          if(target&&!hasNormalReturnWindow(b,p,seat,{time:s.time,manualUntil:this.manualUntil[seat],serviceFlight:this.serviceFlight,slice:!!pending.shot.slice,planner:this.returnPlanners[seat],flight:s.rally,airRequested:pending.airRequested})){
-            this.rescueAttempt[seat]=s.rally;
-            const chance=rescueChance(effectiveStamina(p));
-            if(this.random()<chance){
-              p.rescue={startedAt:s.time,fromX:p.x,fromZ:p.z,toX:target.x,toZ:target.z,contact:target.contact,hit:false,stroke:target.stroke,backhand:target.backhand,travel:target.travel};
-              p.stroke=target.stroke;p.backhand=target.backhand;
-              spendStamina(p,.1);p.preparation=undefined;
-            }
-          }
-        }
+        this.tryRescue(seat);
       }
     }
   }

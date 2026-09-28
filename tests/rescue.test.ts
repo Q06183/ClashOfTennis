@@ -21,8 +21,8 @@ test('a successful rescue physically jumps into reach on either side and returns
   let draws=0;const m=incoming(()=>[0,1,1][draws++]??1,seat);m.input(seat,shot);
   const p=m.state.players[seat];let sawMotion=false;
   for(let i=0;i<40&&m.state.ball.hitter!==seat;i++){const oldX=p.x,oldZ=p.z;m.step(1/60);sawMotion||=!!p.rescue;assert.ok(Math.hypot(p.x-oldX,p.z-oldZ)<.5,'no teleport');}
-  assert.ok(sawMotion,'jump must begin');assert.equal(m.state.ball.hitter,seat);assert.equal(m.state.ball.rescue,true);assert.equal(m.state.ball.critical,false);assert.equal(m.state.event,'极限救球');
-  assert.ok(Math.hypot(m.state.ball.vx,m.state.ball.vz)<14,'weak return');assert.ok(Math.abs(m.state.ball.targetX-.25*4.45*side(seat))>1,'scatter changes real target');assert.equal(draws,3);
+  assert.ok(sawMotion,'jump must begin');assert.equal(m.state.ball.hitter,seat);assert.equal(m.state.ball.rescue,true);assert.equal(m.state.ball.critical,true);assert.equal(m.state.event,'极限救球');
+  assert.ok(Math.hypot(m.state.ball.vx,m.state.ball.vz)<22,'rescue slowdown still applies');assert.ok(Math.abs(m.state.ball.targetX-.25*4.45*side(seat))>1,'scatter changes real target');assert.equal(draws,3);
   assert.ok(p.stamina<.91);for(let i=0;i<Math.ceil((RESCUE.duration+.1)*60);i++)m.step(1/60);assert.equal(p.rescue,undefined);m.dispose();
  }
 });
@@ -69,17 +69,20 @@ test('rescue rolls against pre-jump stamina and ordinary reachable returns never
  for(const stamina of [1,.8,2/3,.5,1/3,.1])for(const succeeds of [false,true]){
   let m:Match,draws=0,chance=0,atRoll=0;
   m=incoming(()=>{
-   if(draws++===0){atRoll=m.state.players[0].stamina;chance=rescueChance(effectiveStamina(m.state.players[0]));return succeeds?chance-1e-7:chance;}
+   if(draws++===0){atRoll=m.state.players[0].totalStamina!;chance=rescueChance(atRoll);return succeeds?chance-1e-7:chance;}
    return .5;
   });
-  m.state.players[0].stamina=stamina;m.input(0,shot);
+  m.state.players[0].stamina=stamina;m.state.players[0].totalStamina=stamina;m.input(0,shot);
   for(let i=0;i<30&&m.state.rally===2;i++)m.step(1/60);
   assert.ok(draws>0,`eligible stamina ${stamina}`);
   assert.equal(!!m.state.ball.rescue,succeeds,`stamina ${stamina}, chance ${chance}`);
   assert.ok(atRoll>stamina-.01,'chance sampled before the .1 takeoff cost');
   assert.equal(draws,succeeds?3:1);m.dispose();
  }
- let draws=0;const m=incoming(()=>{draws++;return 0;});Object.assign(m.state.players[0],{x:1.5,tx:1.5});m.input(0,shot);
+ let draws=0;const m=incoming(()=>{draws++;return 0;});m.step(.08);
+ Object.assign(m.state.players[0],{x:1.5,tx:1.5,z:10,tz:10});
+ m.physics.place({x:2.1,y:1.2,z:9.6},{x:0,y:0,z:4});Object.assign(m.state.ball,m.physics.read(),{hitter:1,bounces:1});
+ m.input(0,shot);
  for(let i=0;i<30&&m.state.ball.hitter!==0;i++)m.step(1/60);
  assert.equal(m.state.ball.hitter,0);assert.equal(draws,0);assert.equal(m.state.ball.rescue,false);m.dispose();
 });
@@ -93,17 +96,17 @@ test('scattered rescue may land out and next point clears its ball and player fl
  assert.equal(m.state.ball.rescue,false);assert.equal(m.state.players[0].rescue,undefined);m.dispose();
 });
 
-test('well-positioned players wait for normal contact instead of rescuing before the ball arrives',()=>{
+test('a future normal window no longer suppresses a currently feasible jump',()=>{
  for(const seat of [0,1] as Seat[])for(const sample of [{x:.9,y:1,vy:0,vz:10},{x:1.2,y:1.5,vy:0,vz:5}]){
   const sign=side(seat);let draws=0;const m=incoming(()=>{draws++;return 0;},seat);
   m.physics.place({x:sample.x*sign,y:sample.y,z:8*sign},{x:0,y:sample.vy,z:sample.vz*sign});Object.assign(m.state.ball,m.physics.read());
   m.input(seat,shot);let jumped=false;
   for(let i=0;i<60&&m.state.phase==='rally'&&m.state.ball.hitter!==seat;i++){m.step(1/60);jumped||=!!m.state.players[seat].rescue;}
-  assert.equal(m.state.ball.hitter,seat,'normal return succeeds');assert.equal(jumped,false,'good positioning must never start a jump');assert.equal(draws,0,'normal upcoming contact must not enter the rescue lottery');assert.equal(m.state.ball.rescue,false);m.dispose();
+  assert.equal(m.state.ball.hitter,seat,'return succeeds');assert.equal(jumped,true,'future normal window must not veto a current jump');assert.equal(draws,3);assert.equal(m.state.ball.rescue,true);m.dispose();
  }
 });
 
-test('normal running and volley windows take priority over the rescue lottery on both sides',()=>{
+test('upcoming running and volley windows may use the rescue lottery on both sides',()=>{
  for(const seat of [0,1] as Seat[])for(const kind of ['running','volley']){
   const sign=side(seat),z=(kind==='volley'?3:10)*sign;let draws=0;
   const m=incoming(()=>{draws++;return 0;},seat),p=m.state.players[seat];Object.assign(p,{x:0,z,tx:0,tz:z});
@@ -111,8 +114,7 @@ test('normal running and volley windows take priority over the rescue lottery on
   m.physics.place({x:(kind==='running'?1.8:.9)*sign,y:kind==='running'?1.5:1,z:z-2*sign},{x:0,y:0,z:(kind==='running'?5:10)*sign});
   Object.assign(m.state.ball,m.physics.read(),{bounces:kind==='volley'?0:1});m.input(seat,shot);
   for(let i=0;i<90&&m.state.phase==='rally'&&m.state.ball.hitter!==seat;i++)m.step(1/60);
-  assert.equal(m.state.ball.hitter,seat,kind);assert.equal(m.state.ball.rescue,false,kind);assert.equal(draws,0,kind);
-  if(kind==='volley')assert.equal(m.state.ball.skill,'volley');m.dispose();
+  assert.equal(m.state.ball.hitter,seat,kind);assert.equal(m.state.ball.rescue,true,kind);assert.equal(draws,3,kind);m.dispose();
  }
 });
 
@@ -123,6 +125,6 @@ test('automatic positioning forecasts the new ball position before moving, just 
   m.physics.place({x:1.0594274453*sign,y:2.0692738906,z:1.0028849477*sign},{x:-.7330817170*sign,y:2.0434809271,z:8.2048775163*sign});
   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});m.input(seat,shot);
   for(let i=0;i<70&&m.state.phase==='rally'&&m.state.ball.hitter!==seat;i++)m.step(1/60);
-  assert.equal(m.state.ball.hitter,seat);assert.equal(m.state.ball.rescue,false);assert.equal(draws,0);m.dispose();
+  assert.equal(m.state.ball.hitter,seat);assert.equal(m.state.ball.rescue,true);assert.equal(draws,3);m.dispose();
  }
 });

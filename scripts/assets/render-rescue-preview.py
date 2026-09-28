@@ -3,11 +3,12 @@ import io
 import json
 import pathlib
 import struct
+import os
 import numpy as np
 from PIL import Image, ImageDraw
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUT = ROOT / "artifacts/jump-rescue"
+OUT = ROOT / os.environ.get("POSE_PREVIEW_DIR", "artifacts/jump-rescue")
 rows = json.loads((OUT / "poses.json").read_text())
 raw = (ROOT / "public/models/athlete.glb").read_bytes()
 length = struct.unpack_from("<I", raw, 12)[0]
@@ -27,7 +28,7 @@ right /= np.linalg.norm(right)
 up = np.cross(right, forward)
 light = np.array([.3, .8, .5])
 light /= np.linalg.norm(light)
-sheet = Image.new("RGB", (W*5, (H+28)*4), "#e6ebdf")
+sheet = Image.new("RGB", (W*max(len(row["frames"]) for row in rows), (H+28)*len(rows)), "#e6ebdf")
 draw = ImageDraw.Draw(sheet)
 
 for row, data in enumerate(rows):

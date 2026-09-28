@@ -1,5 +1,5 @@
 import {shotDepth} from '../simulation/shot-profile.js';
-import {directionToLanding} from '../simulation/shot-aim.js';
+import {bodyAimTarget} from '../simulation/shot-aim.js';
 import {PerspectiveCamera,Vector2,Vector3,Raycaster,Plane,Matrix4} from 'three';
 import type {Vec,Shot,PlayerState,SwipeAim} from '../simulation/types.js';
 /** Convert a screen-space direction at the ball into a court-space heading. */
@@ -32,8 +32,8 @@ export function shotDirection(camera:PerspectiveCamera,ball:Vec,shot:Shot,dx:num
 
 /** Serve and rally use the same visible contact-to-landing direction contract. */
 export function serveDirection(camera:PerspectiveCamera,ball:Vec,player:PlayerState,shot:Shot,dx:number,dy:number,width:number,height:number,sign:number){
- return directionToLanding(captureSwipeAim(camera,shot,dx,dy,width,height),
-  {...ball,y:2.65},-sign*shotDepth(shot,true),0,sign);
+ const z=-sign*shotDepth(shot,true),target=bodyAimTarget(captureSwipeAim(camera,shot,dx,dy,width,height),player,z,sign);
+ return (target-ball.x)*sign/Math.max(.001,Math.abs(z-ball.z));
 }
 
 /** Keep the gesture and input camera basis until the authority knows contact. */

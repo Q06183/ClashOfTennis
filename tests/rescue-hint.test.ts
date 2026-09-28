@@ -5,10 +5,10 @@ import {RESCUE_LABELS} from '../src/simulation/rescue.js';
 import type {MatchState,RescueStroke} from '../src/simulation/types.js';
 
 test('HUD gives the actual stamina chance and names each jump instead of hiding it behind queued input',()=>{
- assert.match(rescueChanceText(1),/60%/);
- assert.match(rescueChanceText(2/3),/32\.5%/);
- assert.match(rescueChanceText(.5),/13\.6%/);
- assert.match(rescueChanceText(1/3),/5%/);
+ assert.match(rescueChanceText(1),/90%/);
+ assert.match(rescueChanceText(2/3),/50%/);
+ assert.match(rescueChanceText(.5),/22\.5%/);
+ assert.match(rescueChanceText(1/3),/10%/);
  const s={players:[{shotQueued:true},{}],ball:{rescue:false,hitter:0}} as unknown as MatchState;
  for(const stroke of Object.keys(RESCUE_LABELS) as RescueStroke[]){
   s.players[0].rescue={startedAt:0,fromX:0,fromZ:10,toX:2,toZ:10,contact:{x:2.5,y:1,z:10},hit:false,stroke};

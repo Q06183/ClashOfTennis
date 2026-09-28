@@ -61,17 +61,18 @@ test('a successful stamina lottery can physically save all four unreachable shot
   }finally{m.dispose();disposeTree(a.root);}
  }
 });
-test('low-stamina lottery is exactly 5 of 100 equally spaced draws and cannot be farmed by swipes',()=>{
+test('low-total-stamina lottery is exactly 10 of 100 equally spaced draws and cannot be farmed by swipes',()=>{
  let jumped=0;
  for(let n=0;n<100;n++){
   let draws=0;const m=incoming('backhand',0,'lin',()=>{draws++;return (n+.5)/100;});
+  m.state.players[0].totalStamina=.2;
   try{
    for(let i=0;i<45&&m.state.rally===2&&m.state.phase==='rally';i++){m.input(0,shot);m.step(1/60);}
    if(m.state.ball.rescue)jumped++;
-   assert.equal(draws,n<5?3:1);
+   assert.equal(draws,n<10?3:1);
   }finally{m.dispose();}
  }
- assert.equal(jumped,5);
+ assert.equal(jumped,10);
 });
 test('four rescue styles have distinct preparation and follow-through, with continuous racket travel',()=>{
  const signatures:string[]=[];
