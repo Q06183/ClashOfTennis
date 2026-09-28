@@ -1,6 +1,5 @@
-import {flightGravity,flightTime} from '../simulation/flight.js';
-import {characterEffects} from '../simulation/characters.js';
-import {shotDepth,shotTier} from '../simulation/shot-profile.js';
+import {shotDepth} from '../simulation/shot-profile.js';
+import {directionToLanding} from '../simulation/shot-aim.js';
 import {PerspectiveCamera,Vector2,Vector3,Raycaster,Plane,Matrix4} from 'three';
 import type {Vec,Shot,PlayerState,SwipeAim} from '../simulation/types.js';
 /** Convert a screen-space direction at the ball into a court-space heading. */
@@ -31,26 +30,14 @@ export function shotDirection(camera:PerspectiveCamera,ball:Vec,shot:Shot,dx:num
  const reverse=shot.slice?-1:1;return swipeDirection(camera,ball,dx*reverse,dy*reverse,width,height,sign,landingZ);
 }
 
-/** Match the visible first 100ms of the launched arc, rather than the chord
- * from an overhead contact to a ground-level landing. Gravity curves the rest. */
+/** Serve and rally use the same visible contact-to-landing direction contract. */
 export function serveDirection(camera:PerspectiveCamera,ball:Vec,player:PlayerState,shot:Shot,dx:number,dy:number,width:number,height:number,sign:number){
- const reverse=shot.slice?-1:1,screenX=dx*reverse,screenUp=-dy*reverse;
- const normalized={...shot,slice:false},landingZ=-sign*shotDepth(normalized,true),g=flightGravity(normalized);
- const origin=new Vector3(ball.x,2.65,ball.z),from=origin.clone().project(camera),power=shot.power*(.65+.35*player.stamina);
- const error=(direction:number)=>{const target={x:origin.x+direction*Math.abs(landingZ-origin.z)*sign,y:.12,z:landingZ};
-  const flight=flightTime(origin,target,power,characterEffects(player.characterId).serve,g,{critical:shotTier(normalized)==='critical',lob:shot.lob});
-  const t=.1,vy=(.12-origin.y+g*flight*flight/2)/flight;
-  const to=new Vector3(origin.x+(target.x-origin.x)*t/flight,origin.y+vy*t-g*t*t/2,origin.z+(target.z-origin.z)*t/flight).project(camera);
-  return (to.x-from.x)*width*screenUp-(to.y-from.y)*height*screenX;
- };
- let lo=-4,hi=4,elo=error(lo),ehi=error(hi);
- if(elo*ehi>0)return Math.abs(elo)<Math.abs(ehi)?lo:hi;
- for(let i=0;i<36;i++){const mid=(lo+hi)/2,e=error(mid);if(e*elo>0){lo=mid;elo=e;}else hi=mid;}
- return (lo+hi)/2;
+ return directionToLanding(captureSwipeAim(camera,shot,dx,dy,width,height),
+  {...ball,y:2.65},-sign*shotDepth(shot,true),0,sign);
 }
 
 /** Keep the gesture and input camera basis until the authority knows contact. */
 export function captureSwipeAim(camera:PerspectiveCamera,shot:Shot,dx:number,dy:number,width:number,height:number):SwipeAim{
  const e=new Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse).elements,reverse=shot.slice?-1:1;
- return {projection:[e[0],e[8],e[12],e[1],e[9],e[13],e[3],e[11],e[15]],dx:dx/width*reverse,dy:-dy/height*reverse};
+ return {projection:[e[0],e[8],e[12],e[1],e[9],e[13],e[3],e[11],e[15]],elevation:[e[4],e[5],e[7]],dx:dx/width*reverse,dy:-dy/height*reverse};
 }

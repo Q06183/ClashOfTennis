@@ -34,7 +34,10 @@ import {shotDirection,swipeDirection} from '../src/input/aim.js';import {frameMa
 test('downward diagonals project opposite the finger through both player cameras and authority',()=>{
  for(const seat of [0,1] as Seat[])for(const dx of [-60,60]){
   const m=sliceReturn(seat),sign=side(seat),p=m.state.players[seat],c=new PerspectiveCamera();frameMatch(c,390,844,seat,p.x,10);const cut=interpretGesture({dx,dy:210,duration:300,hold:0,width:390,height:844})!;
-  const directionX=shotDirection(c,m.state.ball,cut,dx,210,390,844,sign);assert.equal(directionX,swipeDirection(c,m.state.ball,-dx,-210,390,844,sign));assert.equal(Math.sign(directionX),-Math.sign(dx));
+  const directionX=shotDirection(c,m.state.ball,cut,dx,210,390,844,sign);assert.equal(directionX,swipeDirection(c,m.state.ball,-dx,-210,390,844,sign));
+  const from=new Vector3(m.state.ball.x,0,m.state.ball.z).project(c);
+  const to=new Vector3(m.state.ball.x+directionX*16*sign,0,m.state.ball.z-16*sign).project(c);
+  assert.ok(Math.abs((to.x-from.x)*390/((to.y-from.y)*844)+dx/210)<1e-6,'screen direction reverses even in an oblique view');
   // New legal incoming flight: the reverse heading reaches the actual authoritative target.
   m.state.rally=4;m.physics.place({x:.6*sign,y:1.3,z:9.5*sign},{x:0,y:0,z:4*sign});Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1,slice:false});m.input(seat,{...cut,directionX});for(let i=0;i<20&&m.state.rally===4;i++)m.step(1/60);
   assert.equal(m.state.rally,5);const start=p.contact!;assert.ok(Math.abs((m.state.ball.targetX-start.x)*sign/Math.abs(m.state.ball.targetZ-start.z)-directionX)<1e-6);m.dispose();

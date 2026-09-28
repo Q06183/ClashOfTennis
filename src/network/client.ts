@@ -1,4 +1,5 @@
 import type { Input, MatchState, RoomView, Seat } from '../simulation/types.js';
+import {saveSeat,clearSeat} from './session.js';
 type Credentials={code:string;seat:Seat;token:string};
 type Callbacks={welcome:(c:Credentials)=>void;room:(r:RoomView)=>void;state:(s:MatchState,paused:boolean)=>void;status:(s:string)=>void;error:(s:string)=>void;latency:(ms:number)=>void;terminal?:(s:string)=>void};
 export class NetworkClient {
@@ -23,7 +24,8 @@ export class NetworkClient {
       if(m.type==='welcome'){
         awaitingResume=false;
         this.deadline=0;this.credentials={code:m.code,seat:m.seat,token:m.token};
-        sessionStorage.setItem('rally-seat',JSON.stringify(this.credentials));this.callbacks.welcome(this.credentials);
+        const saved=saveSeat(JSON.stringify(this.credentials));this.callbacks.welcome(this.credentials);
+        if(!saved)this.callbacks.error('浏览器无法保存房间，当前对局不受影响；刷新后需重新加入');
       }else if(m.type==='room')this.callbacks.room(m.room);
       else if(m.type==='state')this.callbacks.state(m.state,m.paused);
       else if(m.type==='pong')this.callbacks.latency(Math.max(0,Date.now()-m.at));
@@ -48,5 +50,5 @@ export class NetworkClient {
   send(value:unknown){if(this.ws?.readyState===WebSocket.OPEN)this.ws.send(JSON.stringify(value));}
   input(command:Input){this.send({type:'input',command});}
   private end(message:string){this.close();(this.callbacks.terminal??this.callbacks.error)(message);}
-  close(){this.stopped=true;if(this.retry)clearTimeout(this.retry);if(this.ping)clearInterval(this.ping);this.send({type:'leave'});this.ws?.close();sessionStorage.removeItem('rally-seat');}
+  close(){this.stopped=true;if(this.retry)clearTimeout(this.retry);if(this.ping)clearInterval(this.ping);this.send({type:'leave'});this.ws?.close();clearSeat();}
 }

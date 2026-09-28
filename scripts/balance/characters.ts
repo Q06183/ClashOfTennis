@@ -1,8 +1,8 @@
 import {aiInput} from '../../src/simulation/ai.js';
 import {writeFile} from 'node:fs/promises';
-import {CHARACTERS} from '../../src/simulation/characters.js';import {Match} from '../../src/simulation/match.js';import {initPhysics} from '../../src/simulation/physics.js';import {side,type Seat} from '../../src/simulation/types.js';
+import {STANDARD_CHARACTERS} from '../../src/simulation/characters.js';import {Match} from '../../src/simulation/match.js';import {initPhysics} from '../../src/simulation/physics.js';import {side,type Seat} from '../../src/simulation/types.js';
 await initPhysics();
-const ids=CHARACTERS.map(c=>c.id),rows=Object.fromEntries(ids.map(id=>[id,{games:0,wins:0,points:0,conceded:0}]));const games:any[]=[];
+const ids=STANDARD_CHARACTERS.map(c=>c.id),rows=Object.fromEntries(ids.map(id=>[id,{games:0,wins:0,points:0,conceded:0}]));const games:any[]=[];
 for(let a=0;a<ids.length;a++)for(let b=a+1;b<ids.length;b++)for(const flip of [false,true])for(const polarity of [1,-1])for(const policy of ['rally','attack','net'])for(const seed of Array.from({length:12},(_,i)=>i+1+Number(process.env.BALANCE_SEED_OFFSET??0))){
  const pair:[string,string]=flip?[ids[b],ids[a]]:[ids[a],ids[b]];let randomState=seed;const random=()=>{randomState=(Math.imul(randomState,1664525)+1013904223)>>>0;return randomState/4294967296;};const m=new Match(pair,random);let faults=0,lastEvent=-1;
  for(let tick=0;tick<60*1800&&m.state.phase!=='over';tick++){

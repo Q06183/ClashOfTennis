@@ -46,3 +46,18 @@ test('a new serialized flight clears the previous skill and spin',()=>{
  p.push(JSON.parse(JSON.stringify(a)),1000);assert.equal(p.sample(1000)!.ball.skill,'smash');
  p.push(JSON.parse(JSON.stringify(b)),1800);const out=p.sample(1900)!;assert.equal(out.ball.slice,undefined);assert.equal(out.ball.skill,undefined);assert.equal(out.ball.tier,undefined);assert.equal(out.ball.topspin,undefined);
 });
+
+test('dual stamina survives snapshots, interpolates within a point and resets without blending point boundaries',()=>{
+ const playback=new SnapshotPlayback(),a=state(1),b=state(1.1);
+ Object.assign(a.players[0],{stamina:.8,totalStamina:.9,pointStaminaSpent:.2,pointStaminaCost:.04,pointStaminaSettled:false});
+ Object.assign(b.players[0],{stamina:.6,totalStamina:.86,pointStaminaSpent:.4,pointStaminaCost:.08,pointStaminaSettled:false});
+ playback.push(JSON.parse(JSON.stringify(a)),1000);playback.push(JSON.parse(JSON.stringify(b)),1100);
+ const mid=playback.sample(1125)!.players[0];
+ assert.ok(Math.abs(mid.stamina-.7)<1e-10);assert.ok(Math.abs(mid.totalStamina!-.88)<1e-10);
+ const next=state(1.3);next.phase='serve';next.score=[1,0];
+ Object.assign(next.players[0],{stamina:1,totalStamina:.908,pointStaminaSpent:0,pointStaminaCost:0,pointStaminaSettled:false});
+ playback.push(JSON.parse(JSON.stringify(next)),1300);
+ const ready=playback.sample(1400)!.players[0];assert.equal(ready.stamina,1);assert.equal(ready.totalStamina,.908);
+ const legacy=state(1.5);playback.push(legacy,1500);
+ const old=playback.sample(1600)!.players[0];assert.equal(old.totalStamina,undefined);assert.equal(old.pointStaminaCost,undefined);
+});

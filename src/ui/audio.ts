@@ -1,8 +1,10 @@
+import {readPreference,writePreference} from './preferences.js';
+
 export class CourtAudio {
   private context:AudioContext|null=null;
-  muted=localStorage.getItem('rally-muted')==='1';
+  muted=readPreference('rally-muted')==='1';
   unlock(){try{this.context??=new AudioContext();void this.context.resume();}catch{}}
-  toggle(){this.muted=!this.muted;localStorage.setItem('rally-muted',this.muted?'1':'0');return this.muted;}
+  toggle(){this.muted=!this.muted;writePreference('rally-muted',this.muted?'1':'0');return this.muted;}
   play(kind:'hit'|'bounce'|'point'){
     if(this.muted||!this.context||this.context.state!=='running')return;
     const ctx=this.context,osc=ctx.createOscillator(),gain=ctx.createGain(),now=ctx.currentTime;

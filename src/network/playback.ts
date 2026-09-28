@@ -36,7 +36,11 @@ export class SnapshotPlayback {
   const out=this.draw,players=out.players,ball=out.ball;
   Object.assign(out,state,{players,ball});Object.assign(ball,state.ball);
   for(const key of ['tier','skill','topspin','slice'] as const)if(!(key in state.ball))delete ball[key];
-  for(let i=0;i<2;i++)Object.assign(players[i],state.players[i],{serveCourt:state.players[i].serveCourt,strokeSpin:state.players[i].strokeSpin,preparation:state.players[i].preparation,contact:state.players[i].contact,rescue:state.players[i].rescue});
+  for(let i=0;i<2;i++)Object.assign(players[i],state.players[i],{
+   serveCourt:state.players[i].serveCourt,strokeSpin:state.players[i].strokeSpin,preparation:state.players[i].preparation,contact:state.players[i].contact,rescue:state.players[i].rescue,
+   totalStamina:state.players[i].totalStamina,pointStaminaSpent:state.players[i].pointStaminaSpent,
+   pointStaminaCost:state.players[i].pointStaminaCost,pointStaminaSettled:state.players[i].pointStaminaSettled,
+  });
   return out;
  }
  sample(now:number,frozen=false):MatchState|null{
@@ -56,6 +60,7 @@ export class SnapshotPlayback {
    for(let i=0;i<2;i++){
     const p=out.players[i],from=a.players[i],to=b.players[i];
     p.x=mix(from.x,to.x,t);p.z=mix(from.z,to.z,t);p.vx=mix(from.vx??0,to.vx??0,t);p.vz=mix(from.vz??0,to.vz??0,t);p.stamina=mix(from.stamina,to.stamina,t);
+    if(from.totalStamina!==undefined&&to.totalStamina!==undefined)p.totalStamina=mix(from.totalStamina,to.totalStamina,t);
     this.animate(p,from,age);
     if(from.preparation&&to.preparation&&from.preparation.stroke===to.preparation.stroke)p.preparation={...from.preparation,progress:mix(from.preparation.progress,to.preparation.progress,t),contact:{x:mix(from.preparation.contact.x,to.preparation.contact.x,t),y:mix(from.preparation.contact.y,to.preparation.contact.y,t),z:mix(from.preparation.contact.z,to.preparation.contact.z,t)}};
    }

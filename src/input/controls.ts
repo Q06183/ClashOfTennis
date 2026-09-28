@@ -12,7 +12,8 @@ export class Controls {
   set enabled(value:boolean){this.active=value;if(!value){this.lobMode=false;if(this.start)this.cancel();}}
   constructor(private canvas:HTMLCanvasElement,private movePoint:(x:number,y:number)=>{x:number;z:number}|null,
     private send:(i:Input)=>void,private feedback:(shot:Shot|null,x:number,y:number,end:boolean)=>void,private unlock:()=>void,
-    private aimShot:(shot:Shot,dx:number,dy:number)=>Shot,private charge:(amount:number,x:number,y:number)=>void=()=>{}){
+    private aimShot:(shot:Shot,dx:number,dy:number)=>Shot,private charge:(amount:number,x:number,y:number)=>void=()=>{},
+    private aiming:(active:boolean)=>void=()=>{}){
     canvas.addEventListener('pointerdown',this.down);
     canvas.addEventListener('pointermove',this.move);
     canvas.addEventListener('pointerup',this.up);
@@ -23,6 +24,7 @@ export class Controls {
     if(!this.enabled||this.start)return;
     e.preventDefault();this.unlock();this.canvas.setPointerCapture(e.pointerId);
     this.start={id:e.pointerId,x:e.clientX,y:e.clientY,time:performance.now(),firstMove:0};
+    this.aiming(true);
     this.trail.begin(e.clientX,e.clientY);this.chargeFrame=requestAnimationFrame(this.tickCharge);
   };
   private tickCharge=()=>{
@@ -46,8 +48,8 @@ export class Controls {
     const shot=this.gesture(e);
     if(shot){this.send(this.aimShot(shot,e.clientX-s.x,e.clientY-s.y));this.lobMode=false;}
     else if(Math.hypot(e.clientX-s.x,e.clientY-s.y)<18){const p=this.movePoint(e.clientX,e.clientY);if(p)this.send({type:'move',...p});}
-    this.feedback(shot,e.clientX,e.clientY,true);this.trail.end();this.start=null;cancelAnimationFrame(this.chargeFrame);
+    this.feedback(shot,e.clientX,e.clientY,true);this.trail.end();this.start=null;cancelAnimationFrame(this.chargeFrame);this.aiming(false);
   };
-  private cancel=()=>{cancelAnimationFrame(this.chargeFrame);this.start=null;this.trail.clear();this.feedback(null,0,0,true);};
+  private cancel=()=>{cancelAnimationFrame(this.chargeFrame);this.start=null;this.trail.clear();this.feedback(null,0,0,true);this.aiming(false);};
   dispose(){this.cancel();this.trail.dispose();this.canvas.removeEventListener('pointerdown',this.down);this.canvas.removeEventListener('pointermove',this.move);this.canvas.removeEventListener('pointerup',this.up);this.canvas.removeEventListener('pointercancel',this.cancel);}
 }

@@ -2,12 +2,33 @@ import {test} from 'node:test';import assert from 'node:assert/strict';
 import {PerspectiveCamera,Vector3} from 'three';import {frameMatch} from '../src/render/camera.js';
 import {swipeDirection} from '../src/input/aim.js';
 
-test('close camera roughly doubles the player and nearby court while retaining the opponent',()=>{
- const c=new PerspectiveCamera(26,390/844,.1,130);c.position.set(0,20,40);c.lookAt(0,.7,2.8);c.updateMatrixWorld();
- const height=()=>new Vector3(0,1.98,12.4).project(c).y-new Vector3(0,0,12.4).project(c).y;
- const width=()=>new Vector3(1,0,12.4).project(c).x-new Vector3(0,0,12.4).project(c).x;
- const before=height(),court=width();frameMatch(c,390,844,0,0,12.4);assert.ok(height()/before>1.9&&height()/before<2.3);assert.ok(width()/court>1.8&&width()/court<2.2);
- for(const z of [-12,12.4])for(const y of [0,1.98]){const p=new Vector3(0,y,z).project(c);assert.ok(p.y>-.8&&p.y<.8);}
+test('reference-style elevated camera keeps the near athlete around one fifth of the full court depth',()=>{
+ for(const [w,h] of [[390,844],[320,568],[844,390],[195,183]]){
+  const c=new PerspectiveCamera();frameMatch(c,w,h,0,0,12.4);
+  const p=(x:number,y:number,z:number)=>new Vector3(x,y,z).project(c);
+  const near=p(0,0,11.885),far=p(0,0,-11.885);
+  const court=Math.hypot((near.x-far.x)*w/2,(near.y-far.y)*h/2);
+  const athlete=(p(0,1.96,12.4).y-p(0,0,12.4).y)*h/2;
+  assert.ok(athlete/court>.18&&athlete/court<.26,`${w}x${h}: ${athlete/court}`);
+  assert.ok(c.position.y>=14&&c.position.z>=34,'not the oversized low close-up');
+  for(const x of [-5.485,5.485])for(const z of [-11.885,11.885]){
+   const q=p(x,0,z);assert.ok(Math.abs(q.x)<.94&&Math.abs(q.y)<.75,'all four doubles court corners visible');
+  }
+ }
+});
+test('match view remains directly behind the baseline with level court lines on both seats',()=>{
+ for(const seat of [0,1] as const)for(const [w,h] of [[390,844],[844,390]])
+ for(const x of [-6,0,6])for(const depth of [3,12.4,16]){
+  const sign=seat===0?1:-1,c=new PerspectiveCamera();
+  frameMatch(c,w,h,seat,x,depth,{x:-x,z:-10*sign});
+  assert.equal(c.position.x,0,'no sideline/diagonal camera offset');
+  assert.ok(Math.abs(c.getWorldDirection(new Vector3()).x)<1e-12,'camera looks straight down court');
+  for(const z of [-11.885,0,11.885]){
+   const left=new Vector3(-5.485,0,z).project(c),right=new Vector3(5.485,0,z).project(c);
+   assert.ok(Math.abs(left.y-right.y)<1e-12,'baseline and net are horizontal');
+   assert.ok(Math.abs(left.x+right.x)<1e-12,'court stays horizontally centred while players run');
+  }
+ }
 });
 test('following camera keeps a retreating player visible on phone sizes and preserves swipe direction',()=>{
  for(const seat of [0,1] as const)for(const [w,h]of [[390,844],[320,568],[844,390]])for(const x of [-6,0,6])for(const depth of [10,16]){

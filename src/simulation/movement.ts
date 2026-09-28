@@ -1,11 +1,12 @@
 import {characterEffects} from './characters.js';
+import {effectiveStamina} from './stamina.js';
 import {clamp,side,type PlayerState,type Seat} from './types.js';
 /** Acceleration, braking and direction-dependent court movement, in metres/sec. */
 export function movePlayer(p:PlayerState,seat:Seat,dt:number){
  const athletic=characterEffects(p.characterId).movement;
  const dx=p.tx-p.x,dz=p.tz-p.z,distance=Math.hypot(dx,dz),sign=side(seat);
  const nx=distance>.001?dx/distance:0,nz=distance>.001?dz/distance:0;
- const limit=Math.hypot(nx*5.98,nz*(nz*sign>0?4.945:6.67))*(.75+.25*p.stamina)*athletic;
+ const limit=Math.hypot(nx*5.98,nz*(nz*sign>0?4.945:6.67))*(.75+.25*effectiveStamina(p))*athletic;
  const speed=Math.min(limit,Math.sqrt(2*16.1*Math.max(0,distance-.015)));
  const desiredX=nx*speed,desiredZ=nz*speed;
  let vx=p.vx??0,vz=p.vz??0;

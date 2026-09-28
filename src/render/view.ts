@@ -4,13 +4,14 @@ import { makeCourt } from './court.js';
 import { Athlete } from './player.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {clone} from 'three/addons/utils/SkeletonUtils.js';
-import { clamp, side, other, type MatchState, type Seat, type Shot, type Vec } from '../simulation/types.js';
+import { side, other, type MatchState, type Seat, type Shot } from '../simulation/types.js';
 import { shotDirection,serveDirection,captureSwipeAim } from '../input/aim.js';
 import { FlightGuide } from './trajectory.js';
 import {disposeTree} from './dispose.js';
 import {SHOT_PROFILES} from '../simulation/shot-profile.js';
-import {frameMatch} from './camera.js';
+import {frameMatch,type CameraDistance} from './camera.js';
 import {FrameQuality,QUALITY,type QualityLevel} from './quality.js';
+import {AimCameraLock} from './aim-camera.js';
 export class CourtView {
   readonly renderer:T.WebGLRenderer;
   readonly camera=new T.PerspectiveCamera(43,1,.1,130);
@@ -30,7 +31,9 @@ export class CourtView {
   private loadedModels:T.Group[]=[];
   private mode:'home'|'match'='home';
   private seat:Seat=0;
-  private aimLock=0;
+  private aimCamera=new AimCameraLock();
+  private cameraDistance:CameraDistance='near';
+  private appliedCameraDistance:CameraDistance='near';
   private focus={x:0,depth:11};
   private stadiumEnds:T.Group[];
   private size={w:0,h:0};
@@ -95,23 +98,42 @@ export class CourtView {
     }).catch(()=>{if(this.characterIds[seat]===character.id){canvas.dataset[`athlete${seat}`]='fallback';canvas.dataset.athleteSource='fallback';}this.modelCache.delete(character.model);});
   }
   setMode(mode:'home'|'match',seat:Seat=0){
+    if(this.mode===mode&&this.seat===seat)return;
+    this.aimCamera.reset();
     this.mode=mode;this.seat=seat;this.focus={x:0,depth:11};
-    this.stadiumEnds.forEach((end,i)=>{end.visible=mode==='home'||i!==seat;});this.resize();
+    this.stadiumEnds.forEach((end,i)=>{end.visible=mode==='home'||i!==seat;});this.resize(true);
   }
-  private resize(){
-    const w=this.container.clientWidth,h=this.container.clientHeight;this.size={w,h};this.renderer.setSize(w,h,false);this.camera.aspect=w/h;
+  private resize(forceCamera=false){
+    const w=this.container.clientWidth,h=this.container.clientHeight;
+    const changed=w!==this.size.w||h!==this.size.h;
+    this.renderer.setSize(w,h,false);
+    if(!changed&&!forceCamera)return;
+    this.aimCamera.reset();
+    this.size={w,h};this.camera.aspect=w/h;
     if(this.mode==='home'){
+      this.camera.clearViewOffset();
       this.camera.fov=w>h?39:49;this.camera.position.set(19,23,25);this.camera.lookAt(w>h?-4:0,0,0);
     } else {
-      frameMatch(this.camera,w,h,this.seat,this.focus.x,this.focus.depth);
+      this.appliedCameraDistance=this.cameraDistance;
+      frameMatch(this.camera,w,h,this.seat,this.focus.x,this.focus.depth,undefined,this.appliedCameraDistance);
     }
     this.camera.updateProjectionMatrix();this.camera.updateMatrixWorld();
   }
   aimShot(shot:Shot,state:MatchState,dx:number,dy:number):Shot{
     const serve=state.phase==='serve'&&state.server===this.seat;
     const ball=serve?{...state.ball,y:2.65}:state.ball;
-    if(serve)this.aimLock=1.3;
-    return {...shot,swipeAim:serve?undefined:captureSwipeAim(this.camera,shot,dx,dy,this.size.w,this.size.h),directionX:serve?serveDirection(this.camera,ball,state.players[this.seat],shot,dx,dy,this.size.w,this.size.h,side(this.seat)):shotDirection(this.camera,ball,shot,dx,dy,this.size.w,this.size.h,side(this.seat))};
+    this.aimCamera.shot(state,this.seat);
+    return {...shot,swipeAim:captureSwipeAim(this.camera,shot,dx,dy,this.size.w,this.size.h),directionX:serve?serveDirection(this.camera,ball,state.players[this.seat],shot,dx,dy,this.size.w,this.size.h,side(this.seat)):shotDirection(this.camera,ball,shot,dx,dy,this.size.w,this.size.h,side(this.seat))};
+  }
+  setAiming(active:boolean){this.aimCamera.pointer(active);}
+  setCameraDistance(distance:CameraDistance){this.cameraDistance=distance;}
+  private updateCamera(state:MatchState,dt:number){
+    if(this.aimCamera.update(state,dt))return;
+    this.appliedCameraDistance=this.cameraDistance;
+    const p=state.players[this.seat],alpha=1-Math.exp(-Math.min(dt,.08)*7);
+    this.focus.x+=(p.x-this.focus.x)*alpha;
+    this.focus.depth+=(p.z*side(this.seat)-this.focus.depth)*alpha;
+    frameMatch(this.camera,this.size.w,this.size.h,this.seat,this.focus.x,this.focus.depth,state.players[other(this.seat)],this.appliedCameraDistance);
   }
   courtPoint(x:number,y:number){
     const rect=this.container.getBoundingClientRect();
@@ -120,14 +142,7 @@ export class CourtView {
   }
   render(state:MatchState,dt:number,authoritative:MatchState=state){
     if(this.mode==='match'){
-      this.aimLock=state.phase==='serve'&&state.server===this.seat&&state.players[this.seat].preparation?Math.max(this.aimLock-dt,.25):Math.max(0,this.aimLock-dt);
-      const p=state.players[this.seat],alpha=this.aimLock>0?0:1-Math.exp(-Math.min(dt,.08)*7);
-      this.focus.x+=(p.x-this.focus.x)*alpha;
-      this.focus.depth+=(p.z*side(this.seat)-this.focus.depth)*alpha;
-      // Limit camera lag after point resets and at the edge of the close view.
-      this.focus.x=clamp(this.focus.x,p.x-.6,p.x+.6);
-      this.focus.depth=clamp(this.focus.depth,p.z*side(this.seat)-.6,p.z*side(this.seat)+.6);
-      if(this.aimLock===0)frameMatch(this.camera,this.size.w,this.size.h,this.seat,this.focus.x,this.focus.depth,state.players[other(this.seat)]);
+      this.updateCamera(state,dt);
     }
     for(const seat of [0,1] as Seat[]){
       const p=state.players[seat];this.setCharacter(seat,p.characterId);this.athletes[seat].update(p,state.time,dt);

@@ -1,6 +1,7 @@
 import {characterEffects,getCharacter,handedness} from './characters.js';
 import {flightGravity} from './flight.js';
 import {movePlayer} from './movement.js';
+import {spendStamina,recoverPointStamina,STAMINA} from './stamina.js';
 import {reception} from './reception.js';
 import {canSmash,canReturnNormally,returnHeightLegal} from './skills.js';
 import {clamp,side,type BallState,type PlayerState,type Seat} from './types.js';
@@ -43,7 +44,9 @@ export function canWaitForBounce(b:BallState,p:PlayerState,seat:Seat){
    bounced=true;ball.bounces=1;ball.y=.12;ball.vy=Math.abs(ball.vy)*.72*(b.slice?.68:1);ball.vx*=kick;ball.vz*=kick;ball.topspin=(ball.topspin??0)*.55;
   }else if(bounced&&ball.y<=.12)break;
   const target=bounced?reception(ball,runner,seat):ground;runner.tx=target.x;runner.tz=target.z;
-  movePlayer(runner,seat,step);runner.stamina=clamp(runner.stamina-(runner.moving?.013*effects.drain:-.006*effects.recovery)*step,0,1);
+  movePlayer(runner,seat,step);
+  if(runner.moving)spendStamina(runner,.013*effects.drain*step);
+  else recoverPointStamina(runner,STAMINA.idleRecovery*effects.recovery*step);
   // Require a contact window, not one grazing sample: Rapier may report
   // the bounce a frame after the analytic floor crossing.
   contactFrames=bounced&&ball.z*side(seat)>.35&&returnHeightLegal(ball)&&canReturnNormally(ball,runner,seat)?contactFrames+1:0;

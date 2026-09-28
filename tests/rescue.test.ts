@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {initPhysics} from '../src/simulation/physics.js';
 import {Match} from '../src/simulation/match.js';
 import {side,type Seat} from '../src/simulation/types.js';
+import {rescueChance,RESCUE} from '../src/simulation/rescue.js';
+import {effectiveStamina} from '../src/simulation/stamina.js';
 before(initPhysics);
 const shot={type:'shot' as const,aim:.25,depth:.6,power:1,lob:false,critical:true};
 function incoming(random:()=>number,seat:Seat=0){
@@ -21,7 +23,7 @@ test('a successful rescue physically jumps into reach on either side and returns
   for(let i=0;i<40&&m.state.ball.hitter!==seat;i++){const oldX=p.x,oldZ=p.z;m.step(1/60);sawMotion||=!!p.rescue;assert.ok(Math.hypot(p.x-oldX,p.z-oldZ)<.5,'no teleport');}
   assert.ok(sawMotion,'jump must begin');assert.equal(m.state.ball.hitter,seat);assert.equal(m.state.ball.rescue,true);assert.equal(m.state.ball.critical,false);assert.equal(m.state.event,'极限救球');
   assert.ok(Math.hypot(m.state.ball.vx,m.state.ball.vz)<14,'weak return');assert.ok(Math.abs(m.state.ball.targetX-.25*4.45*side(seat))>1,'scatter changes real target');assert.equal(draws,3);
-  assert.ok(p.stamina<.91);for(let i=0;i<45;i++)m.step(1/60);assert.equal(p.rescue,undefined);m.dispose();
+  assert.ok(p.stamina<.91);for(let i=0;i<Math.ceil((RESCUE.duration+.1)*60);i++)m.step(1/60);assert.equal(p.rescue,undefined);m.dispose();
  }
 });
 test('failed rescue rolls only once per incoming ball despite repeated swipes',()=>{
@@ -51,7 +53,7 @@ test('rescue animation lifts both feet, meets the ball and returns to ground',()
  const contact=m.state.players[0].contact!;athlete.root.updateMatrixWorld(true);
  const sweet=athlete.root.getObjectByName('racket-sweet-spot')!.getWorldPosition(new Vector3());
  assert.ok(sweet.distanceTo(new Vector3(contact.x,contact.y,contact.z))<.09,'racket physically meets rescue contact');
- for(let i=0;i<50;i++){m.step(1/60);athlete.update(m.state.players[0],m.state.time,1/60);}
+ for(let i=0;i<Math.ceil((RESCUE.duration+.1)*60);i++){m.step(1/60);athlete.update(m.state.players[0],m.state.time,1/60);}
  assert.equal(athlete.root.position.y,0);m.dispose();
 });
 
@@ -63,9 +65,19 @@ test('serve return cannot rescue before its legal first bounce',()=>{
  m.input(1,shot);for(let i=0;i<12;i++)m.step(1/60);
  assert.equal(draws,0);assert.equal(p.rescue,undefined);assert.equal(m.state.ball.hitter,0);m.dispose();
 });
-test('rescue chance boundary is 30 percent and ordinary reachable returns never roll',()=>{
- for(const [value,expected] of [[.2999,true],[.30,false]] as const){
-  const m=incoming(()=>value);m.input(0,shot);for(let i=0;i<20;i++)m.step(1/60);assert.equal(!!m.state.ball.rescue,expected);m.dispose();
+test('rescue rolls against pre-jump stamina and ordinary reachable returns never roll',()=>{
+ for(const stamina of [1,.8,2/3,.5,1/3,.1])for(const succeeds of [false,true]){
+  let m:Match,draws=0,chance=0,atRoll=0;
+  m=incoming(()=>{
+   if(draws++===0){atRoll=m.state.players[0].stamina;chance=rescueChance(effectiveStamina(m.state.players[0]));return succeeds?chance-1e-7:chance;}
+   return .5;
+  });
+  m.state.players[0].stamina=stamina;m.input(0,shot);
+  for(let i=0;i<30&&m.state.rally===2;i++)m.step(1/60);
+  assert.ok(draws>0,`eligible stamina ${stamina}`);
+  assert.equal(!!m.state.ball.rescue,succeeds,`stamina ${stamina}, chance ${chance}`);
+  assert.ok(atRoll>stamina-.01,'chance sampled before the .1 takeoff cost');
+  assert.equal(draws,succeeds?3:1);m.dispose();
  }
  let draws=0;const m=incoming(()=>{draws++;return 0;});Object.assign(m.state.players[0],{x:1.5,tx:1.5});m.input(0,shot);
  for(let i=0;i<30&&m.state.ball.hitter!==0;i++)m.step(1/60);

@@ -5,7 +5,7 @@ import {model} from './helpers/athlete-model.js';
 import {Box3,SkinnedMesh,Vector3,Quaternion,type BufferAttribute,type InterleavedBufferAttribute} from 'three';
 import {disposeTree} from '../src/render/dispose.js';
 import {Athlete} from '../src/render/player.js';
-const variants=['athlete','characters/mei','characters/rafa','characters/sora','characters/ines','characters/leo','characters/noah','characters/adrian','characters/luca'];
+const variants=['athlete','characters/mei','characters/rafa','characters/sora','characters/ines','characters/leo','characters/noah','characters/adrian','characters/luca','characters/wuming'];
 
 for(const id of variants)test(`generated ${id} loads a real skin and animates without missing weights or explosive bounds`,async()=>{
   const gltf=await model(id),a=new Athlete(0);a.attachModel(gltf.scene);
@@ -58,11 +58,11 @@ for(const id of variants)test(`running ${id} skin stays grounded and bounded thr
 });
 
 test('all generated characters stay finite and bounded through rescue leap and landing',async()=>{
- const {moveRescue}=await import('../src/simulation/rescue.js');
+ const {moveRescue,RESCUE}=await import('../src/simulation/rescue.js');
  for(const id of variants){
   const {scene}=await model(id),a=new Athlete(0);a.attachModel(scene);
   const p:import('../src/simulation/types.js').PlayerState={characterId:id==='athlete'?'lin':id.split('/')[1],x:0,z:10,tx:1.5,tz:10,stamina:.8,moving:true,stroke:'forehand',swing:0,rescue:{startedAt:0,fromX:0,fromZ:10,toX:1.5,toZ:10.4,hit:false,contact:{x:2.1,y:1,z:10}}};
-  for(let i=1;i<=45;i++){
+  for(let i=1;i<=Math.ceil((RESCUE.duration+.1)*60);i++){
    moveRescue(p,i/60,1/60);a.update(p,i/60,1/60);a.root.updateMatrixWorld(true);
    if(i%5)continue;
    const box=new Box3();a.root.traverse(o=>{if(o instanceof SkinnedMesh){o.skeleton.update();o.computeBoundingBox();box.union(o.boundingBox!.clone().applyMatrix4(o.matrixWorld));}});

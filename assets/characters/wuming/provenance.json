@@ -1,0 +1,19 @@
+{
+  "id": "wuming",
+  "source": "public/models/athlete.glb",
+  "sourceSha256": "05a0f878ff614556ee90ef978beff848296ea75535ce2d480619e64bc1d46801",
+  "model": "public/models/characters/wuming.glb",
+  "modelSha256": "e942cb048a5ca17668f51707e4c2816252ca65d4a77b8f9450334022b89a9796",
+  "method": "Append lossless recolored uniform texture; retain every original bufferView byte. Gold cuff material only.",
+  "changedPixels": 231316,
+  "geometrySkinBytesPreserved": true,
+  "rights": "Derivative of the existing project-owned Lin athlete; inherits source provenance, no new third-party assets.",
+  "externalCredits": 0,
+  "rebuild": "python3 scripts/assets/hidden-master.py && python3 scripts/assets/portrait-cpu.py",
+  "optionalBlendExport": "/Applications/Blender.app/Contents/MacOS/Blender --background --python scripts/assets/render-hidden-master.py",
+  "portrait": "public/portraits/wuming.png",
+  "portraitSha256": "73d544c991a3735a94c63a21484212daba0883fd7c35ceb1a6a31a02519b1caa",
+  "portraitRenderer": "Local CPU rasterizer; actual shipped GLB texture and geometry, 2x supersampling.",
+  "editable": "public/models/characters/wuming.glb",
+  "editableFormat": "GLB (importable into Blender); optional .blend export blocked by host GPU/approval environment."
+}

@@ -1,4 +1,4 @@
-import {directionAtContact,validateSwipeAim} from './shot-aim.js';
+import {directionAtContact,directionToLanding,validateSwipeAim} from './shot-aim.js';
 import {prefersBounce,ReturnPlanner,shouldAssist} from './return-plan.js';
 import {handedness} from './characters.js';
 import {SERVE_DURATION,SERVE_RECOVERY,serveBallHeight} from './serve-motion.js';
@@ -7,12 +7,13 @@ import {canSmash,canReturnNormally,returnHeightLegal,volleyDifficulty} from './s
 import {getCharacter,characterEffects} from './characters.js';
 import { BallPhysics } from './physics.js';
 import {shotDepth,shotTier,SHOT_PROFILES} from './shot-profile.js';
-import {RESCUE,rescueTarget,hasNormalReturnWindow,moveRescue,canReachRescue} from './rescue.js';
+import {RESCUE,rescueChance,rescueTarget,hasNormalReturnWindow,moveRescue,canReachRescue} from './rescue.js';
 import {movePlayer} from './movement.js';
+import {beginPointStamina,spendStamina,recoverPointStamina,settlePointStamina,effectiveStamina,STAMINA} from './stamina.js';
 import { COURT, isInCourt, isInServiceBox, serverForPoint, winnerForScore } from './rules.js';
 import { clamp, other, side, type BallState, type Input, type MatchState, type PlayerState, type Seat, type Shot } from './types.js';
 
-const player = (seat: Seat, characterId: string): PlayerState => ({characterId:getCharacter(characterId).id,x:0,z:side(seat)*10,tx:0,tz:side(seat)*10,stamina:1,swing:0,stroke:'forehand',moving:false});
+const player = (seat: Seat, characterId: string): PlayerState => ({characterId:getCharacter(characterId).id,x:0,z:side(seat)*10,tx:0,tz:side(seat)*10,stamina:1,totalStamina:1,swing:0,stroke:'forehand',moving:false});
 export class Match {
   readonly physics = new BallPhysics();
   readonly state: MatchState;
@@ -35,10 +36,10 @@ export class Match {
     this.resetPoint();
   }
   private announce(event: string) { this.state.event=event; this.state.eventId++; }
-  private clearPreparation() {
+  private clearPreparation(preserveRescue=false) {
     for(const planner of this.returnPlanners)planner.clear();
     this.pending=[null,null];this.serveMotion=null;this.recentContact=null;
-    for(const p of this.state.players)p.rescue=undefined;
+    if(!preserveRescue)for(const p of this.state.players)p.rescue=undefined;
     for(const p of this.state.players){p.preparation=undefined;p.shotQueued=false;}
   }
   private resetPoint() {
@@ -49,10 +50,10 @@ export class Match {
     this.pending=[null,null]; this.manualUntil=[0,0]; this.serveElapsed=0; this.serviceFlight=false;this.impact=null;this.serveMotion=null;this.bouncePoint=null;
     const serveSide=side(s.server)*(total%2===0?1:-1);
     s.players.forEach((p,i) => {
+      if(!this.faultReset)beginPointStamina(p);
       p.x=i===s.server?serveSide*1.5:-serveSide*1.5;
       p.serveCourt=i===s.server?(total%2===0?'deuce':'ad'):undefined;
       p.z=side(i as Seat)*(i===s.server?12.4:10.3); p.tx=p.x;p.tz=p.z;p.vx=0;p.vz=0;p.moving=false;p.swing=0;p.strokeSpin=0;p.preparation=undefined;p.shotQueued=false;
-      if(!this.faultReset) p.stamina=clamp(p.stamina+.2*characterEffects(p.characterId).recovery,0,1);
     });
     const p=s.players[s.server];
     this.physics.place({x:p.x,y:1.25,z:p.z-.25*side(s.server)});
@@ -126,26 +127,32 @@ export class Match {
     const start={x:b.x,y:serve?2.65:b.y,z:b.z};
     const direction=!serve&&shot.swipeAim?directionAtContact(shot.swipeAim,start,shot.directionX??0,sign):shot.directionX;
     if(direction!==undefined)targetX=start.x+direction*Math.abs(targetZ-start.z)*sign;
-    if(slice){const spread=.4+.65*shot.power;targetX+=(this.random()*2-1)*spread;targetZ+=(this.random()*2-1)*(.5+.45*shot.power);}
-    if(rescue){targetX+=(this.random()*2-1)*1.6;targetZ+=(this.random()*2-1)*1.8;}
-    const power=shot.power*(.65+.35*p.stamina)*(1-.2*stretch);
+    let scatterX=0;
+    if(slice){const spread=.4+.65*shot.power;scatterX+=(this.random()*2-1)*spread;targetZ+=(this.random()*2-1)*(.5+.45*shot.power);}
+    if(rescue){scatterX+=(this.random()*2-1)*1.6;targetZ+=(this.random()*2-1)*1.8;}
+    const power=shot.power*(.65+.35*effectiveStamina(p))*(1-.2*stretch);
     const critical=tier==='critical';
     const backhand=(b.x-p.x)*sign*handedness(p.characterId)<0;
     const attribute=serve||smash?'serve':volley?'volley':backhand?'backhand':'forehand';
     const effects=characterEffects(p.characterId),strokeSpeed=effects[attribute];
-    let flight=flightTime(start,{x:targetX,y:.12,z:targetZ},power,strokeSpeed,gravity,{smash,critical,lob:shot.lob});
-    if(volley)flight*=1+.32*volleyDifficulty(b,p);
-    if(slice)flight*=1.15;
-    if(rescue)flight*=RESCUE.slowdown;
+    const slowdown=(volley?1+.32*volleyDifficulty(b,p):1)*(slice?1.15:1)*(rescue?RESCUE.slowdown:1);
+    const flightAt=(x:number)=>flightTime(start,{x,y:.12,z:targetZ},power,strokeSpeed,gravity,{smash,critical,lob:shot.lob})*slowdown;
+    if(shot.swipeAim?.elevation){
+      const corrected=directionToLanding(shot.swipeAim,start,targetZ,direction??0,sign);
+      targetX=start.x+corrected*Math.abs(targetZ-start.z)*sign;
+    }
+    targetX+=scatterX;
+    const flight=flightAt(targetX);
     const velocity={x:(targetX-start.x)/flight,y:(.12-start.y+(gravity/2)*flight*flight)/flight,z:(targetZ-start.z)/flight};
     this.physics.place(start,velocity,topspin);
     Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ,critical,tier,rescue,topspin,slice,skill:smash?'smash':slice?'slice':volley?'volley':undefined});
     s.phase='rally';s.rally++;s.maxRally=Math.max(s.maxRally,s.rally);
     p.swing=serve?SERVE_RECOVERY:.44;p.strokeSpin=topspin;p.backhand=(b.x-p.x)*sign*handedness(p.characterId)<0;
     p.stroke=serve?'serve':smash?'smash':slice?(p.backhand?'slice-backhand':'slice-forehand'):volley?'volley':shot.lob?'lob':p.backhand?'backhand':'forehand';
+    if(rescue&&p.rescue?.stroke){p.stroke=p.rescue.stroke;p.backhand=p.rescue.backhand??p.backhand;}
     p.preparation=undefined;p.shotQueued=false;
     p.contact={...start};if(rescue&&p.rescue){p.rescue.hit=true;p.rescue.contact={...start};}
-    p.stamina=clamp(p.stamina-(.022+.028*power)*effects.drain*strokeSpeed,0,1);
+    spendStamina(p,(.022+.028*power)*effects.drain*strokeSpeed);
     this.recentContact=null;this.sinceHit=0;this.serviceFlight=serve;this.pending[seat]=null;this.impact=null;this.bouncePoint=null;
     // A recovery tap belongs to the previous flight. Fresh incoming-ball taps
     // can still override assistance, but a stale one must not delay the split step.
@@ -162,19 +169,30 @@ export class Match {
   }
   private award(winner: Seat, reason: string) {
     const s=this.state;
+    for(const p of s.players)settlePointStamina(p);
     s.score[winner]++;s.lastPoint=winner;s.fault=0;s.winner=winnerForScore(s.score);
     s.phase=s.winner===null?'point':'over';s.pointTimer=1.8;this.faultReset=false;
-    this.announce(reason);this.clearPreparation();
+    this.announce(reason);this.clearPreparation(true);
   }
   finish(winner: Seat, reason: string) {
+    for(const p of this.state.players)settlePointStamina(p);
     this.state.winner=winner;this.state.phase='over';this.state.lastPoint=winner;this.announce(reason);
     this.clearPreparation();for(const p of this.state.players){p.swing=0;p.moving=false;p.vx=0;p.vz=0;}
   }
   step(dt: number) {
-    if(this.state.phase==='over') return;
+    if(this.state.phase==='over') {
+      if(this.state.players.some(p=>p.rescue)){
+        this.state.time+=dt;
+        for(const p of this.state.players)moveRescue(p,this.state.time,dt);
+      }
+      return;
+    }
     const s=this.state;s.time+=dt;
     for(const p of s.players) p.swing=Math.max(0,p.swing-dt);
-    if(s.phase==='point') { s.pointTimer-=dt;if(s.pointTimer<=0)this.resetPoint();return; }
+    if(s.phase==='point') {
+      for(const p of s.players)moveRescue(p,s.time,dt);
+      s.pointTimer-=dt;if(s.pointTimer<=0)this.resetPoint();return;
+    }
     if(s.phase==='serve') {
       this.serveElapsed+=dt;
       if(this.serveMotion){
@@ -241,7 +259,8 @@ export class Match {
       }
       if(!moveRescue(p,s.time,dt))movePlayer(p,seat,dt);
       const endurance=characterEffects(p.characterId);
-      p.stamina=clamp(p.stamina-(p.moving?.013*endurance.drain:-.006*endurance.recovery)*dt,0,1);
+      if(p.moving)spendStamina(p,.013*endurance.drain*dt);
+      else recoverPointStamina(p,STAMINA.idleRecovery*endurance.recovery*dt);
       const legal=this.returnLegal(seat),reachable=legal&&this.returnReachable(seat);
       if(reachable&&!p.rescue)this.recentContact={at:s.time,flight:s.rally,seat,ball:{...b}};
       const pending=this.pending[seat];
@@ -252,9 +271,11 @@ export class Match {
           const target=rescueTarget(b,p,seat);
           if(target&&!hasNormalReturnWindow(b,p,seat,{time:s.time,manualUntil:this.manualUntil[seat],serviceFlight:this.serviceFlight,slice:!!pending.shot.slice,planner:this.returnPlanners[seat],flight:s.rally,airRequested:pending.airRequested})){
             this.rescueAttempt[seat]=s.rally;
-            if(this.random()<RESCUE.chance){
-              p.rescue={startedAt:s.time,fromX:p.x,fromZ:p.z,toX:target.x,toZ:target.z,contact:target.contact,hit:false};
-              p.stamina=clamp(p.stamina-.1,0,1);p.preparation=undefined;
+            const chance=rescueChance(effectiveStamina(p));
+            if(this.random()<chance){
+              p.rescue={startedAt:s.time,fromX:p.x,fromZ:p.z,toX:target.x,toZ:target.z,contact:target.contact,hit:false,stroke:target.stroke,backhand:target.backhand,travel:target.travel};
+              p.stroke=target.stroke;p.backhand=target.backhand;
+              spendStamina(p,.1);p.preparation=undefined;
             }
           }
         }

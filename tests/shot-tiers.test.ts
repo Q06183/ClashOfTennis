@@ -32,9 +32,24 @@ test('the real swipe pipeline still has an in-bounds critical serve window on bo
  const {interpretGesture}=await import('../src/input/gesture.js');
  for(const total of [0,1,2,3])for(const [w,h] of [[390,844],[320,568],[844,390]]){
   const m=new Match();m.state.score=[total,0];m.state.phase='point';m.state.pointTimer=0;m.step(1/60);
-  const seat=m.state.server,sign=seat===0?1:-1,unit=Math.min(w,h),dx=(total%2===0?-1:1)*65*unit/390,dy=-240*unit/390;
-  const shot=interpretGesture({dx,dy,duration:100,hold:0,width:w,height:h})!;assert.equal(shot.critical,true);
+  const seat=m.state.server,sign=seat===0?1:-1,unit=Math.min(w,h);
+  let dy=-240*unit/390;
   const p=m.state.players[seat],c=new PerspectiveCamera();frameMatch(c,w,h,seat,p.x,12.4);
+  // Aim at a legal service-box point using the current view. Fixed pixel
+  // directions from the old close-up are not the same target in a new camera.
+  let dx=0,shot=interpretGesture({dx,dy,duration:100,hold:0,width:w,height:h})!;
+  for(const length of [240,210,180,150]){
+   dy=-length*unit/390;
+   for(let i=0;i<8;i++){
+    const from=new Vector3(m.state.ball.x,2.65,m.state.ball.z).project(c);
+    const to=new Vector3(-(total%2===0?1:-1)*.2*sign,.12,-sign*shotDepth(shot,true)).project(c);
+    dx=-dy*(to.x-from.x)*w/((to.y-from.y)*h);
+    shot=interpretGesture({dx,dy,duration:100,hold:0,width:w,height:h})!;
+   }
+   if(Math.abs(dx)<w-20&&shot.critical)break;
+  }
+  assert.ok(Math.abs(dx)<w-20,'legal serve can be swiped within the screen');
+  assert.equal(shot.critical,true);
   const directionX=swipeDirection(c,{...m.state.ball,y:2.65},dx,dy,w,h,sign,-sign*shotDepth(shot,true));m.input(seat,{...shot,directionX});
   for(let i=0;i<90&&m.state.rally===0;i++)m.step(1/60);
   const landing=predictFlight(m.state.ball).landing;assert.equal(isInServiceBox(landing.x,landing.z,seat,total),true,`${w}x${h} ${total}: ${JSON.stringify(landing)}`);m.dispose();
