@@ -528,3 +528,32 @@ test('short slow swipe sends a server-authoritative drop shot with matching low 
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
+
+test('expanded lateral rescues cross the old range limit identically on both sockets',async()=>{
+ const {Match}=await import('../src/simulation/match.js');
+ const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{
+  a.send({type:'create',name:'扩大救球A'});const welcome=await a.wait('welcome');
+  b.send({type:'join',code:welcome.code,name:'扩大救球B'});await b.wait('welcome');
+  a.send({type:'ready'});b.send({type:'ready'});await a.wait('state');
+  const room=server.rooms.rooms.get(welcome.code)!;
+  for(const seat of [0,1] as const)for(const backhand of [false,true]){
+   room.match!.dispose();let rolls=0;
+   const m=room.match=new Match(['lin','lin'],()=>{rolls++;return 0;}),p=m.state.players[seat],sign=seat===0?1:-1;
+   m.state.phase='rally';m.state.rally=2;m.step(.08);
+   Object.assign(p,{x:0,z:10*sign,tx:0,tz:10*sign,stamina:.08,totalStamina:.8});
+   m.physics.place({x:3.65*(backhand?-1:1)*sign,y:1.2,z:8.2*sign},{x:0,y:0,z:10*sign});
+   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});
+   a.messages.length=0;b.messages.length=0;
+   (seat===0?a:b).send({type:'input',command:{type:'shot',aim:0,depth:.55,power:.7,lob:false}});
+   const jump=await a.wait('state',v=>!!v.state.players[seat].rescue);
+   assert.deepEqual((await b.wait('state',v=>v.seq===jump.seq)).state,jump.state);
+   const r=jump.state.players[seat].rescue;
+   assert.ok(Math.abs(r.toX-r.fromX)>2.5&&Math.abs(r.toX-r.fromX)<=3.5);
+   assert.equal(r.fromZ,r.toZ);
+   const hit=await a.wait('state',v=>v.state.rally===3);
+   assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
+   assert.equal(hit.state.ball.rescue,true);assert.equal(rolls,3);
+  }
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
+});

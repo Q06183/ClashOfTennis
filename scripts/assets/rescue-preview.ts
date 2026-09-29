@@ -10,6 +10,8 @@ import {handedness} from '../../src/simulation/characters.js';
 
 await initPhysics();
 const out=process.env.POSE_PREVIEW_DIR??'artifacts/jump-rescue';
+const gap=Number(process.env.RESCUE_PREVIEW_GAP??2.65);
+if(!Number.isFinite(gap)||gap<1||gap>5)throw Error('Invalid rescue preview gap');
 const rows=[];
 for(const id of ['lin','noah']){
 for(const stroke of ['forehand','backhand','volley','smash'] as const){
@@ -18,7 +20,7 @@ for(const stroke of ['forehand','backhand','volley','smash'] as const){
  match.state.phase='rally';match.state.rally=2;match.step(.08);
  const depth=stroke==='volley'?4:10;
  Object.assign(p,{x:0,z:-depth,tx:0,tz:-depth,vx:0,vz:0,stamina:.08});
- match.physics.place({x:(stroke==='backhand'?2.65:-2.65)*handedness(id),y:stroke==='smash'?2.9:stroke==='volley'?1.9:1.2,z:-(depth-1.8)},{x:0,y:0,z:-10});
+ match.physics.place({x:(stroke==='backhand'?gap:-gap)*handedness(id),y:stroke==='smash'?2.9:stroke==='volley'?1.9:1.2,z:-(depth-1.8)},{x:0,y:0,z:-10});
  Object.assign(match.state.ball,match.physics.read(),{hitter:0,bounces:stroke==='forehand'||stroke==='backhand'?1:0});
  match.input(1,{type:'shot',aim:0,depth:.5,power:.5,lob:false});
  if(!p.rescue)throw Error(`No rescue: ${id}/${stroke}`);

@@ -5,7 +5,7 @@ import {spendStamina,recoverPointStamina,STAMINA} from './stamina.js';
 import {canReturnNormally,returnHeightLegal} from './skills.js';
 import {flightGravity} from './flight.js';
 import {clamp,side,type BallState,type PlayerState,type Seat,type RescueStroke} from './types.js';
-export const RESCUE={minChance:.10,maxChance:.90,lowStamina:1/3,travel:.20,landAt:.48,riseAt:.68,duration:1.18,reach:2.5,slowdown:1.7};
+export const RESCUE={minChance:.10,maxChance:.90,lowStamina:1/3,travel:.20,landAt:.48,riseAt:.68,duration:1.18,reach:3.5,travelSpeed:18,slowdown:1.7};
 /** Total-match stamina drives the smooth 10%–90% rescue lottery. */
 export function rescueChance(stamina:number){
  const s=Number.isFinite(stamina)?clamp(stamina,0,1):0;
@@ -34,7 +34,9 @@ export function rescueTarget(b:BallState,p:PlayerState,seat:Seat){
   const x=contact.x-sign*handedness(p.characterId)*lateral,z=p.z,distance=Math.abs(x-p.x);
   // Only lateral dives. Forward/backward gaps remain a footwork responsibility.
   if(Math.abs(contact.x-p.x)<.9||Math.abs(contact.z-p.z)>.75)continue;
-  if(distance<.55||distance>Math.min(RESCUE.reach,13*travel)||Math.abs(x)>6.4||z*sign>16.5)continue;
+  // Enlarge body travel, not the arm/contact envelope. Scale its duration
+  // allowance as well; increasing reach alone still capped a 200ms dive at 2.6m.
+  if(distance<.55||distance>Math.min(RESCUE.reach,RESCUE.travelSpeed*travel)||Math.abs(x)>6.4||z*sign>16.5)continue;
   const candidate={...p,x,z,rescue:{startedAt:0,fromX:p.x,fromZ:p.z,toX:x,toZ:z,contact,hit:false,stroke,backhand,travel}};
   if(!canReachRescue({...b,...contact},candidate,seat,travel))continue;
   return {x,z,contact,stroke,backhand,travel};
