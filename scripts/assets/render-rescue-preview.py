@@ -41,9 +41,11 @@ light = np.array([.3, .8, .5])
 light /= np.linalg.norm(light)
 sheet = Image.new("RGB", (W*max(len(row["frames"]) for row in rows), (H+28)*len(rows)), "#e6ebdf")
 draw = ImageDraw.Draw(sheet)
+animation_rows = []
 
 for row, data in enumerate(rows):
     texture = textures.get(data["stroke"].split("-")[0], textures["lin"])
+    animation_tiles = []
     for col, frame in enumerate(data["frames"]):
         pixels = np.zeros((H, W, 3), dtype=float) + [.90, .92, .87]
         depth = np.full((H, W), np.inf)
@@ -93,5 +95,22 @@ for row, data in enumerate(rows):
             ink.ellipse((x-4, y-4, x+4, y+4), fill="#d2e836", outline="#586a17")
         sheet.paste(tile, (col*W, row*(H+28)+28))
         draw.text((col*W+10, row*(H+28)+8), f"{data['stroke']} / {frame['age']:.2f}s", fill="#173e40")
+        if os.environ.get("POSE_ANIMATION") == "1":
+            animation_tiles.append(tile)
+    animation_rows.append(animation_tiles)
 sheet.save(OUT / "four-jumps.png")
 print(OUT / "four-jumps.png")
+if os.environ.get("POSE_ANIMATION") == "1":
+    frames = []
+    for i in range(min(map(len, animation_rows))):
+        frame = Image.new("RGB", (W*len(rows), H+28), "#e6ebdf")
+        label = ImageDraw.Draw(frame)
+        for row, data in enumerate(rows):
+            frame.paste(animation_rows[row][i], (row*W, 28))
+            label.text((row*W+8, 8), f"{data['stroke']} / {data['frames'][i]['age']:.2f}s", fill="#173e40")
+        frames.append(frame)
+    # Omit GIF loop extension: the authored celebration plays once then holds.
+    durations = [max(20, round((rows[0]["frames"][i+1]["age"]-rows[0]["frames"][i]["age"])*1000))
+                 for i in range(len(frames)-1)] + [1500]
+    frames[0].save(OUT / "animation.gif", save_all=True, append_images=frames[1:], duration=durations, disposal=2)
+    print(OUT / "animation.gif")

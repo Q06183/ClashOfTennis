@@ -8,7 +8,7 @@ import {RACKET,contactCrouch} from '../simulation/athlete.js';
 import {rescuePose,RESCUE} from '../simulation/rescue.js';
 import {rescueStroke} from './rescue-strokes.js';
 import {Footwork} from './footwork.js';
-import {victoryPose} from './victory.js';
+import {victoryPose,victoryEase} from './victory.js';
 import {type PlayerState,type Seat} from '../simulation/types.js';
 const material=(color:number)=>new T.MeshStandardMaterial({color,roughness:.72});
 const down=new T.Vector3(0,-1,0);
@@ -25,6 +25,9 @@ export class Athlete {
   private feet=[new T.Group(),new T.Group()];
   private footwork=new Footwork();
   private lastTime=0;
+  private hasRendered=false;
+  private celebrating=false;
+  private celebrationEntry:{node:T.Object3D;position:T.Vector3;rotation:T.Quaternion}[]=[];
   private racket=new T.Group();
   private leftHand=new T.Group();
   modelSource:'procedural'|'lux3d'='procedural';
@@ -165,7 +168,51 @@ export class Athlete {
     foot.quaternion.copy(leg.quaternion).multiply(knee.quaternion).invert()
       .multiply(this.root.quaternion.clone().invert()).multiply(flat);
   }
+  private celebrate(p:PlayerState,time:number){
+    const hand=handedness(p.characterId),yaw=this.seat===0?Math.PI:0;
+    this.root.scale.x=1;
+    if(!this.celebrating){
+      // Return the previous reflected rig to canonical solve space before
+      // capturing it. Keep the entry blend independent of stale shot metadata.
+      if(hand===-1){this.root.position.x*=-1;this.root.quaternion.y*=-1;this.root.quaternion.z*=-1;}
+      this.celebrationEntry=this.hasRendered?[this.root,this.torso,this.hips,this.head,...this.arms,...this.elbows,...this.legs,...this.knees,...this.feet,this.racket,this.leftHand]
+        .map(node=>({node,position:node.position.clone(),rotation:node.quaternion.clone()})):[];
+      this.celebrating=true;
+    }
+    const pose=victoryPose(time),station=new T.Vector3(p.x*hand,0,p.z);
+    this.root.quaternion.setFromAxisAngle(new T.Vector3(0,1,0),yaw);
+    this.root.position.copy(station).add(new T.Vector3(pose.rootX,0,0).applyQuaternion(this.root.quaternion));
+    this.hips.position.set(0,.85-pose.drop,0);this.hips.rotation.set(0,pose.hipTurn,0);
+    this.torso.rotation.set(pose.lean,pose.turn,pose.bank);
+    const pivot=new T.Vector3(0,.85,0);
+    this.torso.position.copy(pivot).sub(pivot.clone().applyQuaternion(this.torso.quaternion));
+    this.torso.position.y-=pose.drop;
+    this.head.rotation.set(pose.nod,-pose.turn*.35,0);
+    this.root.updateMatrixWorld(true);
+    for(let i=0;i<2;i++){
+      this.legs[i].position.set(i?-.15:.15,0,0).applyAxisAngle(new T.Vector3(0,1,0),pose.hipTurn).add(this.hips.position);
+      const foot=pose.feet[i].clone().applyQuaternion(this.root.quaternion).add(station);
+      this.legTo(i,foot,0);
+    }
+    this.racketTo(pose.tip,pose.shaft,false,0,0,new T.Vector3(-.3,-1,.2));
+    this.armTo(0,this.root.localToWorld(pose.hand.clone()),new T.Vector3(.3,-1,.15));
+    // Stable palm orientation: do not inherit an unrelated serve's wrist fold.
+    const palm=this.root.getWorldQuaternion(new T.Quaternion()).multiply(new T.Quaternion().setFromEuler(new T.Euler(.15,0,-.15)));
+    this.leftHand.quaternion.copy(this.elbows[0].getWorldQuaternion(new T.Quaternion()).invert().multiply(palm));
+    const entry=1-victoryEase(time/.45);
+    if(entry>0)for(const from of this.celebrationEntry){
+      from.node.position.lerp(from.position,entry);from.node.quaternion.slerp(from.rotation,entry);
+    }
+    this.root.updateMatrixWorld(true);this.generated?.update();
+    this.root.position.x*=hand;
+    if(hand===-1){this.root.quaternion.y*=-1;this.root.quaternion.z*=-1;}
+    this.root.scale.x=hand;this.root.updateMatrixWorld(true);
+    this.hasRendered=true;
+  }
   update(p:PlayerState,time:number,deltaTime?:number,celebrationTime?:number){
+    if(celebrationTime!==undefined){this.celebrate(p,celebrationTime);return;}
+    if(this.celebrating){this.celebrating=false;this.celebrationEntry=[];this.footwork=new Footwork();}
+    this.hasRendered=true;
     const hand=handedness(p.characterId),worldX=p.x;
     // Solve IK with a proper (non-reflected) transform. Reflect the finished
     // skeleton as one unit, so wrist/ankle quaternions never see negative scale.
@@ -178,7 +225,6 @@ export class Athlete {
         preparation:p.preparation?{...p.preparation,contact:point(p.preparation.contact)}:undefined,
         rescue:p.rescue?{...p.rescue,fromX:-p.rescue.fromX,toX:-p.rescue.toX,contact:point(p.rescue.contact)}:undefined};
     }
-    const celebration=celebrationTime===undefined?undefined:victoryPose(celebrationTime);
     const rescue=rescuePose(p,time);
     const yaw=this.seat===0?Math.PI:0;
     this.root.quaternion.setFromAxisAngle(new T.Vector3(0,1,0),yaw);
@@ -186,15 +232,14 @@ export class Athlete {
       this.root.quaternion.multiply(new T.Quaternion().setFromEuler(new T.Euler(rescue.pitch,0,rescue.roll)));
       const pivot=new T.Vector3(0,.85,0).applyQuaternion(this.root.quaternion);
       this.root.position.set(p.x-pivot.x,rescue.hipHeight-pivot.y,p.z-pivot.z);
-    }else this.root.position.set(p.x,celebration?.lift??0,p.z);
+    }else this.root.position.set(p.x,0,p.z);
     this.root.updateMatrixWorld(true);
     const groundTarget=(x:number,y:number,z:number)=>new T.Vector3(x,y,z).applyAxisAngle(new T.Vector3(0,1,0),yaw).add(new T.Vector3(p.x,0,p.z));
     const actual=p.rescue?.contact??p.preparation?.contact??p.contact;
     const contact=actual?this.root.worldToLocal(new T.Vector3(actual.x,actual.y,actual.z)):new T.Vector3(-.85,1.1,.65);
-    const pose=strokePose(p,contact),active=!!celebration||!!p.rescue||!!p.preparation||p.swing>0;
+    const pose=strokePose(p,contact),active=!!p.rescue||!!p.preparation||p.swing>0;
     const jump=p.rescue?rescueStroke(p,time,contact):undefined;
     if(jump)Object.assign(pose,jump);
-    if(celebration)Object.assign(pose,{tip:celebration.tip,shaft:celebration.shaft,turn:celebration.turn,twoHands:false,support:0});
     const dt=deltaTime??Math.max(1/60,Math.min(.08,time-this.lastTime));this.lastTime=time;
     const body=strokeBody(p),gait=this.footwork.update(this.root.position,this.root.quaternion,dt),movement=gait.localDirection;
     const stride=Math.sin(gait.phase*Math.PI*2)*Math.min(1,gait.speed/2);
@@ -213,14 +258,14 @@ export class Athlete {
     const lower=action*(p.preparation?.stroke==='serve'?1:speedBlend);
     const contactWeight=p.rescue?T.MathUtils.smoothstep(time-p.rescue.startedAt,0,.10):p.swing>0?Math.min(1,p.swing/.15):p.preparation?T.MathUtils.smoothstep(p.preparation.progress,.8,1):0;
     const contactCrouching=contactCrouch(contact.y)*contactWeight*(p.rescue?1-rescue.recovery:1);
-    const hipDrop=celebration?.drop??(p.rescue?0:
-      T.MathUtils.lerp(gait.hipDrop,body.hipDrop-body.lift,action)+contactCrouching);
+    const hipDrop=p.rescue?0:
+      T.MathUtils.lerp(gait.hipDrop,body.hipDrop-body.lift,action)+contactCrouching;
     const hipTurn=T.MathUtils.lerp(gait.turn,body.hipTurn,lower);
     this.hips.position.y=.85-hipDrop;this.hips.rotation.y=hipTurn;
     for(let i=0;i<2;i++){
       this.legs[i].position.set((i?-1:1)*.15,.85-hipDrop,0).applyAxisAngle(new T.Vector3(0,1,0),hipTurn);
       const posed=this.root.localToWorld(body.feet[i].clone());
-      const foot=celebration?this.root.localToWorld(celebration.feet[i].clone()):jump?this.root.localToWorld(jump.feet[i].clone()):
+      const foot=jump?this.root.localToWorld(jump.feet[i].clone()):
         gait.feet[i].lerp(posed,lower).add(new T.Vector3(0,rescue.lift+rescue.air*(i?.05:.1),0));
       if(jump&&rescue.landing>0){
         const settle=T.MathUtils.smoothstep(time-p.rescue!.startedAt,.35,.52);
@@ -254,9 +299,7 @@ export class Athlete {
     this.racketTo(pose.tip,pose.shaft,pose.twoHands,0,body.faceRoll*action,action?body.elbow:undefined);
     if((active||running>0)&&!pose.twoHands){
       const free=body.freeHand.clone();
-      if(celebration){
-        free.copy(celebration.hand);
-      }else if(jump){
+      if(jump){
         free.copy(jump.free);
       }else if(running>0)free.lerp(new T.Vector3(.36,1.13+stride*.045,.18-stride*.22).applyAxisAngle(new T.Vector3(0,1,0),runTurn),running);
       const hand=this.root.localToWorld(free);

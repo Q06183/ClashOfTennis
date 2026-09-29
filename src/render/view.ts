@@ -12,7 +12,7 @@ import {SHOT_PROFILES} from '../simulation/shot-profile.js';
 import {frameMatch,type CameraDistance} from './camera.js';
 import {FrameQuality,QUALITY,type QualityLevel} from './quality.js';
 import {AimCameraLock} from './aim-camera.js';
-import {victoryPlayer} from './victory.js';
+import {victoryPlayer,frameVictory} from './victory.js';
 export class CourtView {
   readonly renderer:T.WebGLRenderer;
   readonly camera=new T.PerspectiveCamera(43,1,.1,130);
@@ -148,12 +148,7 @@ export class CourtView {
     const winner=this.mode==='result'?victoryPlayer(authoritative):null;
     if(winner){
       this.celebrationTime+=dt;
-      const p=winner.player;
-      this.camera.clearViewOffset();this.camera.zoom=1;this.camera.aspect=this.size.w/this.size.h;this.camera.fov=38;
-      const sign=side(winner.seat);
-      this.camera.position.set(p.x,2.5,p.z-7*sign);
-      this.camera.lookAt(p.x,1.35,p.z);
-      this.camera.updateProjectionMatrix();this.camera.updateMatrixWorld();
+      frameVictory(this.camera,this.size.w,this.size.h,winner.player,side(winner.seat));
     }
     if(this.mode==='match'){
       this.updateCamera(state,dt);
