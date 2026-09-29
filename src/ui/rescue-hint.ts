@@ -12,4 +12,4 @@ export function rescueHint(s:MatchState,seat:Seat):string|undefined {
  const label=stroke?RESCUE_LABELS[stroke]:'极限救球';
  return hitter===seat?`${label}！回球变慢，尽快恢复站位`:`对手${label} · 注意偏移后的落点`;
 }
-export const rescueChanceText=(stamina:number)=>`总体力跳接概率 ${Math.round(rescueChance(stamina)*1000)/10}% · 滑动后立即检查并保留下一次机会`;
+export const rescueChanceText=(stamina:number)=>`总体力跳接概率 ${Math.round(rescueChance(stamina)*1000)/10}% · 普通接不到时才尝试左右侧扑`;

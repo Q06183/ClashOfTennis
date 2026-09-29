@@ -1,4 +1,4 @@
-import {directionAtContact,bodyAimTarget,validateSwipeAim} from './shot-aim.js';
+import {directionAtContact,bodyAimTarget,outgoingAimTarget,validateSwipeAim} from './shot-aim.js';
 import {prefersBounce,ReturnPlanner,shouldAssist} from './return-plan.js';
 import {handedness} from './characters.js';
 import {SERVE_DURATION,SERVE_RECOVERY,serveBallHeight} from './serve-motion.js';
@@ -7,7 +7,7 @@ import {canSmash,canReturnNormally,returnHeightLegal,volleyDifficulty} from './s
 import {getCharacter,characterEffects} from './characters.js';
 import { BallPhysics } from './physics.js';
 import {shotDepth,shotTier,SHOT_PROFILES} from './shot-profile.js';
-import {RESCUE,rescueChance,rescueTarget,moveRescue,canReachRescue} from './rescue.js';
+import {RESCUE,rescueChance,rescueTarget,hasNormalReturnWindow,moveRescue,canReachRescue} from './rescue.js';
 import {movePlayer} from './movement.js';
 import {beginPointStamina,spendStamina,recoverPointStamina,settlePointStamina,effectiveStamina,STAMINA} from './stamina.js';
 import { COURT, isInCourt, isInServiceBox, serverForPoint, winnerForScore } from './rules.js';
@@ -111,6 +111,8 @@ export class Match {
        b.y<=COURT.ballRadius||b.bounces>=2||(this.serviceFlight&&b.bounces===0)||
        this.returnLegal(seat)&&canReturnNormally(b,p,seat,!!pending.shot.slice))return false;
     const target=rescueTarget(b,p,seat);if(!target)return false;
+    if(hasNormalReturnWindow(b,p,seat,{time:s.time,manualUntil:this.manualUntil[seat],serviceFlight:this.serviceFlight,
+      slice:!!pending.shot.slice,planner:this.returnPlanners[seat],flight:s.rally,airRequested:pending.airRequested}))return false;
     this.rescueAttempt[seat]=s.rally;
     if(this.random()>=rescueChance(p.totalStamina??1))return false;
     p.rescue={startedAt:s.time,fromX:p.x,fromZ:p.z,toX:target.x,toZ:target.z,contact:target.contact,
@@ -162,7 +164,8 @@ export class Match {
     const slowdown=(volley?1+.32*volleyDifficulty(b,p):1)*(slice?1.15:1)*(rescue?RESCUE.slowdown:1);
     const flightAt=(x:number)=>flightTime(start,{x,y:.12,z:targetZ},power,strokeSpeed,gravity,{smash,critical,lob:shot.lob})*slowdown;
     if(shot.swipeAim?.elevation){
-      targetX=bodyAimTarget(shot.swipeAim,p,targetZ,sign);
+      targetX=outgoingAimTarget(shot.swipeAim,start,targetZ,gravity,flightAt,
+        bodyAimTarget(shot.swipeAim,p,targetZ,sign),sign);
     }
     targetX+=scatterX;
     const flight=flightAt(targetX);

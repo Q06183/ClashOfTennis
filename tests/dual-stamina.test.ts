@@ -33,11 +33,11 @@ test('end-of-point recovery is character dependent, capped at 90% of actual matc
  near(pointRecoveryRate('lin'),.6);near(pointRecoveryRate('mei'),.792);near(pointRecoveryRate('wuming'),.9);
  assert.ok(pointRecoveryRate('leo')<pointRecoveryRate('lin'));
 });
-test('new points reset only the point bar; no-spend points and empty match bars cannot manufacture refunds',()=>{
+test('new points inherit the total bar; no-spend points and empty match bars cannot manufacture refunds',()=>{
  const p=player();beginPointStamina(p);spendStamina(p,1);settlePointStamina(p);near(p.totalStamina!,.92);
- beginPointStamina(p);near(p.stamina,1);near(p.totalStamina!,.92);settlePointStamina(p);near(p.totalStamina!,.92);
- p.totalStamina=.01;beginPointStamina(p);spendStamina(p,1);near(p.pointStaminaCost!,.01);
- settlePointStamina(p);near(p.totalStamina!,.006);
+ beginPointStamina(p);near(p.stamina,.92);near(p.totalStamina!,.92);settlePointStamina(p);near(p.totalStamina!,.92);
+ p.totalStamina=.01;beginPointStamina(p);spendStamina(p,1);near(p.pointStaminaCost!,.002);
+ settlePointStamina(p);near(p.totalStamina!,.0092);
  p.totalStamina=0;beginPointStamina(p);spendStamina(p,1);settlePointStamina(p);near(p.totalStamina!,0);
 });
 test('both bars contribute to effective stamina; legacy states default only the missing match bar',()=>{
@@ -68,7 +68,7 @@ test('first fault is not a new point; second fault settles once and next point r
   assert.deepEqual(s.score,[0,1]);assert.equal(p.pointStaminaSettled,true);
   const total=p.totalStamina!;assert.ok(total<1);
   while(isPoint())m.step(1/60);
-  near(p.stamina,1);near(p.totalStamina!,total);near(p.pointStaminaSpent!,0);
+  near(p.stamina,total);near(p.totalStamina!,total);near(p.pointStaminaSpent!,0);
  }finally{m.dispose();}
 });
 test('match fatigue still slows movement and shots when the fresh point bar is full',()=>{

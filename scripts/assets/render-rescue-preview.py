@@ -17,6 +17,17 @@ binary = raw[28+length:]
 image = doc["images"][0]
 v = doc["bufferViews"][image["bufferView"]]
 texture = np.asarray(Image.open(io.BytesIO(binary[v["byteOffset"]:v["byteOffset"]+v["byteLength"]])).convert("RGB")) / 255
+textures = {"lin": texture}
+for character in {row["stroke"].split("-")[0] for row in rows} - {"lin"}:
+    asset = ROOT / f"public/models/characters/{character}.glb"
+    if not asset.exists():
+        continue
+    raw = asset.read_bytes()
+    length = struct.unpack_from("<I", raw, 12)[0]
+    doc = json.loads(raw[20:20+length])
+    binary = raw[28+length:]
+    v = doc["bufferViews"][doc["images"][0]["bufferView"]]
+    textures[character] = np.asarray(Image.open(io.BytesIO(binary[v["byteOffset"]:v["byteOffset"]+v["byteLength"]])).convert("RGB")) / 255
 
 W, H = 260, 300
 eye = np.array([5., 3., 8.])
@@ -32,6 +43,7 @@ sheet = Image.new("RGB", (W*max(len(row["frames"]) for row in rows), (H+28)*len(
 draw = ImageDraw.Draw(sheet)
 
 for row, data in enumerate(rows):
+    texture = textures.get(data["stroke"].split("-")[0], textures["lin"])
     for col, frame in enumerate(data["frames"]):
         pixels = np.zeros((H, W, 3), dtype=float) + [.90, .92, .87]
         depth = np.full((H, W), np.inf)

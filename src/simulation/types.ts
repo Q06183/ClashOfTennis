@@ -10,6 +10,7 @@ export type PlayerState = {
   x: number; z: number; tx: number; tz: number; stamina: number;
   /** stamina is the per-point bar; optional fields support older snapshots. */
   totalStamina?: number;
+  pointStaminaStart?: number;
   pointStaminaSpent?: number;
   pointStaminaCost?: number;
   pointStaminaSettled?: boolean;

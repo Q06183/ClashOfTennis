@@ -4,7 +4,6 @@ import {movePlayer} from './movement.js';
 import {spendStamina,recoverPointStamina,STAMINA} from './stamina.js';
 import {canReturnNormally,returnHeightLegal} from './skills.js';
 import {flightGravity} from './flight.js';
-import {contactCrouch} from './athlete.js';
 import {clamp,side,type BallState,type PlayerState,type Seat,type RescueStroke} from './types.js';
 export const RESCUE={minChance:.10,maxChance:.90,lowStamina:1/3,travel:.20,landAt:.48,riseAt:.68,duration:1.18,reach:2.5,slowdown:1.7};
 /** Total-match stamina drives the smooth 10%–90% rescue lottery. */
@@ -32,7 +31,9 @@ export function rescueTarget(b:BallState,p:PlayerState,seat:Seat){
   // Leave a little arm margin on the backhand side. A fully stretched target
   // may be reachable only between ticks, then missed at both adjacent ticks.
   const lateral=stroke==='smash'?.25:backhand?-.35:.6;
-  const x=contact.x-sign*handedness(p.characterId)*lateral,z=contact.z+sign*(stroke==='smash'?.15:.4),distance=Math.hypot(x-p.x,z-p.z);
+  const x=contact.x-sign*handedness(p.characterId)*lateral,z=p.z,distance=Math.abs(x-p.x);
+  // Only lateral dives. Forward/backward gaps remain a footwork responsibility.
+  if(Math.abs(contact.x-p.x)<.9||Math.abs(contact.z-p.z)>.75)continue;
   if(distance<.55||distance>Math.min(RESCUE.reach,13*travel)||Math.abs(x)>6.4||z*sign>16.5)continue;
   const candidate={...p,x,z,rescue:{startedAt:0,fromX:p.x,fromZ:p.z,toX:x,toZ:z,contact,hit:false,stroke,backhand,travel}};
   if(!canReachRescue({...b,...contact},candidate,seat,travel))continue;
@@ -69,13 +70,20 @@ export function hasNormalReturnWindow(b:BallState,p:PlayerState,seat:Seat,option
  return false;
 }
 export function rescuePose(p:PlayerState,time:number){
- const r=p.rescue;if(!r)return {lift:0,lean:0,air:0,crouch:0,landing:0,recovery:1};
+ const r=p.rescue;if(!r)return {lift:0,lean:0,air:0,crouch:0,landing:0,recovery:1,pitch:0,roll:0,hipHeight:.85};
  const smooth=(a:number,b:number,x:number)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
  const age=Math.max(0,time-r.startedAt),air=age>=RESCUE.landAt?0:Math.sin(Math.PI*clamp(age/RESCUE.landAt,0,1));
  const recovery=smooth(RESCUE.riseAt,RESCUE.duration,age);
  const landing=smooth(.38,.58,age)*(1-recovery);
+ const prone=smooth(.28,.52,age)*(1-recovery);
+ const pitch=Math.PI/2*prone;
+ // Canonical racket space: seat 0 looks toward -z. Left-hand mirroring is
+ // applied to the complete finished rig by the renderer, not to limb lengths.
+ const lateral=-(r.toX-r.fromX)*(p.z>=0?1:-1);
+ const bank=r.stroke==='smash'?.42:.90; // Keep the shoulder high enough for overhead contact.
+ const roll=-Math.sign(lateral)*bank*Math.sin(Math.PI*clamp(age/.48,0,1))*(1-prone);
  return {lift:rescueHeight(r.stroke)*air,lean:.28*Math.sin(Math.PI*clamp(age/RESCUE.duration,0,1)),air,
-  crouch:.30*landing,landing,recovery};
+  crouch:.30*landing,landing,recovery,pitch,roll,hipHeight:.85+rescueHeight(r.stroke)*air-.60*prone};
 }
 export function moveRescue(p:PlayerState,time:number,dt:number){
  const r=p.rescue;if(!r)return false;
@@ -90,7 +98,16 @@ export function moveRescue(p:PlayerState,time:number,dt:number){
 export function canReachRescue(b:BallState,p:PlayerState,seat:Seat,time:number){
  // Allow the leap to become visible before contact; don't hit at take-off.
  if(p.rescue&&(time-p.rescue.startedAt<.10||time-p.rescue.startedAt>=RESCUE.landAt))return false;
- const sign=side(seat),x=-(b.x-p.x)*sign*handedness(p.characterId),z=-(b.z-p.z)*sign,y=b.y-rescuePose(p,time).lift;
+ const sign=side(seat),hand=handedness(p.characterId);
+ // The renderer solves in canonical right-hand space, rotates the complete
+ // body about the hips, then mirrors it. Apply the same inverse here.
+ const canonical=hand===1?p:{...p,x:-p.x,rescue:p.rescue?{...p.rescue,fromX:-p.rescue.fromX,toX:-p.rescue.toX}:undefined};
+ const pose=rescuePose(canonical,time);
+ const dx=-(b.x-p.x)*sign*hand,dy=b.y-pose.hipHeight,dz=-(b.z-p.z)*sign;
+ const cy=dy*Math.cos(pose.pitch)+dz*Math.sin(pose.pitch);
+ const z=-dy*Math.sin(pose.pitch)+dz*Math.cos(pose.pitch);
+ const x=dx*Math.cos(pose.roll)+cy*Math.sin(pose.roll);
+ const y=-dx*Math.sin(pose.roll)+cy*Math.cos(pose.roll)+.85;
  const backhand=p.rescue?.backhand??false,turn=backhand?.38:-.10;
- return Math.hypot(x+.31*Math.cos(turn),y-(1.385-contactCrouch(y)),z-.05-.31*Math.sin(turn))<1.02;
+ return Math.hypot(x+.31*Math.cos(turn),y-1.39,z-.31*Math.sin(turn))<1.00;
 }

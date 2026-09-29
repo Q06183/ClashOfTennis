@@ -96,17 +96,17 @@ test('scattered rescue may land out and next point clears its ball and player fl
  assert.equal(m.state.ball.rescue,false);assert.equal(m.state.players[0].rescue,undefined);m.dispose();
 });
 
-test('a future normal window no longer suppresses a currently feasible jump',()=>{
+test('a future normal window suppresses a currently feasible jump without drawing RNG',()=>{
  for(const seat of [0,1] as Seat[])for(const sample of [{x:.9,y:1,vy:0,vz:10},{x:1.2,y:1.5,vy:0,vz:5}]){
   const sign=side(seat);let draws=0;const m=incoming(()=>{draws++;return 0;},seat);
   m.physics.place({x:sample.x*sign,y:sample.y,z:8*sign},{x:0,y:sample.vy,z:sample.vz*sign});Object.assign(m.state.ball,m.physics.read());
   m.input(seat,shot);let jumped=false;
   for(let i=0;i<60&&m.state.phase==='rally'&&m.state.ball.hitter!==seat;i++){m.step(1/60);jumped||=!!m.state.players[seat].rescue;}
-  assert.equal(m.state.ball.hitter,seat,'return succeeds');assert.equal(jumped,true,'future normal window must not veto a current jump');assert.equal(draws,3);assert.equal(m.state.ball.rescue,true);m.dispose();
+  assert.equal(m.state.ball.hitter,seat,'return succeeds');assert.equal(jumped,false,'normal return takes priority');assert.equal(draws,0);assert.equal(m.state.ball.rescue,false);m.dispose();
  }
 });
 
-test('upcoming running and volley windows may use the rescue lottery on both sides',()=>{
+test('upcoming running and volley windows avoid the rescue lottery on both sides',()=>{
  for(const seat of [0,1] as Seat[])for(const kind of ['running','volley']){
   const sign=side(seat),z=(kind==='volley'?3:10)*sign;let draws=0;
   const m=incoming(()=>{draws++;return 0;},seat),p=m.state.players[seat];Object.assign(p,{x:0,z,tx:0,tz:z});
@@ -114,7 +114,7 @@ test('upcoming running and volley windows may use the rescue lottery on both sid
   m.physics.place({x:(kind==='running'?1.8:.9)*sign,y:kind==='running'?1.5:1,z:z-2*sign},{x:0,y:0,z:(kind==='running'?5:10)*sign});
   Object.assign(m.state.ball,m.physics.read(),{bounces:kind==='volley'?0:1});m.input(seat,shot);
   for(let i=0;i<90&&m.state.phase==='rally'&&m.state.ball.hitter!==seat;i++)m.step(1/60);
-  assert.equal(m.state.ball.hitter,seat,kind);assert.equal(m.state.ball.rescue,true,kind);assert.equal(draws,3,kind);m.dispose();
+  assert.equal(m.state.ball.hitter,seat,kind);assert.equal(m.state.ball.rescue,false,kind);assert.equal(draws,0,kind);m.dispose();
  }
 });
 
@@ -125,6 +125,6 @@ test('automatic positioning forecasts the new ball position before moving, just 
   m.physics.place({x:1.0594274453*sign,y:2.0692738906,z:1.0028849477*sign},{x:-.7330817170*sign,y:2.0434809271,z:8.2048775163*sign});
   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});m.input(seat,shot);
   for(let i=0;i<70&&m.state.phase==='rally'&&m.state.ball.hitter!==seat;i++)m.step(1/60);
-  assert.equal(m.state.ball.hitter,seat);assert.equal(m.state.ball.rescue,true);assert.equal(draws,3);m.dispose();
+  assert.equal(m.state.ball.hitter,seat);assert.equal(m.state.ball.rescue,false);assert.equal(draws,0);m.dispose();
  }
 });

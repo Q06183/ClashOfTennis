@@ -44,11 +44,11 @@ test('actual hips sink on landing and rise gradually, even if the point finishes
   internal.award(1,'出界');
   assert.ok(p.rescue,'point end must not erase an airborne pose');
   m.step(.32);a.update(p,m.state.time,1/60);
-  const low=a.root.getObjectByName('athlete-torso')!.position.y;
-  assert.ok(low<-.2,'visible landing crouch');
+  const low=a.root.localToWorld(new Vector3(0,.85,0)).y;
+  assert.ok(low<.35,'prone hips settle near the ground');
   m.step(.3);a.update(p,m.state.time,1/60);
-  const high=a.root.getObjectByName('athlete-torso')!.position.y;
-  assert.ok(high>low&&high<0,'visible get-up');
+  const high=a.root.localToWorld(new Vector3(0,.85,0)).y;
+  assert.ok(high>low&&high<.85,'visible get-up');
   m.step(.35);a.update(p,m.state.time,1/60);
   assert.equal(p.rescue,undefined);
   assert.ok(a.root.getObjectByName('foot-0')!.getWorldPosition(new Vector3()).y<.3);

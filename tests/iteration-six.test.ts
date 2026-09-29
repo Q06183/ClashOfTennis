@@ -9,6 +9,7 @@ import {CourtView} from '../src/render/view.js';
 import {AimCameraLock} from '../src/render/aim-camera.js';
 import {side,type Seat} from '../src/simulation/types.js';
 import {shotDepth} from '../src/simulation/shot-profile.js';
+import {projectedOutgoingAngle} from './helpers/projected-shot.js';
 
 before(initPhysics);
 test('eligible rescue starts in input immediately and uses total stamina, not depleted point stamina',()=>{
@@ -50,7 +51,7 @@ test('near and far are uniform zooms of the same perspective rather than differe
   samples[0].forEach((v,i)=>assert.ok(Math.abs(v-samples[1][i])<1e-10));
  }
 });
-test('straight swipes at both corners target body forward, independent of actual racket contact',()=>{
+test('straight swipes at both corners launch vertically on screen from actual racket contact',()=>{
  for(const seat of [0,1] as Seat[])for(const distance of ['near','far'] as const)for(const x of [-4,4])for(const serve of [false,true]){
   const m=new Match(),sign=side(seat),p=m.state.players[seat],camera=new PerspectiveCamera();
   try{
@@ -62,7 +63,7 @@ test('straight swipes at both corners target body forward, independent of actual
    frameMatch(camera,390,844,seat,p.x,12.4,undefined,distance);
    const aimed=CourtView.prototype.aimShot.call({camera,seat,size:{w:390,h:844},aimCamera:new AimCameraLock()} as any,{type:'shot',aim:0,depth:.5,power:.4,lob:false},m.state,0,-150);
    m.input(seat,aimed);if(serve)for(let i=0;i<120&&m.state.rally===0;i++)m.step(1/60);
-   assert.ok(Math.abs(m.state.ball.targetX-p.x)<1e-6,`${seat}/${distance}/${x}/${serve}: targetX=${m.state.ball.targetX}`);
+   assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844))<.001,`${seat}/${distance}/${x}/${serve}`);
   }finally{m.dispose();}
  }
 });
@@ -121,7 +122,7 @@ test('later rescue opportunities use the most recent stored swipe quality and di
   }finally{m.dispose();}
  }
 });
-test('body-origin targets are the same for either wing, high contacts, both views and every side',()=>{
+test('actual outgoing angles match either wing, high contacts, both views and every side',()=>{
  for(const seat of [0,1] as Seat[])for(const px of [-4,0,4])for(const ratio of [-.2,0,.2]){
   const targets:number[]=[];
   for(const distance of ['near','far'] as const)for(const offset of [-.4,.4])for(const height of [1.1,2.4]){
@@ -135,12 +136,13 @@ test('body-origin targets are the same for either wing, high contacts, both view
     // Controlled contact isolates aiming from which high ball is naturally reachable.
     (m as unknown as {hit:(s:Seat,shot:object)=>void}).hit(seat,aimed);
     targets.push(m.state.ball.targetX);
+    assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844)-Math.atan(ratio))<.001);
     assert.ok(Math.abs(p.contact!.y-height)<1e-6);
     assert.equal(p.contact!.x,m.state.ball.x);assert.equal(p.contact!.z,m.state.ball.z);
    }finally{m.dispose();}
   }
-  // Smash has a different depth profile; compare forehand vs backhand / near vs far at each height.
-  assert.ok(Math.abs(targets[0]-targets[2])<1e-8&&Math.abs(targets[0]-targets[4])<1e-8);
-  if(ratio===0)assert.ok(targets.every(x=>Math.abs(x-px*side(seat))<1e-8));
+  // Uniform near/far zoom preserves each physical target, but different
+  // contact locations need different targets for the same visible angle.
+  for(let i=0;i<4;i++)assert.ok(Math.abs(targets[i]-targets[i+4])<1e-8);
  }
 });

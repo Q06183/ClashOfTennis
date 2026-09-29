@@ -38,7 +38,7 @@ export class SnapshotPlayback {
   for(const key of ['tier','skill','topspin','slice','aimOrigin'] as const)if(!(key in state.ball))delete ball[key];
   for(let i=0;i<2;i++)Object.assign(players[i],state.players[i],{
    serveCourt:state.players[i].serveCourt,strokeSpin:state.players[i].strokeSpin,preparation:state.players[i].preparation,contact:state.players[i].contact,rescue:state.players[i].rescue,
-   totalStamina:state.players[i].totalStamina,pointStaminaSpent:state.players[i].pointStaminaSpent,
+   totalStamina:state.players[i].totalStamina,pointStaminaStart:state.players[i].pointStaminaStart,pointStaminaSpent:state.players[i].pointStaminaSpent,
    pointStaminaCost:state.players[i].pointStaminaCost,pointStaminaSettled:state.players[i].pointStaminaSettled,
   });
   return out;

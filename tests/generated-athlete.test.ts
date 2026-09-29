@@ -65,8 +65,8 @@ test('all generated characters stay finite and bounded through rescue leap and l
   for(let i=1;i<=Math.ceil((RESCUE.duration+.1)*60);i++){
    moveRescue(p,i/60,1/60);a.update(p,i/60,1/60);a.root.updateMatrixWorld(true);
    if(i%5)continue;
-   const box=new Box3();a.root.traverse(o=>{if(o instanceof SkinnedMesh){o.skeleton.update();o.computeBoundingBox();box.union(o.boundingBox!.clone().applyMatrix4(o.matrixWorld));}});
-   const size=box.getSize(new Vector3());assert.ok(size.toArray().every(Number.isFinite));assert.ok(size.x<3&&size.y>1&&size.y<3&&size.z<3,`${id}: ${size.toArray()}`);assert.ok(box.min.y>-.2);
+   const box=new Box3();a.root.traverse(o=>{if(o instanceof SkinnedMesh){o.skeleton.update();for(let v=0;v<o.geometry.attributes.position.count;v++)box.expandByPoint(o.localToWorld(o.getVertexPosition(v,new Vector3())));}});
+   const size=box.getSize(new Vector3());assert.ok(size.toArray().every(Number.isFinite));assert.ok(size.x<3&&size.y>.25&&size.y<3&&size.z<3,`${id}: ${size.toArray()}`);assert.ok(box.min.y>-.12,`${id} ground: ${box.min.y}`);
   }
   assert.equal(p.rescue,undefined);assert.equal(a.root.position.y,0);disposeTree(a.root);
  }

@@ -115,10 +115,12 @@ test('actual roster skins keep four jump types bounded with racket contact and c
      for(let frame=0;frame<Math.ceil((RESCUE.duration+.1)*60);frame++){
       m.step(1/60);a.update(p,m.state.time,1/60);a.root.updateMatrixWorld(true);
       if(frame%6)continue;
-      const box=new Box3();a.root.traverse(o=>{if(o instanceof SkinnedMesh){o.skeleton.update();o.computeBoundingBox();box.union(o.boundingBox!.clone().applyMatrix4(o.matrixWorld));}});
+      // A rotated local AABB contains empty corners below ground. Measure the
+      // actual deformed vertices for a horizontal/prone body instead.
+      const box=new Box3();a.root.traverse(o=>{if(o instanceof SkinnedMesh){o.skeleton.update();for(let v=0;v<o.geometry.attributes.position.count;v++)box.expandByPoint(o.localToWorld(o.getVertexPosition(v,new Vector3())));}});
       const size=box.getSize(new Vector3());
       assert.ok(size.toArray().every(Number.isFinite)&&size.x<3.5&&size.y<3.5&&size.z<3.5,`${c.id}/${kind} skin exploded`);
-      assert.ok(box.min.y>-.3,`${c.id}/${kind} below ground ${box.min.y}`);
+      assert.ok(box.min.y>-.12,`${c.id}/${kind} below ground ${box.min.y}`);
      }
      assert.equal(p.rescue,undefined);assert.equal(a.root.position.y,0);
     }finally{m.dispose();}

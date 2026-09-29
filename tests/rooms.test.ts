@@ -2,10 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { WebSocket } from 'ws';
 import { createGameServer } from '../server/app.js';
-import {projectedLandingAngle} from './helpers/projected-shot.js';
+import {projectedOutgoingAngle} from './helpers/projected-shot.js';
 import {AimCameraLock} from '../src/render/aim-camera.js';
 import {effectiveStamina,beginPointStamina,spendStamina,settlePointStamina,pointRecoveryRate} from '../src/simulation/stamina.js';
-import {bodyAimTarget} from '../src/simulation/shot-aim.js';
 
 async function client(url:string) {
   const ws=new WebSocket(url);const messages:any[]=[];
@@ -189,7 +188,7 @@ test('stamina-driven four-style jumps are chosen by the server and shared with b
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
 
-test('real crosscourt flight reaches an adaptive rescue and carries total stamina but resets point bars',async t=>{
+test('real crosscourt flight reaches a lateral rescue and starts point bars at the carried total stamina',async t=>{
  const {Match}=await import('../src/simulation/match.js');
  const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
  try{
@@ -221,7 +220,7 @@ test('real crosscourt flight reaches an adaptive rescue and carries total stamin
   assert.deepEqual((await b.wait('state',v=>v.seq===ready.seq)).state,ready.state);
   for(const [seat,used] of [[0,.48],[1,.28]] as const){
    const expected=1-used*.2*(1-pointRecoveryRate(m.state.players[seat].characterId));
-   assert.equal(ready.state.players[seat].stamina,1);
+   assert.equal(ready.state.players[seat].stamina,ready.state.players[seat].totalStamina);
    assert.ok(Math.abs(ready.state.players[seat].totalStamina-expected)<1e-9,'same two-level stamina accounting on both seats');
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
@@ -301,12 +300,12 @@ test('a running receiver queues screen aim over sockets and uses actual contact 
    const camera=new PerspectiveCamera();frameMatch(camera,390,844,seat,p.x,10);const shot={type:'shot' as const,aim:0,depth:.6,power:.4,lob:false},aim=captureSwipeAim(camera,shot,24,-150,390,844);a.messages.length=0;b.messages.length=0;
    (seat===0?a:b).send({type:'input',command:{...shot,swipeAim:aim}});
    const queued=await a.wait('state',v=>v.state.rally===2&&v.state.players[seat].shotQueued);assert.equal(queued.state.players[seat].moving,true);
-   const hit=await a.wait('state',v=>v.state.rally===3),peer=await b.wait('state',v=>v.seq===hit.seq);assert.deepEqual(hit.state,peer.state);const c=hit.state.players[seat].contact;assert.ok(Math.abs(projectedLandingAngle(camera,c,hit.state.ball,390,844)-Math.atan(24/150))<.01);assert.equal(hit.state.players[seat].shotQueued,false);
+   const hit=await a.wait('state',v=>v.state.rally===3),peer=await b.wait('state',v=>v.seq===hit.seq);assert.deepEqual(hit.state,peer.state);const c=hit.state.players[seat].contact;assert.ok(Math.abs(projectedOutgoingAngle(camera,c,hit.state.ball,390,844)-Math.atan(24/150))<.01);assert.equal(hit.state.players[seat].shotQueued,false);
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
 
-test('whole-court landing direction survives the real WebSocket protocol on both seats',async()=>{
+test('whole-court outgoing direction survives the real WebSocket protocol on both seats',async()=>{
  const {Match}=await import('../src/simulation/match.js');
  const {CourtView}=await import('../src/render/view.js');
  const {PerspectiveCamera}=await import('three');
@@ -332,7 +331,7 @@ test('whole-court landing direction survives the real WebSocket protocol on both
    assert.deepEqual(hit.state,peer.state);
    assert.equal(hit.state.players[seat].characterId,seat===0?'wuming':'lin');
    assert.equal(hit.state.ball.bounces,0);
-   const angle=projectedLandingAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844);
+   const angle=projectedOutgoingAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844);
    assert.ok(Math.abs(angle-Math.atan(ratio))<.015,`${seat}/${x}/${depth}: ${angle}`);
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
@@ -368,7 +367,7 @@ test('both sockets retain landing recovery and reject movement or hits until the
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
 
-test('serve positioning, body-centred straight aim and winning state agree on two real sockets',async()=>{
+test('serve positioning, screen-straight outgoing aim and winning state agree on two real sockets',async()=>{
  const {captureSwipeAim}=await import('../src/input/aim.js'),{frameMatch}=await import('../src/render/camera.js');
  const {PerspectiveCamera}=await import('three');
  const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
@@ -386,7 +385,7 @@ test('serve positioning, body-centred straight aim and winning state agree on tw
   const hit=await a.wait('state',v=>v.state.rally===1),same=await b.wait('state',v=>v.seq===hit.seq);
   assert.deepEqual(hit.state,same.state);
   assert.ok(hit.state.players[0].contact.z>14,'serve is launched from the adjusted station');
-  assert.ok(Math.abs(hit.state.ball.targetX-hit.state.ball.aimOrigin.x)<1e-6);
+  assert.ok(Math.abs(projectedOutgoingAngle(camera,hit.state.players[0].contact,hit.state.ball,390,844))<.001);
   const room=server.rooms.rooms.get(welcome.code)!;room.match!.finish(1,'获胜庆祝');
   const over=await a.wait('state',v=>v.state.phase==='over');
   assert.deepEqual((await b.wait('state',v=>v.seq===over.seq)).state,over.state);assert.equal(over.state.winner,1);
@@ -428,8 +427,39 @@ test('immediate rescue uses total stamina and a later swipe replaces saved quali
    const hit=await a.wait('state',v=>v.state.rally===3&&v.state.ball.rescue);
    assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
    assert.equal(hit.state.ball.topspin,.6);assert.equal(hit.state.ball.tier,'topspin');assert.equal(rolls,3);
-   const target=bodyAimTarget(aim,hit.state.ball.aimOrigin,hit.state.ball.targetZ,sign);
-   assert.ok(Math.abs(hit.state.ball.targetX-target)<1e-6,'latest body-centred direction survives the rescue');
+   assert.ok(Math.abs(projectedOutgoingAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844)-Math.atan(.3))<.001,'latest real outgoing direction survives the rescue');
+  }
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
+});
+
+test('ordinary approaching returns suppress rescue on both real sockets and inherit the next point stamina',async()=>{
+ const {Match}=await import('../src/simulation/match.js');
+ const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{
+  a.send({type:'create',name:'普通接球A'});const welcome=await a.wait('welcome');
+  b.send({type:'join',code:welcome.code,name:'普通接球B'});await b.wait('welcome');
+  a.send({type:'ready'});b.send({type:'ready'});await a.wait('state');
+  const room=server.rooms.rooms.get(welcome.code)!;
+  for(const seat of [0,1] as const){
+   room.match!.dispose();let draws=0;
+   const m=room.match=new Match(['lin','noah'],()=>{draws++;return 0;}),p=m.state.players[seat],sign=seat===0?1:-1;
+   m.state.phase='rally';m.state.rally=2;m.step(.08);
+   Object.assign(p,{x:0,z:10*sign,tx:0,tz:10*sign,vx:0,vz:0,stamina:.6,totalStamina:.6});
+   m.physics.place({x:.9,y:1,z:8*sign},{x:0,y:0,z:10*sign});
+   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});
+   a.messages.length=0;b.messages.length=0;
+   (seat===0?a:b).send({type:'input',command:{type:'shot',aim:0,depth:.5,power:.5,lob:false}});
+   const hit=await a.wait('state',v=>v.state.rally===3);
+   assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
+   assert.equal(draws,0);assert.equal(hit.state.ball.rescue,false);
+   assert.equal(hit.state.players[seat].rescue,undefined);
+   for(const c of [a,b])assert.ok(c.messages.filter(v=>v.type==='state').every(v=>!v.state.players[seat].rescue));
+   const total=p.totalStamina!;
+   m.state.phase='point';m.state.pointTimer=.01;
+   const next=await a.wait('state',v=>v.state.phase==='serve'&&v.state.rally===0);
+   assert.deepEqual((await b.wait('state',v=>v.seq===next.seq)).state,next.state);
+   assert.equal(next.state.players[seat].stamina,total);
+   assert.equal(next.state.players[seat].pointStaminaStart,total);
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });

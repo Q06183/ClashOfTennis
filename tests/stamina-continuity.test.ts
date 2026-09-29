@@ -5,14 +5,14 @@ import {initPhysics} from '../src/simulation/physics.js';
 import {spendStamina,settlePointStamina,pointRecoveryRate} from '../src/simulation/stamina.js';
 
 before(initPhysics);
-test('new points reset their own bars while carrying total stamina on either seat',()=>{
+test('new point bars inherit total stamina on either seat',()=>{
  for(const ids of [['wuming','lin'],['lin','wuming'],['lin','lin']] as const){
   const m=new Match(ids);
   try{
    m.state.players.forEach((p,i)=>{spendStamina(p,i===0?.28:.48);settlePointStamina(p);});
    m.state.phase='point';m.state.pointTimer=0;
    const before=m.state.players.map(p=>p.totalStamina);m.step(1/60);
-   for(const seat of [0,1]){assert.equal(m.state.players[seat].stamina,1);assert.equal(m.state.players[seat].totalStamina,before[seat],`${ids}/${seat} reset must not refill total stamina`);}
+   for(const seat of [0,1]){assert.equal(m.state.players[seat].stamina,before[seat]);assert.equal(m.state.players[seat].totalStamina,before[seat],`${ids}/${seat} reset must not refill total stamina`);}
   }finally{m.dispose();}
  }
 });
@@ -29,7 +29,7 @@ test('point settlement refunds only this point cost and waiting longer cannot gr
    const remaining=m.state.pointTimer;const before=m.state.players.map(p=>p.totalStamina);
    m.step(remaining+.5); // Extra time beyond the break cannot create extra rest.
    assert.equal(m.state.phase,'serve');
-   m.state.players.forEach((p,i)=>{assert.equal(p.stamina,1);assert.equal(p.totalStamina,before[i]);});
+   m.state.players.forEach((p,i)=>{assert.equal(p.stamina,before[i]);assert.equal(p.totalStamina,before[i]);});
   }finally{m.dispose();}
  }
 });

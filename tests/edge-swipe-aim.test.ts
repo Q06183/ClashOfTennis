@@ -10,7 +10,7 @@ import {predictFlight} from '../src/simulation/trajectory.js';
 import {side,type Seat} from '../src/simulation/types.js';
 import {validateSwipeAim,directionAtContact,directionToLanding} from '../src/simulation/shot-aim.js';
 import {captureSwipeAim} from '../src/input/aim.js';
-import {projectedLandingAngle} from './helpers/projected-shot.js';
+import {projectedOutgoingAngle} from './helpers/projected-shot.js';
 
 before(initPhysics);
 test('real edge returns follow the swipe in screen space at actual height, speed and camera perspective',()=>{
@@ -35,7 +35,7 @@ test('real edge returns follow the swipe in screen space at actual height, speed
    m.input(seat,aimed);
    assert.equal(m.state.rally,3,`${id}/${seat}/${x}/${depth}/${height} legal contact`);
    const b=m.state.ball,c=p.contact!;
-   const angle=projectedLandingAngle(camera,c,b,w,h),wanted=Math.atan(ratio);
+   const angle=projectedOutgoingAngle(camera,c,b,w,h),wanted=Math.atan(ratio);
    assert.ok(Math.abs(angle-wanted)<.01,`${id}/${seat}/${w}x${h}/${x}/${depth}/${height}/${ratio}: angle error ${(angle-wanted)*180/Math.PI} degrees`);
    const flight=predictFlight(b);assert.equal(flight.hitNet,false);
    assert.ok(Math.abs(flight.landing.x-b.targetX)<.02&&Math.abs(flight.landing.z-b.targetZ)<.02);
@@ -59,7 +59,7 @@ test('edge aim includes high-contact smashes, slice slowdown, topspin, lobs and 
    const reverse=shot.slice?-1:1;
    const aimed=CourtView.prototype.aimShot.call({camera,seat,size:{w,h},aimCamera:new AimCameraLock()} as any,shot,m.state,ratio*150*reverse,-150*reverse);
    m.input(seat,aimed);assert.equal(m.state.rally,3,skill);
-   assert.ok(Math.abs(projectedLandingAngle(camera,p.contact!,m.state.ball,w,h)-Math.atan(ratio))<.01,`${id}/${seat}/${skill}/${ratio}`);
+   assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,w,h)-Math.atan(ratio))<.01,`${id}/${seat}/${skill}/${ratio}`);
    assert.equal(predictFlight(m.state.ball).hitNet,false);
   }finally{m.dispose();}
  }
@@ -95,7 +95,7 @@ test('the reported wide baseline high contact no longer magnifies the angle into
     if(legacy)delete aimed.swipeAim!.elevation;
     m.input(seat,aimed);assert.equal(m.state.rally,3);
     targets.push(Math.abs(m.state.ball.targetX));
-    if(!legacy)assert.ok(Math.abs(projectedLandingAngle(camera,p.contact!,m.state.ball,390,844)-Math.atan(.6))<.01);
+    if(!legacy)assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844)-Math.atan(.6))<.01);
    }finally{m.dispose();}
   }
   assert.ok(targets.every(Number.isFinite),JSON.stringify(targets));

@@ -7,7 +7,7 @@ export const effectiveStamina=(p:Pick<PlayerState,'stamina'|'totalStamina'>)=>un
 export const pointRecoveryRate=(id?:string)=>clamp(STAMINA.baseRefund*characterEffects(id).recovery,0,STAMINA.maxRefund);
 
 export function beginPointStamina(p:PlayerState){
- p.stamina=1;p.totalStamina=unit(p.totalStamina??1);
+ p.totalStamina=unit(p.totalStamina??1);p.stamina=p.totalStamina;p.pointStaminaStart=p.totalStamina;
  p.pointStaminaSpent=0;p.pointStaminaCost=0;p.pointStaminaSettled=false;
 }
 /** Charge only actual point-bar usage, and never more than one full bar/point.
@@ -23,7 +23,7 @@ export function spendStamina(p:PlayerState,amount:number){
 }
 export function recoverPointStamina(p:PlayerState,amount:number){
  if(!Number.isFinite(amount)||amount<=0||p.pointStaminaSettled)return;
- p.stamina=unit(p.stamina+amount);
+ p.stamina=Math.min(unit(p.pointStaminaStart??1),unit(p.stamina+amount));
 }
 export function settlePointStamina(p:PlayerState){
  if(p.pointStaminaSettled)return;

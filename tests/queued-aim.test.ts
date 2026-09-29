@@ -1,6 +1,6 @@
 import {before,test} from 'node:test';import assert from 'node:assert/strict';import {PerspectiveCamera} from 'three';
 import {captureSwipeAim,shotDirection} from '../src/input/aim.js';import {directionAtContact} from '../src/simulation/shot-aim.js';import {frameMatch} from '../src/render/camera.js';import {Match} from '../src/simulation/match.js';import {initPhysics} from '../src/simulation/physics.js';import {side,type Seat} from '../src/simulation/types.js';
-import {projectedLandingAngle} from './helpers/projected-shot.js';
+import {projectedOutgoingAngle} from './helpers/projected-shot.js';
 before(initPhysics);const shot={type:'shot' as const,aim:0,depth:.6,power:.4,lob:false};
 test('stored screen aim resolves at the future contact point for both seats and slices',()=>{
  for(const seat of [0,1] as Seat[])for(const slice of [false,true])for(const ratio of [-.25,0,.25]){
@@ -16,7 +16,7 @@ test('running receiver saves the swipe, arrives legally and launches from actual
   m.input(seat,{...shot,directionX:shotDirection(camera,m.state.ball,shot,24,-150,390,844,sign),swipeAim:aim});assert.equal(m.state.rally,2);assert.equal(p.shotQueued,true);let frames=0;
   for(;frames<240&&m.state.rally===2&&m.state.phase==='rally';frames++)m.step(1/60);
   assert.equal(m.state.rally,3);assert.ok(frames>20);assert.ok(Math.abs(p.x-startX)>1);assert.equal(p.shotQueued,false);assert.equal(m.state.ball.rescue,false);
-  assert.ok(Math.abs(projectedLandingAngle(camera,p.contact!,m.state.ball,390,844)-Math.atan(24/150))<.01);m.dispose();
+  assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844)-Math.atan(24/150))<.01);m.dispose();
  }
 });
 test('malformed saved aim is rejected without queuing a shot',()=>{

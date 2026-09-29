@@ -55,9 +55,9 @@ test('dual stamina survives snapshots, interpolates within a point and resets wi
  const mid=playback.sample(1125)!.players[0];
  assert.ok(Math.abs(mid.stamina-.7)<1e-10);assert.ok(Math.abs(mid.totalStamina!-.88)<1e-10);
  const next=state(1.3);next.phase='serve';next.score=[1,0];
- Object.assign(next.players[0],{stamina:1,totalStamina:.908,pointStaminaSpent:0,pointStaminaCost:0,pointStaminaSettled:false});
+ Object.assign(next.players[0],{stamina:.908,totalStamina:.908,pointStaminaStart:.908,pointStaminaSpent:0,pointStaminaCost:0,pointStaminaSettled:false});
  playback.push(JSON.parse(JSON.stringify(next)),1300);
- const ready=playback.sample(1400)!.players[0];assert.equal(ready.stamina,1);assert.equal(ready.totalStamina,.908);
+ const ready=playback.sample(1400)!.players[0];assert.equal(ready.stamina,.908);assert.equal(ready.totalStamina,.908);assert.equal(ready.pointStaminaStart,.908);
  const legacy=state(1.5);playback.push(legacy,1500);
- const old=playback.sample(1600)!.players[0];assert.equal(old.totalStamina,undefined);assert.equal(old.pointStaminaCost,undefined);
+ const old=playback.sample(1600)!.players[0];assert.equal(old.totalStamina,undefined);assert.equal(old.pointStaminaCost,undefined);assert.equal(old.pointStaminaStart,undefined);
 });

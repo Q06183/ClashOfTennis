@@ -11,10 +11,10 @@ import {Match} from '../src/simulation/match.js';
 import {initPhysics} from '../src/simulation/physics.js';
 import {predictFlight} from '../src/simulation/trajectory.js';
 import {side,type Seat} from '../src/simulation/types.js';
-import {projectedLandingAngle} from './helpers/projected-shot.js';
+import {projectedOutgoingAngle} from './helpers/projected-shot.js';
 
 before(initPhysics);
-test('the whole flight destination follows real gesture intent everywhere, not only its first 100 ms',()=>{
+test('real outgoing motion follows gesture intent across the whole court and lands at its physical target',()=>{
  for(const distance of ['near','far'] as const)for(const c of CHARACTERS)for(const seat of [0,1] as Seat[])
  for(const [w,h] of [[390,844],[320,568],[844,390]])
  for(const depth of [2,6,10,12.4,16])for(const x of [-5,0,5])
@@ -32,7 +32,7 @@ test('the whole flight destination follows real gesture intent everywhere, not o
    m.input(seat,aimed);assert.equal(m.state.rally,3);
    const b=m.state.ball,contact=p.contact!,flight=predictFlight(b);
    assert.ok(Math.abs(flight.landing.x-b.targetX)<.02);
-   const angle=projectedLandingAngle(camera,contact,b,w,h),error=angle-Math.atan(ratio);
+   const angle=projectedOutgoingAngle(camera,contact,b,w,h),error=angle-Math.atan(ratio);
    assert.ok(Math.abs(error)<.001,`${c.id}/${seat}/${w}x${h}/${x}/${depth}: ${error*180/Math.PI} degrees`);
    assert.equal(flight.hitNet,false);
   }finally{m.dispose();}
@@ -68,7 +68,7 @@ test('pointer direction and aim lifecycle reach the view without viewport or DPR
  }finally{controls.dispose();}
 });
 
-test('pointer-to-match pipeline preserves the input camera and landing direction during a moving return',t=>{
+test('pointer-to-match pipeline preserves the input camera and outgoing direction during a moving return',t=>{
  let now=1;const descriptors=new Map<string,PropertyDescriptor|undefined>();
  class Element extends EventTarget {
   classList={add(){}};style={};clientWidth=390;clientHeight=844;
@@ -105,7 +105,7 @@ test('pointer-to-match pipeline preserves the input camera and landing direction
    assert.deepEqual(camera.matrixWorld.elements,inputMatrix);
    const landing=predictFlight(m.state.ball).landing,c=p.contact!;
    assert.ok(Math.abs(landing.x-m.state.ball.targetX)<.02);
-   assert.ok(Math.abs(projectedLandingAngle(camera,c,m.state.ball,390,844)-Math.atan(1/3))<.001);
+  assert.ok(Math.abs(projectedOutgoingAngle(camera,c,m.state.ball,390,844)-Math.atan(1/3))<.001);
   }finally{controls.dispose();m.dispose();}
  }
 });
