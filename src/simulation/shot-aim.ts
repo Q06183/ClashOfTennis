@@ -45,36 +45,28 @@ export function bodyAimTarget(aim:SwipeAim,body:{x:number;z:number},targetZ:numb
  const forward=directionToLanding({...aim,dx:0,dy:Math.abs(aim.dy)||1},bodyPoint,targetZ,0,sign);
  return body.x+(aimed-forward)*Math.abs(targetZ-body.z)*sign;
 }
-/** Match the actual outgoing arc at a short visible interval, without adding
- * body/forward compensation afterward. The last version's correction changed
- * the real angle even though its inverse-corrected tests appeared to pass. */
-export function outgoingAimTarget(aim:SwipeAim,start:Vec,targetZ:number,gravity:number,flightAt:(x:number)=>number,fallback:number,sign:number){
+/** Solve the screen ray analytically at the actual arc's first visible sample.
+ * Flight duration is fixed before lateral aiming: feeding the new x back into
+ * flightTime made the angle non-monotonic, with missing or multiple roots.
+ * In particular, a slow rescue could suddenly revert to the legacy heading. */
+export function outgoingAimTarget(aim:SwipeAim,start:Vec,targetZ:number,gravity:number,flight:number,fallback:number){
  if(!aim.elevation)return fallback;
  const [xx,xz,xc,yx,yz,yc,wx,wz,wc]=aim.projection,[xy,yy,wy]=aim.elevation;
  const project=(p:Vec)=>{
   const w=wx*p.x+wy*p.y+wz*p.z+wc;
   return w>1e-8?{x:(xx*p.x+xy*p.y+xz*p.z+xc)/w,y:(yx*p.x+yy*p.y+yz*p.z+yc)/w}:null;
  };
- const from=project(start),distance=Math.abs(targetZ-start.z);if(!from||distance<1e-6)return fallback;
- const sample=(d:number)=>{
-  const x=start.x+d*distance*sign,t=flightAt(x);if(!Number.isFinite(t)||t<=0)return null;
-  const dt=Math.min(.1,t*.5),vy=(.12-start.y+gravity*t*t/2)/t;
-  const to=project({x:start.x+(x-start.x)*dt/t,y:start.y+vy*dt-gravity*dt*dt/2,z:start.z+(targetZ-start.z)*dt/t});
-  if(!to)return null;
-  const dx=to.x-from.x,dy=to.y-from.y;
-  return {error:dx*aim.dy-dy*aim.dx,aligned:dx*aim.dx+dy*aim.dy>0};
- };
- const roots:number[]=[];let lo=-4,left=sample(lo);
- for(let i=1;i<=64;i++){
-  const hi=-4+i/8,right=sample(hi);
-  if(left&&right&&left.error*right.error<=0){
-   let a=lo,b=hi,e=left.error;
-   for(let j=0;j<36;j++){const mid=(a+b)/2,s=sample(mid);if(!s)break;if(e*s.error>0){a=mid;e=s.error;}else b=mid;}
-   const d=(a+b)/2;if(sample(d)?.aligned)roots.push(start.x+d*distance*sign);
-  }
-  lo=hi;left=right;
- }
- return roots.sort((a,b)=>Math.abs(a-fallback)-Math.abs(b-fallback))[0]??fallback;
+ const from=project(start);if(!from||!Number.isFinite(flight)||flight<=0)return fallback;
+ const dt=Math.min(.1,flight*.5),fraction=dt/flight;
+ const dy=((.12-start.y+gravity*flight*flight/2)/flight)*dt-gravity*dt*dt/2;
+ const dz=(targetZ-start.z)*fraction;
+ const nx=aim.dy*(xx-from.x*wx)-aim.dx*(yx-from.y*wx);
+ const ny=aim.dy*(xy-from.x*wy)-aim.dx*(yy-from.y*wy);
+ const nz=aim.dy*(xz-from.x*wz)-aim.dx*(yz-from.y*wz);
+ if(Math.abs(nx)<1e-10)return fallback;
+ const dx=-(ny*dy+nz*dz)/nx,targetX=start.x+dx/fraction;
+ const to=project({x:start.x+dx,y:start.y+dy,z:start.z+dz});
+ return Number.isFinite(targetX)&&to&&(to.x-from.x)*aim.dx+(to.y-from.y)*aim.dy>0?targetX:fallback;
 }
 /** Projective ground-plane direction at the actual contact x/z. This preserves
  * the user's screen-space aim as the receiving position changes before impact. */

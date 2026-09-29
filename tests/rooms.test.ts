@@ -463,3 +463,33 @@ test('ordinary approaching returns suppress rescue on both real sockets and inhe
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
+
+test('steep swipes and non-neutral slice/rescue randomness retain actual outgoing direction on both sockets',async()=>{
+ const {Match}=await import('../src/simulation/match.js'),{captureSwipeAim}=await import('../src/input/aim.js');
+ const {PerspectiveCamera}=await import('three'),{frameMatch}=await import('../src/render/camera.js');
+ const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{
+  a.send({type:'create',name:'偏角核验A'});const welcome=await a.wait('welcome');
+  b.send({type:'join',code:welcome.code,name:'偏角核验B'});await b.wait('welcome');
+  a.send({type:'ready'});b.send({type:'ready'});await a.wait('state');
+  const room=server.rooms.rooms.get(welcome.code)!;
+  for(const seat of [0,1] as const)for(const kind of ['slice','rescue'] as const)
+  for(const random of [0,1])for(const ratio of [-2,.6]){
+   room.match!.dispose();let draws=0;
+   const m=room.match=new Match(['lin','lin'],()=>kind==='rescue'&&draws++===0?0:random),p=m.state.players[seat],sign=seat===0?1:-1;
+   m.state.phase='rally';m.state.rally=2;m.step(.08);
+   Object.assign(p,{x:0,z:10*sign,tx:0,tz:10*sign,stamina:.08,totalStamina:.3});
+   m.physics.place({x:(kind==='rescue'?2.65:.3)*sign,y:1.2,z:(kind==='rescue'?8.2:9.75)*sign},{x:0,y:0,z:10*sign});
+   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});
+   const camera=new PerspectiveCamera();frameMatch(camera,390,844,seat,0,10,undefined,'near');
+   const shot={type:'shot' as const,aim:0,depth:.7,power:.7,lob:false,slice:kind==='slice'},reverse=shot.slice?-1:1;
+   a.messages.length=0;b.messages.length=0;
+   (seat===0?a:b).send({type:'input',command:{...shot,swipeAim:captureSwipeAim(camera,shot,ratio*150*reverse,-150*reverse,390,844)}});
+   const hit=await a.wait('state',v=>v.state.rally===3);
+   assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
+   assert.equal(!!hit.state.ball.rescue,kind==='rescue');assert.equal(!!hit.state.ball.slice,kind==='slice');
+   const angle=projectedOutgoingAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844);
+   assert.ok(Math.abs(angle-Math.atan(ratio))<.001,`${seat}/${kind}/${random}/${ratio}: ${angle}`);
+  }
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
+});

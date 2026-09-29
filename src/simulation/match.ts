@@ -163,12 +163,19 @@ export class Match {
     const effects=characterEffects(p.characterId),strokeSpeed=effects[attribute];
     const slowdown=(volley?1+.32*volleyDifficulty(b,p):1)*(slice?1.15:1)*(rescue?RESCUE.slowdown:1);
     const flightAt=(x:number)=>flightTime(start,{x,y:.12,z:targetZ},power,strokeSpeed,gravity,{smash,critical,lob:shot.lob})*slowdown;
+    let flight:number;
     if(shot.swipeAim?.elevation){
-      targetX=outgoingAimTarget(shot.swipeAim,start,targetZ,gravity,flightAt,
-        bodyAimTarget(shot.swipeAim,p,targetZ,sign),sign);
+      // Depth, pace, fatigue and net clearance determine time independently
+      // of horizontal aim. Recomputing time after solving x rotates the shot.
+      flight=flightAt(start.x);
+      targetX=outgoingAimTarget(shot.swipeAim,start,targetZ,gravity,flight,
+        bodyAimTarget(shot.swipeAim,p,targetZ,sign));
+      // Keep depth variation, rescue slowdown and slice bounce effects, but
+      // never randomly rotate a direction explicitly chosen with a swipe.
+    }else{
+      targetX+=scatterX;
+      flight=flightAt(targetX);
     }
-    targetX+=scatterX;
-    const flight=flightAt(targetX);
     const velocity={x:(targetX-start.x)/flight,y:(.12-start.y+(gravity/2)*flight*flight)/flight,z:(targetZ-start.z)/flight};
     this.physics.place(start,velocity,topspin);
     Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ,aimOrigin:{x:p.x,y:1.1,z:p.z},critical,tier,rescue,topspin,slice,skill:smash?'smash':slice?'slice':volley?'volley':undefined});

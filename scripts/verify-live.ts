@@ -11,6 +11,9 @@ import {captureSwipeAim} from '../src/input/aim.js';
 import {projectedOutgoingAngle} from '../tests/helpers/projected-shot.js';
 
 const base=process.env.GAME_URL??'http://100.81.1.29:7470';
+const output=process.env.VERIFY_DIR??'artifacts/sep29';
+const swipeRatio=Number(process.env.SWIPE_RATIO??.2);
+assert.ok(Number.isFinite(swipeRatio)&&swipeRatio>0&&swipeRatio<=5);
 const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 async function client(){
  const ws=new WebSocket(base.replace(/^http/,'ws')+'/ws'),messages:any[]=[];
@@ -31,7 +34,7 @@ try{
  a.send({type:'ready'});b.send({type:'ready'});
  let state=(await a.wait('state')).state;
  for(let n=0;n<2;n++){
-  const seat=state.server,player=state.players[seat],camera=new PerspectiveCamera(),ratio=seat===0?-.2:.2;
+  const seat=state.server,player=state.players[seat],camera=new PerspectiveCamera(),ratio=(seat===0?-1:1)*swipeRatio;
   frameMatch(camera,390,844,seat,player.x,Math.abs(player.z),state.players[1-seat],'near');
   const shot={type:'shot' as const,aim:0,depth:.5,power:.5,lob:false};
   a.messages.length=0;b.messages.length=0;
@@ -56,11 +59,11 @@ try{
   assert.ok(ready.state.players[seat].stamina<1,'new point must not refill to 100%');
   state=ready.state;
  }
- await mkdir('artifacts/sep29',{recursive:true});
+ await mkdir(output,{recursive:true});
  const report={verifiedAt:new Date().toISOString(),base,entry,sha256:createHash('sha256').update(online).digest('hex'),serves,
   pointBars:state.players.map((p:any)=>({point:p.stamina,total:p.totalStamina,opening:p.pointStaminaStart})),
   scope:'Live HTTP bundle and two WebSocket seats; not browser/GPU or phone acceptance.'};
- await writeFile('artifacts/sep29/live-verification.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
+ await writeFile(`${output}/live-verification.json`,JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
 }finally{
  a.send({type:'leave'});b.send({type:'leave'});await sleep(100);a.ws.close();b.ws.close();
 }
