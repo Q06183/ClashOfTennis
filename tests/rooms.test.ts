@@ -4,6 +4,7 @@ import { WebSocket } from 'ws';
 import { createGameServer } from '../server/app.js';
 import {projectedOutgoingAngle} from './helpers/projected-shot.js';
 import {AimCameraLock} from '../src/render/aim-camera.js';
+import {rescueIncoming} from './helpers/rescue-incoming.js';
 import {effectiveStamina,beginPointStamina,spendStamina,settlePointStamina,pointRecoveryRate} from '../src/simulation/stamina.js';
 
 async function client(url:string) {
@@ -150,7 +151,7 @@ test('authoritative rescue animation, slow ball and scatter arrive identically a
   const room=server.rooms.rooms.get(first.code)!;room.match!.dispose();room.match=new Match(['lin','lin'],()=>0);
   const m=room.match;m.state.phase='rally';m.state.rally=2;
   Object.assign(m.state.players[0],{x:0,z:10,tx:0,tz:10,vx:0,vz:0});m.input(0,{type:'move',x:0,z:10});
-  m.physics.place({x:2.1,y:1,z:7.8},{x:0,y:.5,z:10});Object.assign(m.state.ball,m.physics.read(),{hitter:1,bounces:1});
+  rescueIncoming(m,0);
   a.send({type:'input',command:{type:'shot',aim:.25,depth:.6,power:1,lob:false,critical:true,rescue:true}});
   const jump=await a.wait('state',v=>!!v.state.players[0].rescue);const jumpB=await b.wait('state',v=>v.seq===jump.seq);assert.deepEqual(jump.state,jumpB.state);
   const hit=await a.wait('state',v=>v.state.ball.rescue===true);const hitB=await b.wait('state',v=>v.seq===hit.seq);
@@ -174,8 +175,7 @@ test('stamina-driven four-style jumps are chosen by the server and shared with b
    }),sign=seat===0?1:-1,depth=kind==='volley'?4:10;
    m.state.phase='rally';m.state.rally=2;m.step(.08);
    const p=m.state.players[seat];Object.assign(p,{x:0,z:depth*sign,tx:0,tz:depth*sign,vx:0,vz:0,stamina:seat===0?1:1/3,totalStamina:seat===0?1:1/3});
-   m.physics.place({x:(kind==='backhand'?-2.65:2.65)*sign,y:kind==='smash'?2.9:kind==='volley'?1.9:1.2,z:(depth-1.8)*sign},{x:0,y:0,z:10*sign});
-   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:kind==='forehand'||kind==='backhand'?1:0});
+   rescueIncoming(m,seat,kind,3.65);
    a.messages.length=0;b.messages.length=0;
    (seat===0?a:b).send({type:'input',command:{type:'shot',aim:0,depth:.55,power:.8,lob:false,rescueChance:1,rescueStroke:'hacked'}});
    const jump=await a.wait('state',v=>v.state.players[seat].rescue?.stroke===kind);
@@ -183,7 +183,7 @@ test('stamina-driven four-style jumps are chosen by the server and shared with b
    const hit=await a.wait('state',v=>v.state.rally===3&&v.state.ball.rescue);
    assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
    assert.equal(hit.state.players[seat].stroke,kind);assert.equal(draws,3);
-   assert.ok(seat===0?chance>.89:chance===.1);
+   assert.ok(kind==='volley'||kind==='smash'?chance===.1:seat===0?chance>.89:chance===.1);
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
@@ -198,19 +198,19 @@ test('real crosscourt flight reaches a lateral rescue and starts point bars at t
   const room=server.rooms.rooms.get(welcome.code)!;
   room.match!.dispose();const m=room.match=new Match(['leo','wuming'],()=>0);
   m.state.phase='rally';m.state.rally=2;m.step(.08);
-  Object.assign(m.state.players[1],{x:-3,z:-14,tx:-3,tz:-14,vx:0,vz:0,stamina:.8});
+  Object.assign(m.state.players[1],{x:-4,z:-12,tx:-4,tz:-12,vx:0,vz:0,stamina:.08});
   Object.assign(m.state.players[0],{x:0,z:10,tx:0,tz:10,vx:0,vz:0});
   m.physics.place({x:.6,y:1.8,z:9.6});Object.assign(m.state.ball,m.physics.read(),{hitter:1,bounces:1});
   const pausedStep=t.mock.method(m,'step',()=>{});
   a.messages.length=0;b.messages.length=0;
-  a.send({type:'input',command:{type:'shot',aim:.8,depth:.7,power:.9,lob:false}});
+  a.send({type:'input',command:{type:'shot',aim:.8,depth:.5,power:.3,lob:false}});
   await a.wait('state',v=>v.state.rally===3);
   b.send({type:'input',command:{type:'shot',aim:0,depth:.5,power:.5,lob:false}});
   await a.wait('state',v=>v.state.players[1].shotQueued);
   pausedStep.mock.restore();
   const jump=await a.wait('state',v=>!!v.state.players[1].rescue);
   assert.deepEqual((await b.wait('state',v=>v.seq===jump.seq)).state,jump.state);
-  assert.ok(jump.state.players[1].rescue.travel>=.12&&jump.state.players[1].rescue.travel<=.28,'selected jump duration must survive serialization');
+  assert.ok(jump.state.players[1].rescue.travel>=.24&&jump.state.players[1].rescue.travel<=.72,'natural jump duration must survive serialization');
   const hit=await a.wait('state',v=>v.state.rally===4&&v.state.ball.rescue);
   assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
   // Exercise the real reset/broadcast path, with known stamina for both roles.
@@ -409,8 +409,7 @@ test('immediate rescue uses total stamina and a later swipe replaces saved quali
    const m=room.match=new Match(['lin','lin'],()=>++rolls===1?.8:.5),sign=seat===0?1:-1,p=m.state.players[seat];
    m.state.phase='rally';m.state.rally=2;m.step(.08);
    Object.assign(p,{x:0,z:10*sign,tx:0,tz:10*sign,vx:0,vz:0,stamina:.1,totalStamina:1});
-   m.physics.place({x:2.65*sign,y:1.2,z:8.2*sign},{x:0,y:0,z:10*sign});
-   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});
+   rescueIncoming(m,seat);
    const pause=t.mock.method(m,'step',()=>{});
    const camera=new PerspectiveCamera();frameMatch(camera,390,844,seat,0,10,undefined,'near');
    const first={type:'shot' as const,aim:-.2,depth:.4,power:.2,lob:false};
@@ -481,6 +480,7 @@ test('steep swipes and non-neutral slice/rescue randomness retain actual outgoin
    Object.assign(p,{x:0,z:10*sign,tx:0,tz:10*sign,stamina:.08,totalStamina:.3});
    m.physics.place({x:(kind==='rescue'?2.65:.3)*sign,y:1.2,z:(kind==='rescue'?8.2:9.75)*sign},{x:0,y:0,z:10*sign});
    Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});
+   if(kind==='rescue')rescueIncoming(m,seat);
    const camera=new PerspectiveCamera();frameMatch(camera,390,844,seat,0,10,undefined,'near');
    const shot={type:'shot' as const,aim:0,depth:.7,power:.7,lob:false,slice:kind==='slice'},reverse=shot.slice?-1:1;
    a.messages.length=0;b.messages.length=0;
@@ -542,8 +542,7 @@ test('expanded lateral rescues cross the old range limit identically on both soc
    const m=room.match=new Match(['lin','lin'],()=>{rolls++;return 0;}),p=m.state.players[seat],sign=seat===0?1:-1;
    m.state.phase='rally';m.state.rally=2;m.step(.08);
    Object.assign(p,{x:0,z:10*sign,tx:0,tz:10*sign,stamina:.08,totalStamina:.8});
-   m.physics.place({x:3.65*(backhand?-1:1)*sign,y:1.2,z:8.2*sign},{x:0,y:0,z:10*sign});
-   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});
+   rescueIncoming(m,seat,backhand?'backhand':'forehand',3.65);
    a.messages.length=0;b.messages.length=0;
    (seat===0?a:b).send({type:'input',command:{type:'shot',aim:0,depth:.55,power:.7,lob:false}});
    const jump=await a.wait('state',v=>!!v.state.players[seat].rescue);

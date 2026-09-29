@@ -1,0 +1,77 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {WebSocket} from 'ws';
+import {createGameServer} from '../server/app.js';
+import {Match} from '../src/simulation/match.js';
+import {rescueIncoming} from './helpers/rescue-incoming.js';
+const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
+async function client(url:string){
+ const ws=new WebSocket(url),messages:any[]=[];
+ ws.on('message',raw=>messages.push(JSON.parse(String(raw))));
+ await new Promise<void>((resolve,reject)=>{ws.once('open',resolve);ws.once('error',reject);});
+ return {ws,messages,send:(v:object)=>ws.send(JSON.stringify(v)),async wait(type:string,predicate=(m:any)=>true){
+  for(let i=0;i<400;i++){const index=messages.findIndex(m=>m.type===type&&predicate(m));if(index>=0)return messages.splice(index,1)[0];await sleep(10);}
+  throw Error(`Timeout ${type}: ${JSON.stringify(messages.slice(-1))}`);
+ }};
+}
+test('automatic hold synchronizes both clients, accepts only the receiver, and times out without a fabricated return',async()=>{
+ const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{
+  a.send({type:'create',name:'自动救球A'});const welcome=await a.wait('welcome');
+  b.send({type:'join',code:welcome.code,name:'自动救球B'});await b.wait('welcome');
+  a.send({type:'ready'});b.send({type:'ready'});await a.wait('state');
+  const room=server.rooms.rooms.get(welcome.code)!;
+  for(const seat of [0,1] as const)for(const success of [true,false]){
+   room.match!.dispose();let rolls=0;const m=room.match=new Match(['lin','lin'],()=>{rolls++;return 0;});
+   m.state.phase='rally';m.state.rally=2;m.step(.08);
+   const p=m.state.players[seat],sign=seat===0?1:-1;
+   Object.assign(p,{x:0,z:10*sign,tx:0,tz:10*sign,stamina:.08,totalStamina:1});
+   rescueIncoming(m,seat);
+   a.messages.length=0;b.messages.length=0;
+   // No input at all until after the automatic dive has reached the ball.
+   const hold=await a.wait('state',v=>!!v.state.rescueWindow);
+   assert.deepEqual((await b.wait('state',v=>v.seq===hold.seq)).state,hold.state);
+   assert.equal(rolls,1);assert.equal(hold.state.rescueWindow.seat,seat);
+   const shooter=seat===0?a:b,opponent=seat===0?b:a;
+   opponent.send({type:'input',command:{type:'shot',aim:0,depth:.5,power:.5,lob:false}});
+   shooter.send({type:'input',command:{type:'move',x:5,z:14*sign}});
+   const later=await a.wait('state',v=>v.seq>hold.seq&&v.state.rescueWindow?.remaining<hold.state.rescueWindow.remaining-.06);
+   assert.equal(later.state.time,hold.state.time);
+   assert.deepEqual(later.state.ball,hold.state.ball);assert.deepEqual(later.state.players,hold.state.players);
+   if(success){
+    shooter.send({type:'input',command:{type:'shot',aim:.2,depth:.55,power:.7,lob:false}});
+    const hit=await a.wait('state',v=>v.state.rally===3);
+    assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
+    assert.equal(hit.state.rescueWindow,undefined);assert.equal(hit.state.ball.rescue,true);
+    const c=hit.state.players[seat].contact;
+    assert.deepEqual(c,{x:hold.state.ball.x,y:hold.state.ball.y,z:hold.state.ball.z});assert.equal(rolls,3);
+   }else{
+    const expired=await a.wait('state',v=>v.seq>later.seq&&!v.state.rescueWindow);
+    assert.deepEqual((await b.wait('state',v=>v.seq===expired.seq)).state,expired.state);
+    assert.equal(expired.state.rally,2);assert.equal(expired.state.ball.hitter,seat===0?1:0);
+    assert.ok(expired.state.ball.z*sign>=hold.state.ball.z*sign);
+    assert.equal(rolls,1);assert.equal(expired.state.players[seat].rescue.missed,true);
+   }
+  }
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
+});
+test('disconnect pauses the contact countdown and resume does not clear the remaining chance',async()=>{
+ const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ let resumed:Awaited<ReturnType<typeof client>>|undefined;
+ try{
+  a.send({type:'create',name:'A'});const welcome=await a.wait('welcome');
+  b.send({type:'join',code:welcome.code,name:'B'});const peer=await b.wait('welcome');
+  a.send({type:'ready'});b.send({type:'ready'});await a.wait('state');
+  const room=server.rooms.rooms.get(welcome.code)!;room.match!.dispose();
+  const m=room.match=new Match(['lin','lin'],()=>0);m.state.phase='rally';m.state.rally=2;m.step(.08);
+  Object.assign(m.state.players[1],{x:0,z:-10,tx:0,tz:-10,stamina:.08,totalStamina:1});rescueIncoming(m,1);
+  await a.wait('state',v=>!!v.state.rescueWindow);b.ws.terminate();
+  const paused=await a.wait('state',v=>v.paused);const remaining=paused.state.rescueWindow.remaining;
+  await sleep(180);assert.equal(m.state.rescueWindow!.remaining,remaining);
+  resumed=await client(server.wsUrl);resumed.send({type:'resume',code:welcome.code,token:peer.token});await resumed.wait('welcome');
+  resumed.send({type:'input',command:{type:'shot',aim:0,depth:.5,power:.5,lob:false}});
+  const hit=await a.wait('state',v=>v.state.rally===3);
+  assert.equal(hit.state.ball.hitter,1);assert.equal(hit.state.rescueWindow,undefined);
+  assert.deepEqual((await resumed.wait('state',v=>v.seq===hit.seq)).state,hit.state);
+ }finally{a.ws.terminate();b.ws.terminate();resumed?.ws.terminate();await server.close();}
+});

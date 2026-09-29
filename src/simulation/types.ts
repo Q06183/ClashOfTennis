@@ -23,10 +23,12 @@ export type PlayerState = {
   shotQueued?: boolean;
   strokeSpin?: number;
   serveCourt?: 'deuce'|'ad';
-  rescue?: {startedAt:number;fromX:number;fromZ:number;toX:number;toZ:number;contact:Vec;hit:boolean;stroke?:RescueStroke;backhand?:boolean;travel?:number};
+  rescue?: {startedAt:number;fromX:number;fromZ:number;toX:number;toZ:number;contact:Vec;hit:boolean;stroke?:RescueStroke;backhand?:boolean;travel?:number;natural?:boolean;missed?:boolean};
 };
 export type BallState = Vec & { vx: number; vy: number; vz: number; bounces: number; hitter: Seat; targetX: number; targetZ: number; aimOrigin?:Vec; tier?: ShotTier; critical?: boolean; rescue?: boolean; topspin?: number; slice?: boolean; drop?:number; skill?: 'smash'|'volley'|'slice' };
 export type MatchState = {
+  /** Match time and all physics are held; only this real-step countdown runs. */
+  rescueWindow?: {seat:Seat;remaining:number;flight:number};
   time: number; phase: 'serve' | 'rally' | 'point' | 'over';
   score: [number, number]; players: [PlayerState, PlayerState]; ball: BallState;
   server: Seat; fault: number; pointTimer: number; rally: number; maxRally: number;

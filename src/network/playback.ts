@@ -16,6 +16,9 @@ export class SnapshotPlayback {
  reset(){this.queue=[];this.draw=null;this.cursor=-Infinity;this.wasFrozen=false;this.intervals=[];}
  push(state:MatchState,at:number){
   let last=this.queue.at(-1);
+  if(last&&(!!last.state.rescueWindow!==!!state.rescueWindow)){
+   this.queue=[];this.cursor=-Infinity;this.offset=at-state.time*1000;last=undefined;
+  }
   if(last&&(state.time<last.state.time||at-last.at>1000)){this.reset();last=undefined;}
   if(last&&state.time===last.state.time){this.queue[this.queue.length-1]={state,at};return;}
   const offset=at-state.time*1000;
@@ -34,7 +37,7 @@ export class SnapshotPlayback {
  private copy(state:MatchState){
   if(!this.draw)this.draw=structuredClone(state);
   const out=this.draw,players=out.players,ball=out.ball;
-  Object.assign(out,state,{players,ball});Object.assign(ball,state.ball);
+  Object.assign(out,state,{players,ball,rescueWindow:state.rescueWindow?{...state.rescueWindow}:undefined});Object.assign(ball,state.ball);
   for(const key of ['tier','skill','topspin','slice','drop','aimOrigin'] as const)if(!(key in state.ball))delete ball[key];
   for(let i=0;i<2;i++)Object.assign(players[i],state.players[i],{
    serveCourt:state.players[i].serveCourt,strokeSpin:state.players[i].strokeSpin,preparation:state.players[i].preparation,contact:state.players[i].contact,rescue:state.players[i].rescue,
@@ -45,7 +48,7 @@ export class SnapshotPlayback {
  }
  sample(now:number,frozen=false):MatchState|null{
   const latest=this.queue.at(-1);if(!latest)return null;
-  if(frozen||latest.state.phase==='over'){this.wasFrozen=true;return this.copy(latest.state);}
+  if(frozen||latest.state.phase==='over'||latest.state.rescueWindow){this.wasFrozen=true;return this.copy(latest.state);}
   if(this.wasFrozen){this.queue=[latest];this.offset=latest.at-latest.state.time*1000;this.cursor=-Infinity;this.wasFrozen=false;}
   const time=clamp(Math.max(this.cursor,(now-this.offset-this.delayMs)/1000),this.queue[0].state.time,latest.state.time+.05);
   this.cursor=time;

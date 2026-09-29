@@ -14,6 +14,7 @@ import {side} from '../src/simulation/types.js';
 import {handedness} from '../src/simulation/characters.js';
 import {dropStrength} from '../src/simulation/drop-shot.js';
 import {canReturnNormally} from '../src/simulation/skills.js';
+import {rescueIncoming} from './helpers/rescue-incoming.js';
 before(initPhysics);
 
 const gesture=(length:number,duration=650)=>interpretGesture({dx:0,dy:-length,duration,hold:0,width:390,height:844})!;
@@ -76,8 +77,7 @@ test('a real rescue keeps touch depth despite extreme randomness and clears it n
   try{
    m.state.phase='rally';m.state.rally=2;m.step(.08);
    Object.assign(p,{x:0,z:10,tx:0,tz:10,stamina:.08,totalStamina:.3});
-   m.physics.place({x:2.65,y:1.2,z:8.2},{x:0,y:0,z:10});
-   Object.assign(m.state.ball,m.physics.read(),{hitter:1,bounces:1});
+   rescueIncoming(m,0);
    const c=new PerspectiveCamera();frameMatch(c,390,844,0,0,10,undefined,'near');
    const shot=gesture(40);m.input(0,{...shot,swipeAim:captureSwipeAim(c,shot,0,-40,390,844)});
    for(let i=0;i<60&&m.state.rally===2;i++)m.step(1/60);

@@ -63,6 +63,6 @@ test('one-hand volley removes the second-hand limit while keeping racket reach b
 });
 
 test('an airborne rescue remains a weak rescue rather than displaying the volley skill',()=>{
- const m=new Match(['lin','lin'],()=>0);m.state.phase='rally';m.state.rally=2;Object.assign(m.state.players[0],{x:0,z:10,tx:0,tz:10});m.input(0,{type:'move',x:0,z:10});m.physics.place({x:2.1,y:1,z:7.8},{x:0,y:.5,z:10});Object.assign(m.state.ball,m.physics.read(),{hitter:1,bounces:0});m.input(0,shot);
+ const m=new Match(['lin','lin'],()=>0);m.state.phase='rally';m.state.rally=2;Object.assign(m.state.players[0],{x:0,z:10,tx:0,tz:10});m.input(0,{type:'move',x:0,z:10});m.physics.place({x:3.65,y:1.8,z:6},{x:0,y:1.5,z:8});Object.assign(m.state.ball,m.physics.read(),{hitter:1,bounces:0});m.input(0,shot);
  for(let i=0;i<60&&m.state.rally===2;i++)m.step(1/60);assert.equal(m.state.ball.rescue,true);assert.equal(m.state.ball.skill,undefined);assert.equal(m.state.event,'极限救球');m.dispose();
 });

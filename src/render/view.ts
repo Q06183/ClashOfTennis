@@ -32,6 +32,7 @@ export class CourtView {
   private loadedModels:T.Group[]=[];
   private mode:'home'|'match'|'result'='home';
   private celebrationTime=0;
+  private frozenContactTime:number|null=null;
   private seat:Seat=0;
   private aimCamera=new AimCameraLock();
   private cameraDistance:CameraDistance='near';
@@ -132,6 +133,7 @@ export class CourtView {
   setAiming(active:boolean){this.aimCamera.pointer(active);}
   setCameraDistance(distance:CameraDistance){this.cameraDistance=distance;}
   private updateCamera(state:MatchState,dt:number){
+    if(state.rescueWindow)return;
     if(this.aimCamera.update(state,dt))return;
     this.appliedCameraDistance=this.cameraDistance;
     const p=state.players[this.seat],alpha=1-Math.exp(-Math.min(dt,.08)*7);
@@ -153,10 +155,12 @@ export class CourtView {
     if(this.mode==='match'){
       this.updateCamera(state,dt);
     }
+    const repeatHold=!!state.rescueWindow&&this.frozenContactTime===state.time;
+    this.frozenContactTime=state.rescueWindow?state.time:null;
     for(const seat of [0,1] as Seat[]){
       const source=state.players[seat],p=winner?{...source,preparation:undefined,rescue:undefined,swing:0,moving:false,tx:source.x,tz:source.z}:source;
       this.setCharacter(seat,p.characterId);this.athletes[seat].root.visible=!winner||winner.seat===seat;
-      this.athletes[seat].update(p,state.time,dt,winner?.seat===seat?this.celebrationTime:undefined);
+      if(!repeatHold)this.athletes[seat].update(p,state.time,dt,winner?.seat===seat?this.celebrationTime:undefined);
       this.contactShadows[seat].position.set(p.x,.065,p.z);this.contactShadows[seat].visible=this.quality.level==='low';
     }
     const b=state.ball;
@@ -164,7 +168,7 @@ export class CourtView {
     this.flight.update(state,this.seat,this.mode==='match',authoritative);
     for(let i=this.trail.length-1;i>0;i--)this.trail[i].position.copy(this.trail[i-1].position);
     this.trail[0].position.copy(this.ball.position);
-    this.ball.position.set(b.x,b.y,b.z);this.ball.rotation.z+=dt*12;
+    this.ball.position.set(b.x,b.y,b.z);if(!state.rescueWindow)this.ball.rotation.z+=dt*12;
     this.shadow.position.set(b.x,.07,b.z);this.shadow.scale.setScalar(1+b.y*.09);
     this.target.position.set(b.targetX,.075,b.targetZ);
     this.target.visible=false;

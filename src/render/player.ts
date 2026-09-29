@@ -5,7 +5,7 @@ import {solveGrip} from './grip.js';
 import {strokeBody} from './stroke-body.js';
 import {strokePose} from './strokes.js';
 import {RACKET,contactCrouch} from '../simulation/athlete.js';
-import {rescuePose,RESCUE} from '../simulation/rescue.js';
+import {rescuePose,rescueAge,RESCUE} from '../simulation/rescue.js';
 import {rescueStroke} from './rescue-strokes.js';
 import {Footwork} from './footwork.js';
 import {victoryPose,victoryEase} from './victory.js';
@@ -256,7 +256,7 @@ export class Athlete {
     // Whole-body loading must run during the serve, even though it has no queued return.
     const action=active&&!p.rescue?body.blend:0;
     const lower=action*(p.preparation?.stroke==='serve'?1:speedBlend);
-    const contactWeight=p.rescue?T.MathUtils.smoothstep(time-p.rescue.startedAt,0,.10):p.swing>0?Math.min(1,p.swing/.15):p.preparation?T.MathUtils.smoothstep(p.preparation.progress,.8,1):0;
+    const contactWeight=p.rescue?T.MathUtils.smoothstep(rescueAge(p,time),0,.10):p.swing>0?Math.min(1,p.swing/.15):p.preparation?T.MathUtils.smoothstep(p.preparation.progress,.8,1):0;
     const contactCrouching=contactCrouch(contact.y)*contactWeight*(p.rescue?1-rescue.recovery:1);
     const hipDrop=p.rescue?0:
       T.MathUtils.lerp(gait.hipDrop,body.hipDrop-body.lift,action)+contactCrouching;
@@ -268,7 +268,7 @@ export class Athlete {
       const foot=jump?this.root.localToWorld(jump.feet[i].clone()):
         gait.feet[i].lerp(posed,lower).add(new T.Vector3(0,rescue.lift+rescue.air*(i?.05:.1),0));
       if(jump&&rescue.landing>0){
-        const settle=T.MathUtils.smoothstep(time-p.rescue!.startedAt,.35,.52);
+        const settle=T.MathUtils.smoothstep(rescueAge(p,time),.35,.52);
         const recoveryFoot=groundTarget(i?-.22:.22,.105,-.68*(1-rescue.recovery));
         foot.lerp(recoveryFoot,settle);
       }
@@ -293,10 +293,14 @@ export class Athlete {
       // Keep the shaft pointing away from the shoulder during the roll to the
       // floor; an overhead shaft passing through the reach-cone antipode flips.
       const reach=pose.tip.clone().sub(shoulder).normalize();
-      const blend=T.MathUtils.smoothstep(time-p.rescue.startedAt,.23,.32)*(1-rescue.recovery);
+      // Keep a bent-elbow grip through follow-through. A perfectly radial
+      // shaft can put the hand at the shoulder when tip distance equals .45m.
+      const tangent=new T.Vector3(0,0,1).addScaledVector(reach,-reach.z).normalize();
+      reach.multiplyScalar(.8).addScaledVector(tangent,.6).normalize();
+      const blend=T.MathUtils.smoothstep(rescueAge(p,time),.23,.32)*(1-rescue.recovery);
       pose.shaft.lerp(reach,blend).normalize();
     }
-    this.racketTo(pose.tip,pose.shaft,pose.twoHands,0,body.faceRoll*action,action?body.elbow:undefined);
+    this.racketTo(pose.tip,pose.shaft,pose.twoHands,0,body.faceRoll*action,p.rescue?new T.Vector3(-.3,0,-1):action?body.elbow:undefined);
     if((active||running>0)&&!pose.twoHands){
       const free=body.freeHand.clone();
       if(jump){
@@ -322,8 +326,8 @@ export class Athlete {
       if(!tossing&&!serving)this.leftHand.rotation.y=-.5;
       if(support){const gripQ=this.elbows[0].getWorldQuaternion(new T.Quaternion()).invert().multiply(this.racket.getWorldQuaternion(new T.Quaternion()));this.leftHand.quaternion.slerp(gripQ,support);}
     }
-    if(p.rescue&&time-p.rescue.startedAt>.32){
-      const plant=T.MathUtils.smoothstep(time-p.rescue.startedAt,.32,RESCUE.riseAt);
+    if(p.rescue&&rescueAge(p,time)>.32){
+      const plant=T.MathUtils.smoothstep(rescueAge(p,time),.32,RESCUE.riseAt);
       const release=T.MathUtils.smoothstep(rescue.recovery,.48,1);
       for(const i of [0,1]){
         const hand=i===1?this.racket:this.leftHand;
@@ -331,15 +335,17 @@ export class Athlete {
         const current=hand.getWorldPosition(new T.Vector3());
         const floor=groundTarget(i===1?-.32:.32,.12,.52);
         const target=floor.lerp(current,release);
-        const pole=(i?new T.Vector3(-.7,-1,.35):new T.Vector3(.7,-.6,-.2))
-          .lerp(new T.Vector3(i?-.8:.8,-.3,-.3),plant*(1-release));
+        const pole=(i?new T.Vector3(-.3,0,-1):new T.Vector3(.7,-.6,-.2))
+          .lerp(new T.Vector3(i?-.3:.8,0,-1),plant*(1-release));
         this.armTo(i,current.lerp(target,plant),pole);
         hand.quaternion.copy(this.elbows[i].getWorldQuaternion(new T.Quaternion()).invert().multiply(orientation));
       }
-      const supported=this.elbows[1].getWorldQuaternion(new T.Quaternion()).invert()
-        .multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),yaw))
-        .multiply(new T.Quaternion().setFromEuler(new T.Euler(Math.PI/2,0,0)));
-      this.racket.quaternion.slerp(supported,plant*(1-release));
+      const world=this.racket.getWorldQuaternion(new T.Quaternion());
+      const shaft=new T.Vector3(0,-1,0).applyQuaternion(world);
+      const flat=new T.Vector3(0,0,-1).applyAxisAngle(new T.Vector3(0,1,0),yaw);
+      const swing=new T.Quaternion().setFromUnitVectors(shaft,flat);
+      swing.slerp(new T.Quaternion(),1-plant*(1-release));
+      this.racket.quaternion.copy(this.elbows[1].getWorldQuaternion(new T.Quaternion()).invert().multiply(swing.multiply(world)));
     }
     if(this.generated){this.root.updateMatrixWorld(true);this.generated.update();}
     this.root.position.x=worldX+hand*(this.root.position.x-p.x);

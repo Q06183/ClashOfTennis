@@ -10,6 +10,7 @@ import {AimCameraLock} from '../src/render/aim-camera.js';
 import {side,type Seat} from '../src/simulation/types.js';
 import {shotDepth} from '../src/simulation/shot-profile.js';
 import {projectedOutgoingAngle} from './helpers/projected-shot.js';
+import {rescueIncoming} from './helpers/rescue-incoming.js';
 
 before(initPhysics);
 test('eligible rescue starts in input immediately and uses total stamina, not depleted point stamina',()=>{
@@ -18,8 +19,7 @@ test('eligible rescue starts in input immediately and uses total stamina, not de
   try{
    m.state.phase='rally';m.state.rally=2;m.step(.08);
    Object.assign(p,{x:0,z:10*sign,tx:0,tz:10*sign,stamina:.05,totalStamina:1,vx:0,vz:0});
-   m.physics.place({x:2.65*sign,y:1.2,z:8.2*sign},{x:0,y:0,z:10*sign});
-   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});
+   rescueIncoming(m,seat);
    const time=m.state.time;
    m.input(seat,{type:'shot',aim:.2,depth:.5,power:.8,lob:false});
    assert.ok(p.rescue,'must jump before input returns');assert.equal(draws,1);assert.equal(m.state.time,time);
@@ -32,8 +32,7 @@ test('a high incoming ball can trigger a jump now if its future contact is legal
  try{
   m.state.phase='rally';m.state.rally=2;m.step(.08);
   Object.assign(p,{x:0,z:10,tx:0,tz:10,vx:0,vz:0,stamina:1,totalStamina:1});
-  m.physics.place({x:2,y:3.3,z:8.2},{x:0,y:-2.2,z:10});
-  Object.assign(m.state.ball,m.physics.read(),{hitter:1,bounces:0});
+  rescueIncoming(m,0,'smash',3.65);
   m.input(0,{type:'shot',aim:0,depth:.5,power:.5,lob:false});
   assert.equal(p.rescue?.stroke,'smash');
   assert.ok(p.rescue!.contact.y<3.05&&p.rescue!.contact.y>2.25);
@@ -103,15 +102,14 @@ test('later rescue opportunities use the most recent stored swipe quality and di
   try{
    m.state.phase='rally';m.state.rally=2;m.step(.08);
    Object.assign(p,{x:0,z:10*sign,tx:0,tz:10*sign,stamina:.8,totalStamina:1,vx:0,vz:0});
-   m.physics.place({x:3*sign,y:1.2,z:3*sign},{x:0,y:2,z:11*sign});
+   m.physics.place({x:3*sign,y:1.2,z:1*sign},{x:0,y:2,z:8*sign});
    Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});
    m.input(seat,{type:'shot',aim:-.4,depth:.25,power:.3,lob:false});
    assert.equal(p.rescue,undefined);
    const latest={type:'shot' as const,aim:.4,depth:.7,power:1,lob:false,critical:true,topspin:.6};
    m.input(seat,latest);
    // No new swipe when the ball later enters the reachable jump envelope.
-   m.physics.place({x:2.65*sign,y:1.2,z:8.2*sign},{x:0,y:0,z:10*sign});
-   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});
+   rescueIncoming(m,seat);
    let started=false;
    for(let i=0;i<90&&m.state.rally===2;i++){m.step(1/60);started||=!!p.rescue;}
    assert.ok(started);assert.equal(m.state.ball.rescue,true);assert.equal(draws,3);

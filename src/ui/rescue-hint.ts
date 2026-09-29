@@ -1,10 +1,13 @@
-import {rescueChance,RESCUE_LABELS,RESCUE} from '../simulation/rescue.js';
+import {rescueChance,rescueAge,RESCUE_LABELS,RESCUE} from '../simulation/rescue.js';
 import type {MatchState,Seat} from '../simulation/types.js';
 
 export function rescueHint(s:MatchState,seat:Seat):string|undefined {
+ const hold=s.rescueWindow;
+ if(hold)return hold.seat===seat?`滑动回击 · 剩余 ${hold.remaining.toFixed(1)} 秒`:'对手正在补滑回击 · 回合暂时定格';
  const r=s.players[seat].rescue;
- if(r&&s.time-r.startedAt>=RESCUE.landAt&&s.time-r.startedAt<RESCUE.duration){
-  return s.time-r.startedAt<RESCUE.riseAt?'跳接落地缓冲中 · 暂时不能移动或击球':'正在起身 · 稍后恢复移动和击球';
+ const age=rescueAge(s.players[seat],s.time);
+ if(r&&age>=RESCUE.landAt&&age<RESCUE.duration){
+  return age<RESCUE.riseAt?'跳接落地缓冲中 · 暂时不能移动或击球':'正在起身 · 稍后恢复移动和击球';
  }
  if(r&&!r.hit)return `${RESCUE_LABELS[r.stroke??'forehand']}中…`;
  if(!s.ball.rescue)return;

@@ -102,6 +102,7 @@ export class App {
   }
   private input(command:Input){
     if(this.screen!=='playing'||this.paused||!this.connected||this.help)return;
+    if((this.remote??this.local.state).rescueWindow&&command.type==='move')return;
     if(this.net){this.net.input(command);if(command.type==='move')this.predictedMove={x:command.x,z:command.z,until:performance.now()+750};}
     else this.local.input(0,command);
   }
@@ -260,8 +261,8 @@ export class App {
   private helpPanel(){return this.panel(`<div class="panel-top"><span>JUST THREE MOVES</span><button class="icon-button" data-action="close-help" aria-label="关闭帮助">×</button></div><h2>好球，从这一拍开始。</h2><p>${this.net?'线上对局仍在进行，请尽快回到球场。':'先记住三个动作，马上就能打出回合。'}</p>
     <div class="tutorial-steps"><div class="tutorial-step"><b>1</b><div><strong>轻点球场，移动到位</strong><span>发球前可以点按调整站位，发球者限当前半区底线后，开始抛球后锁定位置。普通球员优先接落地球，伊内丝主动上前截击。本分消耗按20%折算到总体力，一分最多扣总体力20%；分末按角色返还部分消耗，最多90%。下一分以恢复后的总体力作为本分初始值，不再回满100%；二发不重置。跑动和击球使用“本分×总体”的有效体力，跳接概率只看总体力。</span></div></div>
     <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>短而慢地滑动可放小球：显示“放小球”，轻落在网后约1～2米，弹跳低、落地后明显减速。遇到高球也不会自动加力扣杀；发球不使用小球规则。中长滑动平滑过渡到原来的深球；手指按住不动再划才是蓄力上旋。球从球拍实际触球点飞出，方向按屏幕滑动角度计算，斜划过大仍可能从边线出界。球仍按真实抛物线下落，后半程不是屏幕直线。近景和远景只缩放，不改变场地比例。跑动时可提前滑动，保存最后一次方向和球质。</span></div></div>
-    <div class="tutorial-step"><b>3</b><div><strong>认颜色，控制速度与深度</strong><span>绿普通、蓝快速、橙强力、玫红暴击、青绿上旋、金色高压、冰白切削、紫色高吊。长按蓄力上旋，下划反向切削，右侧按钮选择高吊。正常站位、跑动或等待来球能接到时不触发飞身；只有普通方式来不及、侧扑可及的球才抽签。总体力满时90%，1/3及以下10%，中间平滑变化。每记来球只抽一次，重复滑动不能刷签。跳接使用最后手势的方向、深度和球种，保留减速及深浅波动；救球和切削不再随机改变滑动指定的出球方向。切削落地后仍有低弹跳和侧偏；接发仍必须落地，出界或二跳后不能救。</span></div></div></div>
-    <p>右下角“近景 / 远景”可切换镜头距离，默认近景并记住选择；正在瞄准时会等当前击球结束再切换。救球只向左右侧扑，人物单次横移最多3.5米，实际仍需球拍够到；持拍手伸向球，随后趴地缓冲，再用双手撑地、花0.5秒起身；从起跳到约1.18秒恢复期间不能再次移动或击球，可以提前输入下一拍。</p>
+    <div class="tutorial-step"><b>3</b><div><strong>认颜色，控制速度与深度</strong><span>绿普通、蓝快速、橙强力、玫红暴击、青绿上旋、金色高压、冰白切削、紫色高吊。长按蓄力上旋，下划反向切削，右侧按钮选择高吊。不必先滑动：预测普通跑动接不到、侧扑来得及时，角色会自动尝试飞身。总体力满时90%，1/3及以下10%，中间平滑变化；每记来球只抽一次。已提前滑动就直接回球；未滑动则在球拍真正够到球时，双方人物和球一起定格最多0.5秒，显示“滑动回击”。窗口内滑动立即击球，超时球继续原轨迹，不自动击中或倒带。救球保留减速和深浅波动；切削落地后仍有侧偏，接发仍须落地，出界或二跳后不能救。</span></div></div></div>
+    <p>右下角“近景 / 远景”切换镜头距离；瞄准和触球定格期间不切镜头。侧扑最多横移3.5米，但受速度、加速与来球时间限制，来不及就不会瞬移补接。起跳到伸拍按距离使用约0.24～0.72秒，之后趴地缓冲、双手撑地起身0.5秒。定格期间双方都不能移动或恢复体力；救球者落地起身前不能再次击球。</p>
     <p id="performance-stats" class="small-note"></p><p id="performance-sync" class="small-note"></p><button class="primary" data-action="close-help">知道了，上场 →</button><p class="small-note">先到 7 分且领先 2 分获胜 · 发球限时 12 秒</p>`);}
   private result(){
     const s=this.remote??this.local.state,won=s.winner===this.seat;
@@ -349,7 +350,8 @@ export class App {
     if(this.remote){
       this.drawState=this.playback.sample(now,this.paused||!this.connected)??structuredClone(this.remote);
       const draw=this.drawState;
-      if(this.predictedMove&&now<this.predictedMove.until&&!this.paused&&this.connected&&state.phase==='rally'){
+      if(state.rescueWindow)this.predictedMove=null;
+      if(this.predictedMove&&now<this.predictedMove.until&&!this.paused&&this.connected&&state.phase==='rally'&&!state.rescueWindow){
         draw.players[this.seat].tx=this.predictedMove.x;draw.players[this.seat].tz=this.predictedMove.z;
       }
       state=draw;
@@ -360,7 +362,7 @@ export class App {
       this.lastEvent=actual.eventId;
       if((actual.event==='落地'||actual.event==='切削弹跳'))this.audio.play('bounce');
       else if(actual.phase==='point'||actual.phase==='over')this.audio.play('point');
-      else if(actual.phase==='rally')this.audio.play('hit');
+      else if(actual.phase==='rally'&&actual.event!=='滑动回击'&&actual.event!=='未及时回击')this.audio.play('hit');
     }
     if(now-this.lastHud>90){this.updateHud();this.lastHud=now;}
     requestAnimationFrame(this.frame);

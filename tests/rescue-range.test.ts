@@ -9,6 +9,7 @@ import {side,type Seat,type RescueStroke} from '../src/simulation/types.js';
 import {Athlete} from '../src/render/player.js';
 import {model} from './helpers/athlete-model.js';
 import {disposeTree} from '../src/render/dispose.js';
+import {rescueIncoming} from './helpers/rescue-incoming.js';
 
 before(initPhysics);
 const shot={type:'shot' as const,aim:0,depth:.55,power:.7,lob:false};
@@ -16,8 +17,7 @@ function fixture(kind:RescueStroke,seat:Seat,id='lin',random=()=>0,gap=3.65){
  const m=new Match([id,id],random),p=m.state.players[seat],sign=side(seat),depth=kind==='volley'?4:10;
  m.state.phase='rally';m.state.rally=2;m.step(.08);
  Object.assign(p,{x:0,z:depth*sign,tx:0,tz:depth*sign,vx:0,vz:0,stamina:.08,totalStamina:.8});
- m.physics.place({x:gap*(kind==='backhand'?-1:1)*sign*handedness(id),y:kind==='smash'?2.9:kind==='volley'?1.9:1.2,z:(depth-1.8)*sign},{x:0,y:0,z:10*sign});
- Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:kind==='forehand'||kind==='backhand'?1:0});
+ rescueIncoming(m,seat,kind,gap);
  return m;
 }
 test('new lateral reach catches balls outside the previous 2.5m body-travel limit with actual skinned racket contact',async()=>{
@@ -32,7 +32,7 @@ test('new lateral reach catches balls outside the previous 2.5m body-travel limi
      assert.ok(Math.abs(target.x-p.x)>2.5,'fixture exercises newly added range');
      assert.ok(Math.abs(target.x-p.x)<=3.5);
      m.input(seat,shot);assert.ok(p.rescue);
-     for(let i=0;i<60&&m.state.rally===2;i++){
+     for(let i=0;i<100&&m.state.rally===2;i++){
       const oldX=p.x;m.step(1/120);a.update(p,m.state.time,1/120);
       assert.equal(p.z,z,'still lateral-only');
       assert.ok(Math.abs(p.x-oldX)<.31,'continuous travel rather than teleporting');

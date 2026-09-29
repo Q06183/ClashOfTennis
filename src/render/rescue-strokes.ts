@@ -1,12 +1,12 @@
 import {Vector3,MathUtils} from 'three';
-import {RESCUE,rescuePose} from '../simulation/rescue.js';
+import {RESCUE,rescuePose,rescueAge} from '../simulation/rescue.js';
 import type {PlayerState,RescueStroke} from '../simulation/types.js';
 
 /** Authored tennis rescue gestures; canonical right-handed body space.
  * Normal strokes use their usual grip. A desperate backhand releases the
  * support hand for reach; volley keeps a short block, smash uses scissors. */
 export function rescueStroke(p:PlayerState,time:number,contact:Vector3){
- const r=p.rescue!,age=Math.max(0,time-r.startedAt);
+ const r=p.rescue!,age=rescueAge(p,time);
  const kind:RescueStroke=r.stroke??'forehand',bh=r.backhand??kind==='backhand';
  const load=1-MathUtils.smoothstep(age,0,.105);
  const follow=r.hit?MathUtils.smoothstep(age,.23,.53):0;

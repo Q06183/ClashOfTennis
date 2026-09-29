@@ -7,6 +7,7 @@ import {frameMatch} from '../src/render/camera.js';
 import {captureSwipeAim} from '../src/input/aim.js';
 import {projectedOutgoingAngle} from './helpers/projected-shot.js';
 import {side,type Shot} from '../src/simulation/types.js';
+import {rescueIncoming} from './helpers/rescue-incoming.js';
 
 before(initPhysics);
 test('legal slice returns keep the swipe heading even at both extremes of random scatter',()=>{
@@ -34,8 +35,7 @@ test('physical lateral rescue preserves the swipe despite random scatter and low
   try{
    m.state.phase='rally';m.state.rally=2;m.step(.08);
    Object.assign(p,{x:0,z:10*sign,tx:0,tz:10*sign,stamina:.08,totalStamina:.3});
-   m.physics.place({x:2.65*sign,y:1.2,z:8.2*sign},{x:0,y:0,z:10*sign});
-   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});
+   rescueIncoming(m,seat);
    frameMatch(camera,390,844,seat,0,10,undefined,'near');
    const shot:Shot={type:'shot',aim:0,depth:.7,power:.7,lob:false};
    m.input(seat,{...shot,swipeAim:captureSwipeAim(camera,shot,ratio*150,-150,390,844)});

@@ -9,6 +9,7 @@ import {Athlete} from '../src/render/player.js';
 import {Vector3,Box3,SkinnedMesh} from 'three';
 import {model} from './helpers/athlete-model.js';
 import {disposeTree} from '../src/render/dispose.js';
+import {rescueIncoming} from './helpers/rescue-incoming.js';
 
 before(initPhysics);
 const shot={type:'shot' as const,aim:0,depth:.55,power:.8,lob:false};
@@ -18,8 +19,7 @@ function incoming(kind:RescueStroke,seat:Seat,id='lin',random=()=>0){
  const depth=kind==='volley'?4:10;
  Object.assign(p,{x:0,z:depth*sign,tx:0,tz:depth*sign,vx:0,vz:0,stamina:.08});
  const backhand=kind==='backhand';
- m.physics.place({x:(backhand?-2.65:2.65)*sign*hand,y:kind==='smash'?2.9:kind==='volley'?1.9:1.2,z:(depth-1.8)*sign},{x:0,y:0,z:10*sign});
- Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:kind==='forehand'||kind==='backhand'?1:0});
+ rescueIncoming(m,seat,kind);
  return m;
 }
 test('jump candidates cover both wings, above-waist volleys and high overheads even when tired',()=>{

@@ -4,8 +4,18 @@ import {movePlayer} from './movement.js';
 import {spendStamina,recoverPointStamina,STAMINA} from './stamina.js';
 import {canReturnNormally,returnHeightLegal} from './skills.js';
 import {flightGravity} from './flight.js';
+import {predictFlight} from './trajectory.js';
+import {isInCourt} from './rules.js';
+import {dropRebound} from './drop-shot.js';
 import {clamp,side,type BallState,type PlayerState,type Seat,type RescueStroke} from './types.js';
-export const RESCUE={minChance:.10,maxChance:.90,lowStamina:1/3,travel:.20,landAt:.48,riseAt:.68,duration:1.18,reach:3.5,travelSpeed:18,slowdown:1.7};
+export const RESCUE={minChance:.10,maxChance:.90,lowStamina:1/3,travel:.20,landAt:.48,riseAt:.68,duration:1.18,reach:3.5,travelSpeed:9,acceleration:65,window:.5,slowdown:1.7};
+/** Existing authored poses use a 200ms reach phase. Natural dives stretch only
+ * that phase; landing and the 500ms push-up keep their original duration. */
+export function rescueAge(p:PlayerState,time:number){
+ const r=p.rescue;if(!r)return 0;
+ const age=Math.max(0,time-r.startedAt),travel=r.travel??RESCUE.travel;
+ return r.natural?(age<travel?age/travel*RESCUE.travel:RESCUE.travel+age-travel):age;
+}
 /** Total-match stamina drives the smooth 10%–90% rescue lottery. */
 export function rescueChance(stamina:number){
  const s=Number.isFinite(stamina)?clamp(stamina,0,1):0;
@@ -17,27 +27,38 @@ export function rescueChance(stamina:number){
 export const RESCUE_LABELS:Record<RescueStroke,string>={forehand:'正手飞身救球',backhand:'反手跃步救球',volley:'腾空截击救球',smash:'跃起高压救球'};
 export const rescueHeight=(stroke?:RescueStroke)=>stroke==='smash'?.62:stroke==='volley'?.38:.34;
 export const rescueLift=(stroke:RescueStroke|undefined,age:number)=>rescueHeight(stroke)*Math.sin(Math.PI*clamp(age/.48,0,1));
-/** Search the remaining flight for a reachable jump, not just a fixed 200ms
- * sample (fast rebounds can already be outside the arena at that time).
- * Never extrapolate through a bounce, across the net or beyond court bounds. */
-export function rescueTarget(b:BallState,p:PlayerState,seat:Seat){
+/** Forecast a legal interception, including the expected first bounce when
+ * necessary. Never forecast through a second bounce or award predicted contact;
+ * actual authority physics and arm reach must still meet before a hold/hit. */
+export function rescueTarget(b:BallState,p:PlayerState,seat:Seat,serviceFlight=false){
  const sign=side(seat),speed2=b.vx*b.vx+b.vz*b.vz;
  if(speed2<9)return null;
- for(const travel of [RESCUE.travel,.12,.14,.16,.18,.22,.24,.26,.28]){
-  const contact={x:b.x+b.vx*travel,y:b.y+b.vy*travel-flightGravity(b)*travel*travel/2,z:b.z+b.vz*travel};
+ const landing=b.bounces===0?predictFlight(b):null;
+ if(landing?.hitNet)return null;
+ for(let frame=0;frame<=24;frame++){
+  const travel=.24+frame*.02;
+  let contact={x:b.x+b.vx*travel,y:b.y+b.vy*travel-flightGravity(b)*travel*travel/2,z:b.z+b.vz*travel},bounces=b.bounces;
+  if(landing&&travel>landing.duration){
+   if(!isInCourt(landing.landing.x,landing.landing.z,seat))continue;
+   const after=travel-landing.duration,kick=b.slice?.86:1+.12*(b.topspin??0);
+   const v=dropRebound({x:b.vx*kick,y:Math.abs(b.vy-flightGravity(b)*landing.duration)*.72*(b.slice?.68:1),z:b.vz*kick},b.drop);
+   contact={x:landing.landing.x+v.x*after,y:.12+v.y*after-flightGravity({topspin:(b.topspin??0)*.55})*after*after/2,z:landing.landing.z+v.z*after};bounces=1;
+  }
+  if(serviceFlight&&!bounces)continue;
   if(contact.y<.35||contact.y>3.05||contact.z*sign<1)continue;
   const backhand=(contact.x-p.x)*sign*handedness(p.characterId)<0;
-  const stroke:RescueStroke=contact.y>=2.25?'smash':b.bounces===0?'volley':backhand?'backhand':'forehand';
+  const stroke:RescueStroke=contact.y>=2.25?'smash':bounces===0?'volley':backhand?'backhand':'forehand';
   // Leave a little arm margin on the backhand side. A fully stretched target
   // may be reachable only between ticks, then missed at both adjacent ticks.
   const lateral=stroke==='smash'?.25:backhand?-.35:.6;
   const x=contact.x-sign*handedness(p.characterId)*lateral,z=p.z,distance=Math.abs(x-p.x);
   // Only lateral dives. Forward/backward gaps remain a footwork responsibility.
   if(Math.abs(contact.x-p.x)<.9||Math.abs(contact.z-p.z)>.75)continue;
-  // Enlarge body travel, not the arm/contact envelope. Scale its duration
-  // allowance as well; increasing reach alone still capped a 200ms dive at 2.6m.
-  if(distance<.55||distance>Math.min(RESCUE.reach,RESCUE.travelSpeed*travel)||Math.abs(x)>6.4||z*sign>16.5)continue;
-  const candidate={...p,x,z,rescue:{startedAt:0,fromX:p.x,fromZ:p.z,toX:x,toZ:z,contact,hit:false,stroke,backhand,travel}};
+  // Smoothstep has peak speed 1.5*d/t and peak acceleration 6*d/t².
+  // Forecast earlier rather than speeding the body up to catch a late ball.
+  if(distance<.55||distance>RESCUE.reach||1.5*distance/travel>RESCUE.travelSpeed||
+    6*distance/(travel*travel)>RESCUE.acceleration||Math.abs(x)>6.4||z*sign>16.5)continue;
+  const candidate={...p,x,z,rescue:{startedAt:0,fromX:p.x,fromZ:p.z,toX:x,toZ:z,contact,hit:false,stroke,backhand,travel,natural:true}};
   if(!canReachRescue({...b,...contact},candidate,seat,travel))continue;
   return {x,z,contact,stroke,backhand,travel};
  }
@@ -74,7 +95,7 @@ export function hasNormalReturnWindow(b:BallState,p:PlayerState,seat:Seat,option
 export function rescuePose(p:PlayerState,time:number){
  const r=p.rescue;if(!r)return {lift:0,lean:0,air:0,crouch:0,landing:0,recovery:1,pitch:0,roll:0,hipHeight:.85};
  const smooth=(a:number,b:number,x:number)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
- const age=Math.max(0,time-r.startedAt),air=age>=RESCUE.landAt?0:Math.sin(Math.PI*clamp(age/RESCUE.landAt,0,1));
+ const age=rescueAge(p,time),air=age>=RESCUE.landAt?0:Math.sin(Math.PI*clamp(age/RESCUE.landAt,0,1));
  const recovery=smooth(RESCUE.riseAt,RESCUE.duration,age);
  const landing=smooth(.38,.58,age)*(1-recovery);
  const prone=smooth(.28,.52,age)*(1-recovery);
@@ -89,17 +110,17 @@ export function rescuePose(p:PlayerState,time:number){
 }
 export function moveRescue(p:PlayerState,time:number,dt:number){
  const r=p.rescue;if(!r)return false;
- const age=time-r.startedAt,u=clamp(age/(r.travel??RESCUE.travel),0,1),ease=u*(2-u),x=p.x,z=p.z;
+ const age=time-r.startedAt,u=clamp(age/(r.travel??RESCUE.travel),0,1),ease=r.natural?u*u*(3-2*u):u*(2-u),x=p.x,z=p.z;
  p.x=r.fromX+(r.toX-r.fromX)*ease;p.z=r.fromZ+(r.toZ-r.fromZ)*ease;
  p.vx=(p.x-x)/dt;p.vz=(p.z-z)/dt;p.moving=u<1;
- if(age>=RESCUE.duration){p.rescue=undefined;p.vx=0;p.vz=0;}
+ if(rescueAge(p,time)>=RESCUE.duration){p.rescue=undefined;p.vx=0;p.vz=0;}
  return true;
 }
 
 /** Extra reach margin for the airborne, one-handed pose instead of a grounded torso turn. */
 export function canReachRescue(b:BallState,p:PlayerState,seat:Seat,time:number){
  // Allow the leap to become visible before contact; don't hit at take-off.
- if(p.rescue&&(time-p.rescue.startedAt<.10||time-p.rescue.startedAt>=RESCUE.landAt))return false;
+ if(p.rescue&&(p.rescue.missed||rescueAge(p,time)<(p.rescue.natural ? .198 : .10)||rescueAge(p,time)>=RESCUE.landAt))return false;
  const sign=side(seat),hand=handedness(p.characterId);
  // The renderer solves in canonical right-hand space, rotates the complete
  // body about the hips, then mirrors it. Apply the same inverse here.
