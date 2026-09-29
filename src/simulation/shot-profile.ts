@@ -1,4 +1,5 @@
 import type {Shot,ShotTier} from './types.js';
+import {dropStrength} from './drop-shot.js';
 /** Shared tiers keep touch feedback, authoritative depth and flight colours aligned. */
 export const SHOT_PROFILES={
  slice:{label:'切削球',color:0xddefff,depthPush:0,servePush:0},
@@ -16,5 +17,7 @@ export function shotTier(shot:Pick<Shot,'power'|'lob'|'critical'|'topspin'|'slic
 export function shotDepth(shot:Shot,serve:boolean){
  // Downward serves reverse the gesture but retain the overhead serve's pace/depth.
  const profile=SHOT_PROFILES[shotTier(serve&&shot.slice?{...shot,slice:false}:shot)];
- return (serve?3.4+shot.depth*2.6:2.8+shot.depth*8.6)+(serve?profile.servePush:profile.depthPush)*(.5+shot.depth);
+ const normal=(serve?3.4+shot.depth*2.6:2.8+shot.depth*8.6)+(serve?profile.servePush:profile.depthPush)*(.5+shot.depth);
+ const touch=serve?0:dropStrength(shot);
+ return normal+(1.15+shot.depth*4-normal)*touch;
 }

@@ -493,3 +493,38 @@ test('steep swipes and non-neutral slice/rescue randomness retain actual outgoin
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
+
+test('short slow swipe sends a server-authoritative drop shot with matching low rebound to both clients',async()=>{
+ const {Match}=await import('../src/simulation/match.js'),{captureSwipeAim}=await import('../src/input/aim.js');
+ const {interpretGesture}=await import('../src/input/gesture.js');
+ const {PerspectiveCamera}=await import('three'),{frameMatch}=await import('../src/render/camera.js');
+ const {predictFlight}=await import('../src/simulation/trajectory.js');
+ const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{
+  a.send({type:'create',name:'小球A'});const welcome=await a.wait('welcome');
+  b.send({type:'join',code:welcome.code,name:'小球B'});await b.wait('welcome');
+  a.send({type:'ready'});b.send({type:'ready'});await a.wait('state');
+  const room=server.rooms.rooms.get(welcome.code)!;
+  for(const seat of [0,1] as const){
+   room.match!.dispose();const m=room.match=new Match(['wuming','wuming'],()=>1),p=m.state.players[seat],sign=seat===0?1:-1;
+   m.state.phase='rally';m.state.rally=2;m.step(.08);
+   Object.assign(p,{x:0,z:12.4*sign,tx:0,tz:12.4*sign});
+   m.physics.place({x:.3*sign,y:2.4,z:12.15*sign},{x:0,y:0,z:4*sign});
+   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});
+   const camera=new PerspectiveCamera();frameMatch(camera,390,844,seat,0,12.4,undefined,'near');
+   const shot=interpretGesture({dx:0,dy:-40,duration:650,hold:0,width:390,height:844})!;
+   a.messages.length=0;b.messages.length=0;
+   (seat===0?a:b).send({type:'input',command:{...shot,drop:999,swipeAim:captureSwipeAim(camera,shot,0,-40,390,844)}});
+   const hit=await a.wait('state',v=>v.state.rally===3);
+   assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
+   assert.equal(hit.state.ball.drop,1,'server derives strength, never trusts client drop flag');
+   assert.equal(hit.state.event,'放小球');
+   assert.ok(Math.abs(hit.state.ball.targetZ)<2);
+   const bounce=await a.wait('state',v=>v.state.rally===3&&v.state.ball.bounces===1);
+   assert.deepEqual((await b.wait('state',v=>v.seq===bounce.seq)).state,bounce.state);
+   const next=predictFlight(bounce.state.ball);
+   assert.ok(Math.abs(next.landing.z)<4.5);
+   assert.ok(Math.max(...next.points.map(p=>p.y))<.8);
+  }
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
+});

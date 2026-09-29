@@ -39,7 +39,9 @@ export class Controls {
   }
   private move=(e:PointerEvent)=>{
     const s=this.start;if(!s||e.pointerId!==s.id)return;
-    if(!s.firstMove&&Math.hypot(e.clientX-s.x,e.clientY-s.y)>12)s.firstMove=performance.now();
+    // Measure hold only while the finger is stationary. A 12px dead zone
+    // counted much of a gentle 20–40px swipe as a charged topspin hold.
+    if(!s.firstMove&&Math.hypot(e.clientX-s.x,e.clientY-s.y)>3)s.firstMove=performance.now();
     this.trail.move(e.clientX,e.clientY);
     this.feedback(this.gesture(e),e.clientX,e.clientY,false);
   };

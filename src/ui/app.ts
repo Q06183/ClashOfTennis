@@ -7,6 +7,7 @@ import {staminaBars,staminaLabels} from './stamina.js';
 import {CameraChoice} from './camera-choice.js';
 import {effectiveStamina} from '../simulation/stamina.js';
 import {shotTier,SHOT_PROFILES} from '../simulation/shot-profile.js';
+import {dropStrength} from '../simulation/drop-shot.js';
 import { Match } from '../simulation/match.js';
 import { driveAI } from '../simulation/ai.js';
 import { other, side, type Input, type MatchState, type RoomView, type Seat, type Shot } from '../simulation/types.js';
@@ -111,7 +112,8 @@ export class App {
     el.style.display='block';el.style.left=`${Math.max(65,Math.min(innerWidth-65,x))}px`;el.style.top=`${Math.max(160,y-30)}px`;
     const tier=shotTier(shot),profile=SHOT_PROFILES[tier];
     el.dataset.tier=tier;el.style.setProperty('--shot-color',`#${profile.color.toString(16).padStart(6,'0')}`);
-    el.querySelector('span')!.textContent=shot.slice&&(this.remote??this.local.state).phase==='serve'?'反向发球':profile.label;
+    const serving=(this.remote??this.local.state).phase==='serve';
+    el.querySelector('span')!.textContent=serving?(shot.slice?'反向发球':profile.label):dropStrength(shot)>.5?'放小球':profile.label;
     (el.querySelector('i') as HTMLElement).style.transform=`scaleX(${Math.max(.1,shot.power)})`;
     if(end)this.feedbackTimer=setTimeout(()=>el.style.display='none',550);
   }
@@ -257,7 +259,7 @@ export class App {
     <div class="match-bottom"><div class="serve-notice" id="serve-notice" role="status" aria-live="polite" hidden><strong id="serve-title"></strong><span id="serve-detail"></span></div><div class="hint" id="rally-hint"><strong id="match-hint">斜向滑动，发进对角发球区</strong><small id="match-subhint">绿普通 · 蓝快速 · 橙强力 · 玫红暴击</small></div><div class="court-actions">${this.cameraChoice.button()}<button class="lob-button" id="lob-mode" data-action="lob" aria-label="选择下一拍高吊球" aria-pressed="false">高吊</button><button class="help-button" data-action="help" aria-label="查看操作帮助">?</button></div></div>`;}
   private helpPanel(){return this.panel(`<div class="panel-top"><span>JUST THREE MOVES</span><button class="icon-button" data-action="close-help" aria-label="关闭帮助">×</button></div><h2>好球，从这一拍开始。</h2><p>${this.net?'线上对局仍在进行，请尽快回到球场。':'先记住三个动作，马上就能打出回合。'}</p>
     <div class="tutorial-steps"><div class="tutorial-step"><b>1</b><div><strong>轻点球场，移动到位</strong><span>发球前可以点按调整站位，发球者限当前半区底线后，开始抛球后锁定位置。普通球员优先接落地球，伊内丝主动上前截击。本分消耗按20%折算到总体力，一分最多扣总体力20%；分末按角色返还部分消耗，最多90%。下一分以恢复后的总体力作为本分初始值，不再回满100%；二发不重置。跑动和击球使用“本分×总体”的有效体力，跳接概率只看总体力。</span></div></div>
-    <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>球从球拍实际触球点飞出，出球方向按手指在屏幕上的滑动角度计算，不再额外放大横向角度。发球同样如此，请斜划发进对角区。球仍按真实抛物线下落，后半程不是屏幕直线。近景和远景只缩放，不改变场地比例。滑得越长、越快，落点越深，也更容易出界。跑动时可提前滑动，保存最后一次方向和球质，后续在可及窗口回击或跳接。</span></div></div>
+    <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>短而慢地滑动可放小球：显示“放小球”，轻落在网后约1～2米，弹跳低、落地后明显减速。遇到高球也不会自动加力扣杀；发球不使用小球规则。中长滑动平滑过渡到原来的深球；手指按住不动再划才是蓄力上旋。球从球拍实际触球点飞出，方向按屏幕滑动角度计算，斜划过大仍可能从边线出界。球仍按真实抛物线下落，后半程不是屏幕直线。近景和远景只缩放，不改变场地比例。跑动时可提前滑动，保存最后一次方向和球质。</span></div></div>
     <div class="tutorial-step"><b>3</b><div><strong>认颜色，控制速度与深度</strong><span>绿普通、蓝快速、橙强力、玫红暴击、青绿上旋、金色高压、冰白切削、紫色高吊。长按蓄力上旋，下划反向切削，右侧按钮选择高吊。正常站位、跑动或等待来球能接到时不触发飞身；只有普通方式来不及、侧扑可及的球才抽签。总体力满时90%，1/3及以下10%，中间平滑变化。每记来球只抽一次，重复滑动不能刷签。跳接使用最后手势的方向、深度和球种，保留减速及深浅波动；救球和切削不再随机改变滑动指定的出球方向。切削落地后仍有低弹跳和侧偏；接发仍必须落地，出界或二跳后不能救。</span></div></div></div>
     <p>右下角“近景 / 远景”可切换镜头距离，默认近景并记住选择；正在瞄准时会等当前击球结束再切换。救球只向左右侧扑，持拍手伸向球，随后趴地缓冲，再用双手撑地、花0.5秒起身；从起跳到约1.18秒恢复期间不能再次移动或击球，可以提前输入下一拍。</p>
     <p id="performance-stats" class="small-note"></p><p id="performance-sync" class="small-note"></p><button class="primary" data-action="close-help">知道了，上场 →</button><p class="small-note">先到 7 分且领先 2 分获胜 · 发球限时 12 秒</p>`);}
@@ -315,6 +317,7 @@ export class App {
     text('match-subhint',this.controls.lobMode?'下一拍：高吊球 · 再点按钮可取消':s.ball.topspin?'上旋球 · 注意落地前冲':'长按上旋 · 下划切削 · 右侧选高吊');
     if(s.phase==='rally'){
       const jump=rescueHint(s,me);if(jump)text('match-hint',jump);
+      if(!jump&&(s.ball.drop??0)>.5)text('match-hint',s.ball.hitter===me?'放小球 · 网前短落点、低弹跳':'对手放小球 · 尽快上网接球');
       if(!this.controls.lobMode&&!s.ball.topspin)text('match-subhint',rescueChanceText(s.players[me].totalStamina??1));
     }
     const phaseKey=`${s.phase}-${s.eventId}`;

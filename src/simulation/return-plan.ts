@@ -1,5 +1,6 @@
 import {characterEffects,getCharacter,handedness} from './characters.js';
 import {flightGravity} from './flight.js';
+import {dropRebound} from './drop-shot.js';
 import {movePlayer} from './movement.js';
 import {spendStamina,recoverPointStamina,STAMINA} from './stamina.js';
 import {reception} from './reception.js';
@@ -42,6 +43,8 @@ export function canWaitForBounce(b:BallState,p:PlayerState,seat:Seat){
   ball.x+=ball.vx*step;ball.z+=ball.vz*step;ball.y+=ball.vy*step-gravity*step*step/2;ball.vy-=gravity*step;elapsed+=step;
   if(!bounced&&elapsed>=drop-1e-8){
    bounced=true;ball.bounces=1;ball.y=.12;ball.vy=Math.abs(ball.vy)*.72*(b.slice?.68:1);ball.vx*=kick;ball.vz*=kick;ball.topspin=(ball.topspin??0)*.55;
+   const rebound=dropRebound({x:ball.vx,y:ball.vy,z:ball.vz},b.drop);
+   ball.vx=rebound.x;ball.vy=rebound.y;ball.vz=rebound.z;
   }else if(bounced&&ball.y<=.12)break;
   const target=bounced?reception(ball,runner,seat):ground;runner.tx=target.x;runner.tz=target.z;
   movePlayer(runner,seat,step);

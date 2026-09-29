@@ -1,4 +1,25 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {Controls} from '../src/input/controls.js';
+import {dropStrength} from '../src/simulation/drop-shot.js';
+test('a very short gradually moving finger is not misread as a stationary topspin charge',t=>{
+ let now=1;const sent:any[]=[];
+ class Element extends EventTarget{classList={add(){}};style={};clientWidth=390;clientHeight=844;setAttribute(){}removeAttribute(){}append(){}remove(){}setPointerCapture(){}}
+ for(const key of ['document','requestAnimationFrame','cancelAnimationFrame']){
+  const saved=Object.getOwnPropertyDescriptor(globalThis,key);
+  Object.defineProperty(globalThis,key,{value:undefined,writable:true,configurable:true});
+  t.after(()=>saved?Object.defineProperty(globalThis,key,saved):Reflect.deleteProperty(globalThis,key));
+ }
+ t.mock.method(performance,'now',()=>now);t.mock.property(globalThis,'document',{createElementNS:()=>new Element(),body:new Element()} as any);
+ t.mock.property(globalThis,'requestAnimationFrame',()=>1);t.mock.property(globalThis,'cancelAnimationFrame',()=>{});
+ const canvas=new Element(),c=new Controls(canvas as any,()=>null,v=>sent.push(v),()=>{},()=>{},s=>s);c.enabled=true;
+ const event=(type:string,y:number)=>{const e=new Event(type);Object.assign(e,{pointerId:1,clientX:150,clientY:y});canvas.dispatchEvent(e);};
+ try{
+  event('pointerdown',500);
+  for(let i=1;i<=20;i++){now=1+i*50;event('pointermove',500-i*1.25);}
+  event('pointerup',475);
+  assert.equal(sent.length,1);assert.equal(sent[0].topspin,0);
+  assert.ok(dropStrength(sent[0])>.99);
+ }finally{c.dispose();}
+});
 test('charge, lob selection, cancel, disable and release each have a single input lifecycle',t=>{
  let time=1,id=0;const frames=new Map<number,FrameRequestCallback>(),sent:any[]=[],charges:number[]=[];
  class Element extends EventTarget{classList={add(){}};style={};clientWidth=390;clientHeight=844;setAttribute(){}removeAttribute(){}append(){}remove(){}setPointerCapture(){}}

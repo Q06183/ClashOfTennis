@@ -35,7 +35,7 @@ export class SnapshotPlayback {
   if(!this.draw)this.draw=structuredClone(state);
   const out=this.draw,players=out.players,ball=out.ball;
   Object.assign(out,state,{players,ball});Object.assign(ball,state.ball);
-  for(const key of ['tier','skill','topspin','slice','aimOrigin'] as const)if(!(key in state.ball))delete ball[key];
+  for(const key of ['tier','skill','topspin','slice','drop','aimOrigin'] as const)if(!(key in state.ball))delete ball[key];
   for(let i=0;i<2;i++)Object.assign(players[i],state.players[i],{
    serveCourt:state.players[i].serveCourt,strokeSpin:state.players[i].strokeSpin,preparation:state.players[i].preparation,contact:state.players[i].contact,rescue:state.players[i].rescue,
    totalStamina:state.players[i].totalStamina,pointStaminaStart:state.players[i].pointStaminaStart,pointStaminaSpent:state.players[i].pointStaminaSpent,

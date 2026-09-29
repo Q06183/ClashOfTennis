@@ -7,6 +7,7 @@ import {canSmash,canReturnNormally,returnHeightLegal,volleyDifficulty} from './s
 import {getCharacter,characterEffects} from './characters.js';
 import { BallPhysics } from './physics.js';
 import {shotDepth,shotTier,SHOT_PROFILES} from './shot-profile.js';
+import {dropStrength,dropRebound} from './drop-shot.js';
 import {RESCUE,rescueChance,rescueTarget,hasNormalReturnWindow,moveRescue,canReachRescue} from './rescue.js';
 import {movePlayer} from './movement.js';
 import {beginPointStamina,spendStamina,recoverPointStamina,settlePointStamina,effectiveStamina,STAMINA} from './stamina.js';
@@ -57,7 +58,7 @@ export class Match {
     });
     const p=s.players[s.server];
     this.physics.place({x:p.x,y:1.25,z:p.z-.25*side(s.server)});
-    Object.assign(s.ball,this.physics.read(),{bounces:0,hitter:s.server,targetX:-serveSide*2,targetZ:-side(s.server)*4.8,aimOrigin:undefined,critical:false,tier:undefined,rescue:false,topspin:0,slice:false,skill:undefined});
+    Object.assign(s.ball,this.physics.read(),{bounces:0,hitter:s.server,targetX:-serveSide*2,targetZ:-side(s.server)*4.8,aimOrigin:undefined,critical:false,tier:undefined,rescue:false,topspin:0,slice:false,drop:0,skill:undefined});
     this.announce(s.fault?'二发 · 稳一点':'滑动发球');
     this.faultReset=false;
   }
@@ -135,15 +136,16 @@ export class Match {
     const total=s.score[0]+s.score[1], serveSide=sign*(total%2===0?1:-1);
     const stretch=serve?0:clamp(Math.hypot(p.x-b.x,p.z-b.z)-.6,0,1.2);
     let targetX=shot.aim*4.45*sign;
+    const drop=serve?0:dropStrength(shot);
     const rescue=!serve&&!!p.rescue&&!p.rescue.hit;
     const smash=!serve&&!rescue&&canSmash(b,p,seat),volley=!serve&&!rescue&&!smash&&b.bounces===0;
     // Preserve the latest swipe's intended depth, heading, spin and pace tier.
     // Rescue still applies its physical slowdown and scatter below.
-    if(smash)shot={...shot,power:Math.max(.75,shot.power),critical:false,lob:false,topspin:0,slice:false};
+    if(smash&&drop===0)shot={...shot,power:Math.max(.75,shot.power),critical:false,lob:false,topspin:0,slice:false};
     else if(volley){const difficulty=volleyDifficulty(b,p);shot={...shot,topspin:0,power:shot.power*(1-.48*difficulty),critical:difficulty>.05?false:shot.critical,depth:shot.depth*(1-.32*difficulty)};}
     if(serve)shot={...shot,slice:false};
     const slice=shot.slice===true;
-    const tier=smash?'smash':shotTier(shot),topspin=spinAmount(shot.topspin),gravity=flightGravity({topspin});
+    const tier=smash&&drop===0?'smash':shotTier(shot),topspin=spinAmount(shot.topspin),gravity=flightGravity({topspin});
     let targetZ=-sign*shotDepth(shot,serve);
     if(serve) {
       targetX=-serveSide*1.75+shot.aim*2.25*sign;
@@ -154,15 +156,16 @@ export class Match {
     const direction=!serve&&shot.swipeAim?directionAtContact(shot.swipeAim,start,shot.directionX??0,sign):shot.directionX;
     if(direction!==undefined)targetX=start.x+direction*Math.abs(targetZ-start.z)*sign;
     let scatterX=0;
-    if(slice){const spread=.4+.65*shot.power;scatterX+=(this.random()*2-1)*spread;targetZ+=(this.random()*2-1)*(.5+.45*shot.power);}
-    if(rescue){scatterX+=(this.random()*2-1)*1.6;targetZ+=(this.random()*2-1)*1.8;}
+    const depthSpread=1-.9*drop;
+    if(slice){const spread=.4+.65*shot.power;scatterX+=(this.random()*2-1)*spread;targetZ+=(this.random()*2-1)*(.5+.45*shot.power)*depthSpread;}
+    if(rescue){scatterX+=(this.random()*2-1)*1.6;targetZ+=(this.random()*2-1)*1.8*depthSpread;}
     const power=shot.power*(.65+.35*effectiveStamina(p))*(1-.2*stretch);
     const critical=tier==='critical';
     const backhand=(b.x-p.x)*sign*handedness(p.characterId)<0;
     const attribute=serve||smash?'serve':volley?'volley':backhand?'backhand':'forehand';
-    const effects=characterEffects(p.characterId),strokeSpeed=effects[attribute];
+    const effects=characterEffects(p.characterId),strokeSpeed=effects[attribute]+(Math.min(effects[attribute],1)-effects[attribute])*drop;
     const slowdown=(volley?1+.32*volleyDifficulty(b,p):1)*(slice?1.15:1)*(rescue?RESCUE.slowdown:1);
-    const flightAt=(x:number)=>flightTime(start,{x,y:.12,z:targetZ},power,strokeSpeed,gravity,{smash,critical,lob:shot.lob})*slowdown;
+    const flightAt=(x:number)=>flightTime(start,{x,y:.12,z:targetZ},power,strokeSpeed,gravity,{smash:smash&&drop===0,critical,lob:shot.lob})*slowdown;
     let flight:number;
     if(shot.swipeAim?.elevation){
       // Depth, pace, fatigue and net clearance determine time independently
@@ -178,7 +181,7 @@ export class Match {
     }
     const velocity={x:(targetX-start.x)/flight,y:(.12-start.y+(gravity/2)*flight*flight)/flight,z:(targetZ-start.z)/flight};
     this.physics.place(start,velocity,topspin);
-    Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ,aimOrigin:{x:p.x,y:1.1,z:p.z},critical,tier,rescue,topspin,slice,skill:smash?'smash':slice?'slice':volley?'volley':undefined});
+    Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ,aimOrigin:{x:p.x,y:1.1,z:p.z},critical,tier,rescue,topspin,slice,drop,skill:smash?'smash':slice?'slice':volley?'volley':undefined});
     s.phase='rally';s.rally++;s.maxRally=Math.max(s.maxRally,s.rally);
     p.swing=serve?SERVE_RECOVERY:.44;p.strokeSpin=topspin;p.backhand=(b.x-p.x)*sign*handedness(p.characterId)<0;
     p.stroke=serve?'serve':smash?'smash':slice?(p.backhand?'slice-backhand':'slice-forehand'):volley?'volley':shot.lob?'lob':p.backhand?'backhand':'forehand';
@@ -190,7 +193,7 @@ export class Match {
     // A recovery tap belongs to the previous flight. Fresh incoming-ball taps
     // can still override assistance, but a stale one must not delay the split step.
     this.manualUntil[other(seat)]=0;
-    this.announce(rescue?'极限救球':smash?'高压球':slice?(p.backhand?'反手切削':'正手切削'):volley?'截击':serve?`${SHOT_PROFILES[tier].label.replace('球','')}发球`:SHOT_PROFILES[tier].label);
+    this.announce(drop>.5?'放小球':rescue?'极限救球':smash?'高压球':slice?(p.backhand?'反手切削':'正手切削'):volley?'截击':serve?`${SHOT_PROFILES[tier].label.replace('球','')}发球`:SHOT_PROFILES[tier].label);
   }
   private faultOrPoint(reason: string) {
     const s=this.state;
@@ -283,6 +286,11 @@ export class Match {
           const angle=(this.random()*2-1)*.16,pace=.8+.12*this.random(),vx=b.vx,vz=b.vz;
           b.vx=(vx*Math.cos(angle)-vz*Math.sin(angle))*pace;b.vz=(vx*Math.sin(angle)+vz*Math.cos(angle))*pace;b.vy*=.58+.2*this.random();
           this.physics.body.setLinvel({x:b.vx,y:b.vy,z:b.vz},true);
+        }
+        if(b.drop){
+          const rebound=dropRebound({x:b.vx,y:b.vy,z:b.vz},b.drop);
+          b.vx=rebound.x;b.vy=rebound.y;b.vz=rebound.z;
+          this.physics.body.setLinvel(rebound,true);
         }
         this.announce(b.slice?'切削弹跳':'落地');
       } else {this.award(b.hitter,'二跳');return;}
