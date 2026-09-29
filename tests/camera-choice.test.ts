@@ -7,7 +7,7 @@ import {CourtView} from '../src/render/view.js';
 import {Match} from '../src/simulation/match.js';
 import {initPhysics} from '../src/simulation/physics.js';
 import {interpretGesture} from '../src/input/gesture.js';
-import {projectedOutgoingAngle} from './helpers/projected-shot.js';
+import {projectedOutgoingAngle,expectedControlledAngle} from './helpers/projected-shot.js';
 
 before(initPhysics);
 test('near and far presets stay behind both players, with clearly different subject sizes',()=>{
@@ -52,7 +52,7 @@ test('both presets retain actual outgoing screen direction for each seat',()=>{
    const shot=interpretGesture({dx:30,dy:-150,duration:220,hold:0,width:390,height:844})!;
    const aimed=CourtView.prototype.aimShot.call({camera,seat,size:{w:390,h:844},aimCamera:new AimCameraLock()} as any,shot,m.state,30,-150);
    m.input(seat,aimed);assert.equal(m.state.rally,3);
-   assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844)-Math.atan(.2))<.001);
+   assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844)-expectedControlledAngle(camera,p.contact!,m.state.ball,390,844,.2))<.001);
   }finally{m.dispose();}
  }
 });

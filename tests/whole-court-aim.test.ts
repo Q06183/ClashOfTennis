@@ -11,7 +11,7 @@ import {Match} from '../src/simulation/match.js';
 import {initPhysics} from '../src/simulation/physics.js';
 import {predictFlight} from '../src/simulation/trajectory.js';
 import {side,type Seat} from '../src/simulation/types.js';
-import {projectedOutgoingAngle} from './helpers/projected-shot.js';
+import {projectedOutgoingAngle,expectedControlledAngle} from './helpers/projected-shot.js';
 
 before(initPhysics);
 test('real outgoing motion follows gesture intent across the whole court and lands at its physical target',()=>{
@@ -32,7 +32,7 @@ test('real outgoing motion follows gesture intent across the whole court and lan
    m.input(seat,aimed);assert.equal(m.state.rally,3);
    const b=m.state.ball,contact=p.contact!,flight=predictFlight(b);
    assert.ok(Math.abs(flight.landing.x-b.targetX)<.02);
-   const angle=projectedOutgoingAngle(camera,contact,b,w,h),error=angle-Math.atan(ratio);
+   const angle=projectedOutgoingAngle(camera,contact,b,w,h),error=angle-expectedControlledAngle(camera,contact,b,w,h,ratio);
    assert.ok(Math.abs(error)<.001,`${c.id}/${seat}/${w}x${h}/${x}/${depth}: ${error*180/Math.PI} degrees`);
    assert.equal(flight.hitNet,false);
   }finally{m.dispose();}
@@ -105,7 +105,7 @@ test('pointer-to-match pipeline preserves the input camera and outgoing directio
    assert.deepEqual(camera.matrixWorld.elements,inputMatrix);
    const landing=predictFlight(m.state.ball).landing,c=p.contact!;
    assert.ok(Math.abs(landing.x-m.state.ball.targetX)<.02);
-  assert.ok(Math.abs(projectedOutgoingAngle(camera,c,m.state.ball,390,844)-Math.atan(1/3))<.001);
+  assert.ok(Math.abs(projectedOutgoingAngle(camera,c,m.state.ball,390,844)-expectedControlledAngle(camera,c,m.state.ball,390,844,1/3))<.001);
   }finally{controls.dispose();m.dispose();}
  }
 });

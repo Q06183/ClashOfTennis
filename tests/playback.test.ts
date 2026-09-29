@@ -42,10 +42,10 @@ test('serialized snapshots clear completed rescue motion instead of retaining a 
 });
 
 test('a new serialized flight clears the previous skill, spin and drop rebound',()=>{
- const p=new SnapshotPlayback(),a=state(1),b=state(1.8);a.ball.slice=true;a.ball.skill='smash';a.ball.tier='smash';a.ball.topspin=1;a.ball.drop=1;b.rally++;
+ const p=new SnapshotPlayback(),a=state(1),b=state(1.8);a.ball.slice=true;a.ball.skill='smash';a.ball.tier='smash';a.ball.topspin=1;a.ball.drop=1;a.ball.placementAssist=1;b.rally++;
  p.push(JSON.parse(JSON.stringify(a)),1000);assert.equal(p.sample(1000)!.ball.skill,'smash');
  assert.equal(p.sample(1000)!.ball.drop,1);
- p.push(JSON.parse(JSON.stringify(b)),1800);const out=p.sample(1900)!;assert.equal(out.ball.slice,undefined);assert.equal(out.ball.skill,undefined);assert.equal(out.ball.tier,undefined);assert.equal(out.ball.topspin,undefined);assert.equal(out.ball.drop,undefined);
+ p.push(JSON.parse(JSON.stringify(b)),1800);const out=p.sample(1900)!;assert.equal(out.ball.slice,undefined);assert.equal(out.ball.skill,undefined);assert.equal(out.ball.tier,undefined);assert.equal(out.ball.topspin,undefined);assert.equal(out.ball.drop,undefined);assert.equal(out.ball.placementAssist,undefined);
 });
 
 test('dual stamina survives snapshots, interpolates within a point and resets without blending point boundaries',()=>{

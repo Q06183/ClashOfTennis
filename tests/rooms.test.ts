@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { WebSocket } from 'ws';
 import { createGameServer } from '../server/app.js';
-import {projectedOutgoingAngle} from './helpers/projected-shot.js';
+import {projectedOutgoingAngle,expectedControlledAngle} from './helpers/projected-shot.js';
 import {AimCameraLock} from '../src/render/aim-camera.js';
 import {rescueIncoming} from './helpers/rescue-incoming.js';
 import {effectiveStamina,beginPointStamina,spendStamina,settlePointStamina,pointRecoveryRate} from '../src/simulation/stamina.js';
@@ -300,7 +300,7 @@ test('a running receiver queues screen aim over sockets and uses actual contact 
    const camera=new PerspectiveCamera();frameMatch(camera,390,844,seat,p.x,10);const shot={type:'shot' as const,aim:0,depth:.6,power:.4,lob:false},aim=captureSwipeAim(camera,shot,24,-150,390,844);a.messages.length=0;b.messages.length=0;
    (seat===0?a:b).send({type:'input',command:{...shot,swipeAim:aim}});
    const queued=await a.wait('state',v=>v.state.rally===2&&v.state.players[seat].shotQueued);assert.equal(queued.state.players[seat].moving,true);
-   const hit=await a.wait('state',v=>v.state.rally===3),peer=await b.wait('state',v=>v.seq===hit.seq);assert.deepEqual(hit.state,peer.state);const c=hit.state.players[seat].contact;assert.ok(Math.abs(projectedOutgoingAngle(camera,c,hit.state.ball,390,844)-Math.atan(24/150))<.01);assert.equal(hit.state.players[seat].shotQueued,false);
+   const hit=await a.wait('state',v=>v.state.rally===3),peer=await b.wait('state',v=>v.seq===hit.seq);assert.deepEqual(hit.state,peer.state);const c=hit.state.players[seat].contact;assert.ok(Math.abs(projectedOutgoingAngle(camera,c,hit.state.ball,390,844)-expectedControlledAngle(camera,c,hit.state.ball,390,844,24/150))<.01);assert.equal(hit.state.players[seat].shotQueued,false);
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
@@ -332,7 +332,7 @@ test('whole-court outgoing direction survives the real WebSocket protocol on bot
    assert.equal(hit.state.players[seat].characterId,seat===0?'wuming':'lin');
    assert.equal(hit.state.ball.bounces,0);
    const angle=projectedOutgoingAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844);
-   assert.ok(Math.abs(angle-Math.atan(ratio))<.015,`${seat}/${x}/${depth}: ${angle}`);
+   assert.ok(Math.abs(angle-expectedControlledAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844,ratio))<.015,`${seat}/${x}/${depth}: ${angle}`);
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
@@ -489,7 +489,7 @@ test('steep swipes and non-neutral slice/rescue randomness retain actual outgoin
    assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
    assert.equal(!!hit.state.ball.rescue,kind==='rescue');assert.equal(!!hit.state.ball.slice,kind==='slice');
    const angle=projectedOutgoingAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844);
-   assert.ok(Math.abs(angle-Math.atan(ratio))<.001,`${seat}/${kind}/${random}/${ratio}: ${angle}`);
+   assert.ok(Math.abs(angle-expectedControlledAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844,ratio))<.001,`${seat}/${kind}/${random}/${ratio}: ${angle}`);
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
@@ -553,6 +553,34 @@ test('expanded lateral rescues cross the old range limit identically on both soc
    const hit=await a.wait('state',v=>v.state.rally===3);
    assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
    assert.equal(hit.state.ball.rescue,true);assert.equal(rolls,3);
+  }
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
+});
+
+test('server applies speed-dependent placement protection identically on both sockets',async()=>{
+ const {Match}=await import('../src/simulation/match.js'),{captureSwipeAim}=await import('../src/input/aim.js');
+ const {PerspectiveCamera}=await import('three'),{frameMatch}=await import('../src/render/camera.js');
+ const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{
+  a.send({type:'create',name:'控球A'});const welcome=await a.wait('welcome');
+  b.send({type:'join',code:welcome.code,name:'控球B'});await b.wait('welcome');
+  a.send({type:'ready'});b.send({type:'ready'});await a.wait('state');
+  const room=server.rooms.rooms.get(welcome.code)!;
+  for(const seat of [0,1] as const)for(const power of [.2,1]){
+   room.match!.dispose();const m=room.match=new Match(['lin','lin'],()=>.5),p=m.state.players[seat],sign=seat===0?1:-1;
+   m.state.phase='rally';m.state.rally=2;m.step(.08);
+   Object.assign(p,{x:3*sign,z:12.4*sign,tx:3*sign,tz:12.4*sign});
+   m.physics.place({x:3.3*sign,y:1.3,z:12.15*sign},{x:0,y:0,z:4*sign});
+   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});
+   const camera=new PerspectiveCamera();frameMatch(camera,390,844,seat,p.x,12.4,undefined,'near');
+   const shot={type:'shot' as const,aim:0,depth:1,power,lob:false,critical:power===1};
+   a.messages.length=0;b.messages.length=0;
+   (seat===0?a:b).send({type:'input',command:{...shot,placementAssist:power===1?1:0,swipeAim:captureSwipeAim(camera,shot,90,-150,390,844)}});
+   const hit=await a.wait('state',v=>v.state.rally===3);
+   assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
+   const ball=hit.state.ball;assert.equal(ball.placementAssist,power===1?0:1,'client cannot override assistance');
+   if(power===1)assert.ok(Math.abs(ball.targetZ)>11.915&&Math.abs(ball.targetX)>4.145);
+   else assert.ok(Math.abs(ball.targetX)<3.96&&Math.abs(ball.targetZ)<10.95);
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });

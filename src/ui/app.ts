@@ -8,6 +8,7 @@ import {CameraChoice} from './camera-choice.js';
 import {effectiveStamina} from '../simulation/stamina.js';
 import {shotTier,SHOT_PROFILES} from '../simulation/shot-profile.js';
 import {dropStrength} from '../simulation/drop-shot.js';
+import {placementAssist} from '../simulation/pace-control.js';
 import { Match } from '../simulation/match.js';
 import { driveAI } from '../simulation/ai.js';
 import { other, side, type Input, type MatchState, type RoomView, type Seat, type Shot } from '../simulation/types.js';
@@ -114,7 +115,7 @@ export class App {
     const tier=shotTier(shot),profile=SHOT_PROFILES[tier];
     el.dataset.tier=tier;el.style.setProperty('--shot-color',`#${profile.color.toString(16).padStart(6,'0')}`);
     const serving=(this.remote??this.local.state).phase==='serve';
-    el.querySelector('span')!.textContent=serving?(shot.slice?'反向发球':profile.label):dropStrength(shot)>.5?'放小球':profile.label;
+    el.querySelector('span')!.textContent=serving?(shot.slice?'反向发球':profile.label):dropStrength(shot)>.5?'放小球':`${profile.label} · ${placementAssist(shot.power)>.8?'稳健落点':placementAssist(shot.power)>.2?'注意控线':'高风险压线'}`;
     (el.querySelector('i') as HTMLElement).style.transform=`scaleX(${Math.max(.1,shot.power)})`;
     if(end)this.feedbackTimer=setTimeout(()=>el.style.display='none',550);
   }
@@ -260,7 +261,7 @@ export class App {
     <div class="match-bottom"><div class="serve-notice" id="serve-notice" role="status" aria-live="polite" hidden><strong id="serve-title"></strong><span id="serve-detail"></span></div><div class="hint" id="rally-hint"><strong id="match-hint">斜向滑动，发进对角发球区</strong><small id="match-subhint">绿普通 · 蓝快速 · 橙强力 · 玫红暴击</small></div><div class="court-actions">${this.cameraChoice.button()}<button class="lob-button" id="lob-mode" data-action="lob" aria-label="选择下一拍高吊球" aria-pressed="false">高吊</button><button class="help-button" data-action="help" aria-label="查看操作帮助">?</button></div></div>`;}
   private helpPanel(){return this.panel(`<div class="panel-top"><span>JUST THREE MOVES</span><button class="icon-button" data-action="close-help" aria-label="关闭帮助">×</button></div><h2>好球，从这一拍开始。</h2><p>${this.net?'线上对局仍在进行，请尽快回到球场。':'先记住三个动作，马上就能打出回合。'}</p>
     <div class="tutorial-steps"><div class="tutorial-step"><b>1</b><div><strong>轻点球场，移动到位</strong><span>发球前可以点按调整站位，发球者限当前半区底线后，开始抛球后锁定位置。普通球员优先接落地球，伊内丝主动上前截击。本分消耗按20%折算到总体力，一分最多扣总体力20%；分末按角色返还部分消耗，最多90%。下一分以恢复后的总体力作为本分初始值，不再回满100%；二发不重置。跑动和击球使用“本分×总体”的有效体力，跳接概率只看总体力。</span></div></div>
-    <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>短而慢地滑动可放小球：显示“放小球”，轻落在网后约1～2米，弹跳低、落地后明显减速。遇到高球也不会自动加力扣杀；发球不使用小球规则。中长滑动平滑过渡到原来的深球；手指按住不动再划才是蓄力上旋。球从球拍实际触球点飞出，方向按屏幕滑动角度计算，斜划过大仍可能从边线出界。球仍按真实抛物线下落，后半程不是屏幕直线。近景和远景只缩放，不改变场地比例。跑动时可提前滑动，保存最后一次方向和球质。</span></div></div>
+    <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>短而慢地滑动可放小球：显示“放小球”，落在网后约1～2米、低弹跳。普通及中慢速回球有落点辅助，接近边线时柔和收回，并保留底线余量；越快越用力，辅助越少，强力球和暴击球更容易出界。球场中央的小幅方向不改，边缘辅助会有意收敛角度，不再要求慢球与原始手势完全同角度。发球仍需主动斜划进对角发球区，不自动纠正发球方向。手指按住再划是上旋，右侧按钮可选高吊；近远景不改变规则。跑动时可提前滑动，保存最后一次方向和球质。</span></div></div>
     <div class="tutorial-step"><b>3</b><div><strong>认颜色，控制速度与深度</strong><span>绿普通、蓝快速、橙强力、玫红暴击、青绿上旋、金色高压、冰白切削、紫色高吊。长按蓄力上旋，下划反向切削，右侧按钮选择高吊。不必先滑动：预测普通跑动接不到、侧扑来得及时，角色会自动尝试飞身。总体力满时90%，1/3及以下10%，中间平滑变化；每记来球只抽一次。已提前滑动就直接回球；未滑动则在球拍真正够到球时，双方人物和球一起定格最多0.5秒，显示“滑动回击”。窗口内滑动立即击球，超时球继续原轨迹，不自动击中或倒带。救球保留减速和深浅波动；切削落地后仍有侧偏，接发仍须落地，出界或二跳后不能救。</span></div></div></div>
     <p>右下角“近景 / 远景”切换镜头距离；瞄准和触球定格期间不切镜头。侧扑最多横移3.5米，但受速度、加速与来球时间限制，来不及就不会瞬移补接。起跳到伸拍按距离使用约0.24～0.72秒，之后趴地缓冲、双手撑地起身0.5秒。定格期间双方都不能移动或恢复体力；救球者落地起身前不能再次击球。</p>
     <p id="performance-stats" class="small-note"></p><p id="performance-sync" class="small-note"></p><button class="primary" data-action="close-help">知道了，上场 →</button><p class="small-note">先到 7 分且领先 2 分获胜 · 发球限时 12 秒</p>`);}
@@ -320,6 +321,8 @@ export class App {
       const jump=rescueHint(s,me);if(jump)text('match-hint',jump);
       if(!jump&&(s.ball.drop??0)>.5)text('match-hint',s.ball.hitter===me?'放小球 · 网前短落点、低弹跳':'对手放小球 · 尽快上网接球');
       if(!this.controls.lobMode&&!s.ball.topspin)text('match-subhint',rescueChanceText(s.players[me].totalStamina??1));
+      if(!jump&&!this.controls.lobMode&&s.ball.hitter===me&&(s.ball.placementAssist??0)>0)
+        text('match-subhint','慢球辅助留边 · 越快越需要控制角度和长度');
     }
     const phaseKey=`${s.phase}-${s.eventId}`;
     if(this.lastPhase!==phaseKey){

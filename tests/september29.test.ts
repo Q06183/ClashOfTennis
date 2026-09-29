@@ -12,6 +12,7 @@ import {rescueTarget,RESCUE} from '../src/simulation/rescue.js';
 import {side,type PlayerState} from '../src/simulation/types.js';
 import {Athlete} from '../src/render/player.js';
 import {disposeTree} from '../src/render/dispose.js';
+import {expectedControlledAngle} from './helpers/projected-shot.js';
 
 before(initPhysics);
 test('actual unmodified outgoing ball motion follows finger angle for both serve and returns',()=>{
@@ -30,13 +31,14 @@ test('actual unmodified outgoing ball motion follows finger angle for both serve
    const b=m.state.ball,c=p.contact!,a=new Vector3(c.x,c.y,c.z).project(camera);
    const z=new Vector3(c.x+b.vx*.1,c.y+b.vy*.1-flightGravity(b)*.005,c.z+b.vz*.1).project(camera);
    const angle=Math.atan2((z.x-a.x)*390,(z.y-a.y)*844);
-   assert.ok(Math.abs(angle-Math.atan(ratio))<.005,`${seat}/${distance}/${x}/${serve}/${ratio}: ${angle}`);
+   const expected=expectedControlledAngle(camera,c,b,390,844,ratio);
+   assert.ok(Math.abs(angle-expected)<.005,`${seat}/${distance}/${x}/${serve}/${ratio}: ${angle}`);
    // Also advance the actual Rapier body, rather than only checking the
    // analytic launch formula. Small tolerance covers numerical integration.
    for(let tick=0;tick<6;tick++)m.physics.step(1/60);
    const actual=m.physics.read(),screen=new Vector3(actual.x,actual.y,actual.z).project(camera);
    const measured=Math.atan2((screen.x-a.x)*390,(screen.y-a.y)*844);
-   assert.ok(Math.abs(measured-Math.atan(ratio))<.005,`physical screen angle: ${measured}`);
+   assert.ok(Math.abs(measured-expected)<.005,`physical screen angle: ${measured}`);
   }finally{m.dispose();}
  }
 });

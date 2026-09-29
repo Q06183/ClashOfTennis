@@ -9,7 +9,7 @@ import {CourtView} from '../src/render/view.js';
 import {AimCameraLock} from '../src/render/aim-camera.js';
 import {side,type Seat} from '../src/simulation/types.js';
 import {shotDepth} from '../src/simulation/shot-profile.js';
-import {projectedOutgoingAngle} from './helpers/projected-shot.js';
+import {projectedOutgoingAngle,expectedControlledAngle} from './helpers/projected-shot.js';
 import {rescueIncoming} from './helpers/rescue-incoming.js';
 
 before(initPhysics);
@@ -62,7 +62,7 @@ test('straight swipes at both corners launch vertically on screen from actual ra
    frameMatch(camera,390,844,seat,p.x,12.4,undefined,distance);
    const aimed=CourtView.prototype.aimShot.call({camera,seat,size:{w:390,h:844},aimCamera:new AimCameraLock()} as any,{type:'shot',aim:0,depth:.5,power:.4,lob:false},m.state,0,-150);
    m.input(seat,aimed);if(serve)for(let i=0;i<120&&m.state.rally===0;i++)m.step(1/60);
-   assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844))<.001,`${seat}/${distance}/${x}/${serve}`);
+   assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844)-expectedControlledAngle(camera,p.contact!,m.state.ball,390,844,0))<.001,`${seat}/${distance}/${x}/${serve}`);
   }finally{m.dispose();}
  }
 });
@@ -134,7 +134,7 @@ test('actual outgoing angles match either wing, high contacts, both views and ev
     // Controlled contact isolates aiming from which high ball is naturally reachable.
     (m as unknown as {hit:(s:Seat,shot:object)=>void}).hit(seat,aimed);
     targets.push(m.state.ball.targetX);
-    assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844)-Math.atan(ratio))<.001);
+    assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844)-expectedControlledAngle(camera,p.contact!,m.state.ball,390,844,ratio))<.001);
     assert.ok(Math.abs(p.contact!.y-height)<1e-6);
     assert.equal(p.contact!.x,m.state.ball.x);assert.equal(p.contact!.z,m.state.ball.z);
    }finally{m.dispose();}

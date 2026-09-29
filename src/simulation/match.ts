@@ -8,6 +8,7 @@ import {getCharacter,characterEffects} from './characters.js';
 import { BallPhysics } from './physics.js';
 import {shotDepth,shotTier,SHOT_PROFILES} from './shot-profile.js';
 import {dropStrength,dropRebound} from './drop-shot.js';
+import {placementAssist,controlledPlacement} from './pace-control.js';
 import {RESCUE,rescueChance,rescueTarget,hasNormalReturnWindow,moveRescue,canReachRescue} from './rescue.js';
 import {movePlayer} from './movement.js';
 import {beginPointStamina,spendStamina,recoverPointStamina,settlePointStamina,effectiveStamina,STAMINA} from './stamina.js';
@@ -60,7 +61,7 @@ export class Match {
     });
     const p=s.players[s.server];
     this.physics.place({x:p.x,y:1.25,z:p.z-.25*side(s.server)});
-    Object.assign(s.ball,this.physics.read(),{bounces:0,hitter:s.server,targetX:-serveSide*2,targetZ:-side(s.server)*4.8,aimOrigin:undefined,critical:false,tier:undefined,rescue:false,topspin:0,slice:false,drop:0,skill:undefined});
+    Object.assign(s.ball,this.physics.read(),{bounces:0,hitter:s.server,targetX:-serveSide*2,targetZ:-side(s.server)*4.8,placementAssist:0,aimOrigin:undefined,critical:false,tier:undefined,rescue:false,topspin:0,slice:false,drop:0,skill:undefined});
     this.announce(s.fault?'二发 · 稳一点':'滑动发球');
     this.faultReset=false;
   }
@@ -152,6 +153,7 @@ export class Match {
   }
   private hit(seat: Seat, shot: Shot, serve=false) {
     const s=this.state,p=s.players[seat],b=s.ball,sign=side(seat);
+    const intendedPower=shot.power;
     const total=s.score[0]+s.score[1], serveSide=sign*(total%2===0?1:-1);
     const stretch=serve?0:clamp(Math.hypot(p.x-b.x,p.z-b.z)-.6,0,1.2);
     let targetX=shot.aim*4.45*sign;
@@ -166,6 +168,9 @@ export class Match {
     const slice=shot.slice===true;
     const tier=smash&&drop===0?'smash':shotTier(shot),topspin=spinAmount(shot.topspin),gravity=flightGravity({topspin});
     let targetZ=-sign*shotDepth(shot,serve);
+    // Service-box direction remains deliberate (no automatic diagonal serve).
+    // Rally assistance follows requested pace, not the character's raw stats.
+    const assist=!serve&&shot.swipeAim?.elevation?placementAssist(intendedPower):0;
     if(serve) {
       targetX=-serveSide*1.75+shot.aim*2.25*sign;
     } else if(stretch>.65) {
@@ -178,6 +183,7 @@ export class Match {
     const depthSpread=1-.9*drop;
     if(slice){const spread=.4+.65*shot.power;scatterX+=(this.random()*2-1)*spread;targetZ+=(this.random()*2-1)*(.5+.45*shot.power)*depthSpread;}
     if(rescue){scatterX+=(this.random()*2-1)*1.6;targetZ+=(this.random()*2-1)*1.8*depthSpread;}
+    targetZ=controlledPlacement(0,targetZ,assist).z;
     const power=shot.power*(.65+.35*effectiveStamina(p))*(1-.2*stretch);
     const critical=tier==='critical';
     const backhand=(b.x-p.x)*sign*handedness(p.characterId)<0;
@@ -192,6 +198,7 @@ export class Match {
       flight=flightAt(start.x);
       targetX=outgoingAimTarget(shot.swipeAim,start,targetZ,gravity,flight,
         bodyAimTarget(shot.swipeAim,p,targetZ,sign));
+      targetX=controlledPlacement(targetX,targetZ,assist).x;
       // Keep depth variation, rescue slowdown and slice bounce effects, but
       // never randomly rotate a direction explicitly chosen with a swipe.
     }else{
@@ -200,7 +207,7 @@ export class Match {
     }
     const velocity={x:(targetX-start.x)/flight,y:(.12-start.y+(gravity/2)*flight*flight)/flight,z:(targetZ-start.z)/flight};
     this.physics.place(start,velocity,topspin);
-    Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ,aimOrigin:{x:p.x,y:1.1,z:p.z},critical,tier,rescue,topspin,slice,drop,skill:smash?'smash':slice?'slice':volley?'volley':undefined});
+    Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ,placementAssist:assist,aimOrigin:{x:p.x,y:1.1,z:p.z},critical,tier,rescue,topspin,slice,drop,skill:smash?'smash':slice?'slice':volley?'volley':undefined});
     s.phase='rally';s.rally++;s.maxRally=Math.max(s.maxRally,s.rally);
     p.swing=serve?SERVE_RECOVERY:.44;p.strokeSpin=topspin;p.backhand=(b.x-p.x)*sign*handedness(p.characterId)<0;
     p.stroke=serve?'serve':smash?'smash':slice?(p.backhand?'slice-backhand':'slice-forehand'):volley?'volley':shot.lob?'lob':p.backhand?'backhand':'forehand';

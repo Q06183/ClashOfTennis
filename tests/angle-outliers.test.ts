@@ -5,7 +5,7 @@ import {Match} from '../src/simulation/match.js';
 import {initPhysics} from '../src/simulation/physics.js';
 import {frameMatch} from '../src/render/camera.js';
 import {captureSwipeAim} from '../src/input/aim.js';
-import {projectedOutgoingAngle} from './helpers/projected-shot.js';
+import {projectedOutgoingAngle,expectedControlledAngle} from './helpers/projected-shot.js';
 import {side,type Shot} from '../src/simulation/types.js';
 import {rescueIncoming} from './helpers/rescue-incoming.js';
 
@@ -24,7 +24,7 @@ test('legal slice returns keep the swipe heading even at both extremes of random
    m.input(seat,{...shot,swipeAim:captureSwipeAim(camera,shot,-ratio*150,150,390,844)});
    assert.equal(m.state.rally,3);
    assert.equal(m.state.ball.slice,true);
-   assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844)-Math.atan(ratio))<.001,
+   assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844)-expectedControlledAngle(camera,p.contact!,m.state.ball,390,844,ratio))<.001,
     `${seat}/${distance}/${random}/${ratio}`);
   }finally{m.dispose();}
  }
@@ -42,7 +42,7 @@ test('physical lateral rescue preserves the swipe despite random scatter and low
    for(let i=0;i<60&&m.state.rally===2;i++)m.step(1/60);
    assert.equal(m.state.ball.rescue,true);
    assert.equal(draws,3,'keep lottery and depth variation sampling stable');
-   assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844)-Math.atan(ratio))<.001,
+   assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844)-expectedControlledAngle(camera,p.contact!,m.state.ball,390,844,ratio))<.001,
     `${seat}/${scatter}/${ratio}`);
   }finally{m.dispose();}
  }
@@ -63,11 +63,12 @@ test('steep swipe directions do not fall back to a different heading in slow and
    m.input(seat,{...shot,swipeAim:captureSwipeAim(camera,shot,ratio*100*reverse,-100*reverse,390,844)});
    assert.equal(m.state.rally,3,`${kind} legal contact`);
    const angle=projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844);
-   assert.ok(Math.abs(angle-Math.atan(ratio))<.001,`${id}/${kind}/${stamina}/${depth}/${x}/${ratio}: ${angle}`);
+   const expected=expectedControlledAngle(camera,p.contact!,m.state.ball,390,844,ratio);
+   assert.ok(Math.abs(angle-expected)<.001,`${id}/${kind}/${stamina}/${depth}/${x}/${ratio}: ${angle}`);
    const c=p.contact!,from=new Vector3(c.x,c.y,c.z).project(camera);
    for(let i=0;i<6;i++)m.physics.step(1/60);
    const b=m.physics.read(),to=new Vector3(b.x,b.y,b.z).project(camera);
-   assert.ok(Math.abs(Math.atan2((to.x-from.x)*390,(to.y-from.y)*844)-Math.atan(ratio))<.015,
+   assert.ok(Math.abs(Math.atan2((to.x-from.x)*390,(to.y-from.y)*844)-expected)<.015,
     'actual Rapier flight, not an inverse-corrected target');
   }finally{m.dispose();}
  }
