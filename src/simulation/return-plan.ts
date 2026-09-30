@@ -31,7 +31,7 @@ export class ReturnPlanner {
 /** Forecast ordinary retreat and post-bounce contact, including momentum and
  * fatigue. Slice bounce uses its expected kick; random deflection is only known
  * at the real bounce, when the authority replans. No RNG is consumed here. */
-export function canWaitForBounce(b:BallState,p:PlayerState,seat:Seat){
+export function canWaitForBounce(b:BallState,p:PlayerState,seat:Seat,minimumWindow=.05){
  if(b.bounces>0)return false;
  const G=flightGravity(b),drop=(b.vy+Math.sqrt(b.vy*b.vy+2*G*Math.max(0,b.y-.12)))/G;
  const ball={...b},runner={...p},effects=characterEffects(p.characterId),dt=1/60;
@@ -53,7 +53,7 @@ export function canWaitForBounce(b:BallState,p:PlayerState,seat:Seat){
   // Require a contact window, not one grazing sample: Rapier may report
   // the bounce a frame after the analytic floor crossing.
   contactFrames=bounced&&ball.z*side(seat)>.35&&returnHeightLegal(ball)&&canReturnNormally(ball,runner,seat)?contactFrames+1:0;
-  if(contactFrames>=3)return true;
+  if(contactFrames*dt>=minimumWindow-1e-9)return true;
  }
  return false;
 }

@@ -1,5 +1,6 @@
 import {singleBackhand} from '../simulation/characters.js';
 import {motionValue} from './motion-curve.js';
+import {preparationPhase} from './motion-phase.js';
 import {servePhase,serveTossHand} from '../simulation/serve-motion.js';
 import {Vector3} from 'three';
 import {clamp,type PlayerState} from '../simulation/types.js';
@@ -11,7 +12,7 @@ function sample(keys:BodyKey[],t:number,continuous=false){let a=keys[0],b=keys.a
 /** Separate kinetic chains. Feet are body-local ankle targets; lift moves the body and take-off feet together. */
 export function strokeBody(p:PlayerState){
  const prep=p.preparation,stroke=prep?.stroke??p.stroke,active=!!prep||p.swing>0;
- const t=stroke==='serve'?servePhase(prep?.progress,p.swing):prep?clamp(prep.progress,0,1):1+clamp(1-p.swing/.44,0,1),bh=stroke==='backhand'||stroke==='slice-backhand'||(stroke==='volley'||stroke==='lob')&&p.backhand;
+ const t=stroke==='serve'?servePhase(prep?.progress,p.swing):prep?preparationPhase(p):1+clamp(1-p.swing/.44,0,1),bh=stroke==='backhand'||stroke==='slice-backhand'||(stroke==='volley'||stroke==='lob')&&p.backhand;
  const slice=stroke==='slice-forehand'||stroke==='slice-backhand',dir=bh?1:-1;
  let keys:BodyKey[];
  if(stroke==='serve'){

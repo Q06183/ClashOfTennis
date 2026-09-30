@@ -1,0 +1,10 @@
+<!doctype html><html lang="zh-CN"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>原始模型 · 比赛绑定验收</title>
+<style>body{margin:0;font:14px system-ui;background:#dce6e9;color:#17343e}nav{position:absolute;z-index:2;left:15px;right:15px;top:15px;display:flex;flex-wrap:wrap;gap:8px;padding:12px;background:#fffffff0;border-radius:8px;align-items:center}select,button,input{font:inherit;padding:6px}canvas{display:block;width:100vw;height:100vh}aside{position:absolute;bottom:15px;left:15px;padding:10px;background:#ffffffd9}#phase{width:240px}</style>
+<nav><strong>原始模型 · 真实比赛控制器</strong>
+<select id="character"><option value="bob">Bob</option><option value="saba">Saba</option></select>
+<select id="action"><option value="bind">原始静止姿态</option><option value="idle">准备</option><option value="forehand">正手</option><option value="backhand">反手</option><option value="serve">发球</option><option value="volley">截击</option><option value="smash">高压</option><option value="run">跑动</option><option value="rescue">救球</option><option value="victory">庆祝</option></select>
+<label><input id="play" type="checkbox">播放</label><input id="phase" type="range" min="0" max="2" step=".005" value=".5"><output id="time">0.50</output>
+<button data-view="front">正面</button><button data-view="back">背面</button><button data-view="side">侧面</button>
+<label><input id="bones" type="checkbox">骨骼</label></nav><canvas></canvas><aside id="status">加载中</aside>
+<script type="module" src="./direct-match-lab.ts"></script></html>

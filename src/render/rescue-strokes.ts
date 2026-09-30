@@ -31,7 +31,7 @@ export function rescueStroke(p:PlayerState,time:number,contact:Vector3){
  const free=kind==='smash'?new Vector3(.26,1.75-load*.15,.35):
   kind==='backhand'?new Vector3(.70,1.28,-.45):
   kind==='volley'?new Vector3(.5,1.3,.2):new Vector3(.45,1.24,.24);
- free.lerp(new Vector3(.4,.82,.28),landing).lerp(new Vector3(.38,1.15,.36),recover);
+ free.lerp(new Vector3(.4,r.recovery==='step-out'?1.12:.82,.28),landing).lerp(new Vector3(.38,1.15,.36),recover);
  const flight=Math.sin(Math.PI*MathUtils.clamp(age/.48,0,1));
  const scissors=kind==='smash'?Math.sin(Math.PI*2*MathUtils.clamp(age/.48,0,1))*.24:0;
  const feet=kind==='smash'?[new Vector3(.18,.10+flight*.10,scissors),new Vector3(-.18,.10+flight*.14,-scissors)]:

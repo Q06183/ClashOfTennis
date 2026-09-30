@@ -1,0 +1,93 @@
+[
+  {
+    "id": "rafa",
+    "source": "public/models/characters/rafa.glb",
+    "output": "public/models/releases/joint-pivot-v1/rafa.glb",
+    "sourceSha256": "463ddf5502b583a5fc57fff0bbb5ed5dd867736ed96387080733a4db9212780f",
+    "outputSha256": "798386662b6bfbb82e0bc670e05e134ca3129ea20f415d43f45efa94eec4fc62",
+    "changedWeightVertices": 1340,
+    "appearancePayloadPreserved": true,
+    "jointProfile": "original",
+    "elbowToWrist": 0.256,
+    "upperArm": 0.36,
+    "externalCredits": 0
+  },
+  {
+    "id": "sora",
+    "source": "public/models/characters/sora.glb",
+    "output": "public/models/releases/joint-pivot-v1/sora.glb",
+    "sourceSha256": "67428f8c6b988abd8c198a8a91047bfc93a312db95ae34fe470683ec96ece17c",
+    "outputSha256": "ee5601ac312e395a66901862c368904d0bcfd82997e0010688a546cb49ee09f2",
+    "changedWeightVertices": 1482,
+    "appearancePayloadPreserved": true,
+    "jointProfile": "original",
+    "elbowToWrist": 0.256,
+    "upperArm": 0.36,
+    "externalCredits": 0
+  },
+  {
+    "id": "ines",
+    "source": "public/models/characters/ines.glb",
+    "output": "public/models/releases/joint-pivot-v1/ines.glb",
+    "sourceSha256": "c8d6669f4d3f3b51897c664f70ee90da0d946843cc41c35d8c7ce7d6b2d1d4b1",
+    "outputSha256": "30f31ec9d791c08712d4c6d3457481942a10d4d0e2dd7711431dce5c88d34844",
+    "changedWeightVertices": 1514,
+    "appearancePayloadPreserved": true,
+    "jointProfile": "original",
+    "elbowToWrist": 0.256,
+    "upperArm": 0.36,
+    "externalCredits": 0
+  },
+  {
+    "id": "leo",
+    "source": "public/models/characters/leo.glb",
+    "output": "public/models/releases/joint-pivot-v1/leo.glb",
+    "sourceSha256": "fc733401daf670e74c2699cdfb4eaf348f89cd3e4d49631692ea96bf875e3631",
+    "outputSha256": "0a180e3eab73fa10e4bfdd822bd6c2a0a2c7044a8ce68e2977db38b172a16850",
+    "changedWeightVertices": 1326,
+    "appearancePayloadPreserved": true,
+    "jointProfile": "original",
+    "elbowToWrist": 0.256,
+    "upperArm": 0.36,
+    "externalCredits": 0
+  },
+  {
+    "id": "adrian",
+    "source": "public/models/characters/adrian.glb",
+    "output": "public/models/releases/joint-pivot-v1/adrian.glb",
+    "sourceSha256": "201b85bbda81b772fcbb68d499e8df0d8ea12304ca4570aa2eec7247249c4a46",
+    "outputSha256": "641a96af2d589b64c7c2adc2eb4093c9be992ad6a8efb9508e54d941f64f7f2c",
+    "changedWeightVertices": 1326,
+    "appearancePayloadPreserved": true,
+    "jointProfile": "original",
+    "elbowToWrist": 0.256,
+    "upperArm": 0.36,
+    "externalCredits": 0
+  },
+  {
+    "id": "luca",
+    "source": "public/models/characters/luca.glb",
+    "output": "public/models/releases/joint-pivot-v1/luca.glb",
+    "sourceSha256": "ba8f2c2e7e6be89a7c1d3398deed2cb4f13e6071aa42b505c84c1e368439fbaf",
+    "outputSha256": "6d79fce8929af3e7467a0a7fa9720a667daa881ac5034c9ae0cd32b16d91c83c",
+    "changedWeightVertices": 1540,
+    "appearancePayloadPreserved": true,
+    "jointProfile": "original",
+    "elbowToWrist": 0.256,
+    "upperArm": 0.36,
+    "externalCredits": 0
+  },
+  {
+    "id": "wuming",
+    "source": "public/models/characters/wuming.glb",
+    "output": "public/models/releases/joint-pivot-v1/wuming.glb",
+    "sourceSha256": "194983a13ee6207a2698360e0984a12165640ff5bef34f0337d588ee1c0c9245",
+    "outputSha256": "ea0f310224c838553ec6c0762b01eb3c17a4d4ffdf7779fa17bb057df76b2204",
+    "changedWeightVertices": 1794,
+    "appearancePayloadPreserved": true,
+    "jointProfile": "original",
+    "elbowToWrist": 0.256,
+    "upperArm": 0.36,
+    "externalCredits": 0
+  }
+]

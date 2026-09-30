@@ -35,7 +35,7 @@ test('real edge returns follow the swipe in screen space at actual height, speed
    m.input(seat,aimed);
    assert.equal(m.state.rally,3,`${id}/${seat}/${x}/${depth}/${height} legal contact`);
    const b=m.state.ball,c=p.contact!;
-   const angle=projectedOutgoingAngle(camera,c,b,w,h),wanted=expectedControlledAngle(camera,c,b,w,h,ratio);
+   const angle=projectedOutgoingAngle(camera,c,b,w,h),wanted=expectedControlledAngle(camera,c,b,w,h,ratio,{shot,player:p});
    assert.ok(Math.abs(angle-wanted)<.01,`${id}/${seat}/${w}x${h}/${x}/${depth}/${height}/${ratio}: angle error ${(angle-wanted)*180/Math.PI} degrees`);
    const flight=predictFlight(b);assert.equal(flight.hitNet,false);
    assert.ok(Math.abs(flight.landing.x-b.targetX)<.02&&Math.abs(flight.landing.z-b.targetZ)<.02);
@@ -59,7 +59,7 @@ test('edge aim includes high-contact smashes, slice slowdown, topspin, lobs and 
    const reverse=shot.slice?-1:1;
    const aimed=CourtView.prototype.aimShot.call({camera,seat,size:{w,h},aimCamera:new AimCameraLock()} as any,shot,m.state,ratio*150*reverse,-150*reverse);
    m.input(seat,aimed);assert.equal(m.state.rally,3,skill);
-   assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,w,h)-expectedControlledAngle(camera,p.contact!,m.state.ball,w,h,ratio))<.01,`${id}/${seat}/${skill}/${ratio}`);
+   assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,w,h)-expectedControlledAngle(camera,p.contact!,m.state.ball,w,h,ratio,{shot,player:p}))<.01,`${id}/${seat}/${skill}/${ratio}`);
    assert.equal(predictFlight(m.state.ball).hitNet,false);
   }finally{m.dispose();}
  }
@@ -95,7 +95,7 @@ test('the reported wide baseline high contact no longer magnifies the angle into
     if(legacy)delete aimed.swipeAim!.elevation;
     m.input(seat,aimed);assert.equal(m.state.rally,3);
     targets.push(Math.abs(m.state.ball.targetX));
-    if(!legacy)assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844)-Math.atan(.6))<.01);
+    if(!legacy)assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844)-expectedControlledAngle(camera,p.contact!,m.state.ball,390,844,.6,{shot:aimed,player:p}))<.01);
    }finally{m.dispose();}
   }
   assert.ok(targets.every(Number.isFinite),JSON.stringify(targets));

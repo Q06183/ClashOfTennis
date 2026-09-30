@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh"><meta charset="utf-8"><title>21 骨骼动作验收</title>
+<style>
+body{margin:0;background:#d9e2d8;color:#162a24;font:14px system-ui}nav{position:absolute;z-index:2;inset:12px 12px auto;display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#ffffffed;padding:12px;border-radius:10px}select,button,input{font:inherit;padding:7px}#phase{width:230px}canvas{display:block}aside{position:absolute;bottom:14px;left:16px;right:16px;background:#fffD;padding:10px;pointer-events:none}output{font-variant-numeric:tabular-nums}
+</style>
+<nav><strong>21 骨骼 · 本地验收</strong><select id="character"></select>
+<select id="action"><option value="forehand">正手</option><option value="backhand">反手</option><option value="volley">截击</option><option value="serve">发球</option><option value="run">跑动</option><option value="rescue">救球 · 脚落地</option><option value="fall">救球 · 撑地</option><option value="victory">庆祝（尚待重做）</option><option value="bind">比例检查 · A姿态</option><option value="elbow">关节检查 · 只弯肘</option><option value="wrist">关节检查 · 只转腕</option></select>
+<select id="view"><option value="rear">后视</option><option value="front">前视</option><option value="side">侧视</option></select>
+<select id="revision" aria-label="模型版本"><option value="after">正式关节优化版</option><option value="before">修改前</option></select>
+<select id="detail" aria-label="观察部位"><option value="body">全身</option><option value="face">面部近景</option><option value="hand">握拍手近景</option></select>
+<select id="seat"><option value="1">远端</option><option value="0">近端</option></select>
+<label><input id="bones" type="checkbox">骨骼轴线</label>
+<button id="play">暂停</button><input id="phase" type="range" min="0" max="2" step=".001" value="0"><output id="status">加载中</output></nav>
+<aside>关节修订 · 腕点固定在前臂末端，弯肘/转腕不改变骨段长度。选择“只弯肘 / 只转腕”并拖动滑杆；骨骼轴线与长度读数用于检查。完整皮肤保留，手指闭合仍待精修。</aside>
+<script type="module">
+import * as T from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {Athlete} from '/src/render/player.ts';
+import {disposeTree} from '/src/render/dispose.ts';
+import {CHARACTERS,handedness} from '/src/simulation/characters.ts';
+const $=s=>document.querySelector(s);
+const renderer=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.toneMapping=T.ACESFilmicToneMapping;document.body.append(renderer.domElement);
+const scene=new T.Scene();scene.background=new T.Color('#d9e2d8');scene.add(new T.HemisphereLight(0xffffff,0x344838,2.5));const sun=new T.DirectionalLight(0xfff0df,3);sun.position.set(-3,7,4);scene.add(sun);
+const floor=new T.Mesh(new T.PlaneGeometry(40,40),new T.MeshStandardMaterial({color:0x72927f}));floor.rotation.x=-Math.PI/2;floor.position.y=-.01;scene.add(floor);scene.add(new T.GridHelper(30,60,0xa8c8b5,0x849f8c));
+const camera=new T.PerspectiveCamera(33,innerWidth/innerHeight,.05,80);
+for(const c of CHARACTERS){const option=document.createElement('option');option.value=c.id;option.textContent=c.name;$('#character').append(option);}
+let athlete,bindModel,skeleton,t=0,playing=true,last=performance.now(),loaded=false,token=0;
+async function load(){
+ const request=++token;loaded=false;
+ if(bindModel){scene.remove(bindModel);disposeTree(bindModel);bindModel=null;}
+ if(skeleton){scene.remove(skeleton);skeleton.geometry.dispose();skeleton.material.dispose();skeleton=null;}
+ if(athlete){scene.remove(athlete.root);disposeTree(athlete.root);}
+ athlete=new Athlete(Number($('#seat').value));scene.add(athlete.root);
+ const id=$('#character').value,released=$('#revision').value==='after';
+ const g=await new GLTFLoader().loadAsync(released?CHARACTERS.find(c=>c.id===id).model:`/models/${id==='lin'?'athlete':`characters/${id}`}.glb`);
+ if(request!==token){disposeTree(g.scene);return;}
+ if($('#action').value==='bind'){bindModel=g.scene;scene.add(bindModel);athlete.root.visible=false;}
+ else athlete.attachModel(g.scene);
+ skeleton=new T.SkeletonHelper(g.scene);skeleton.material.depthTest=false;skeleton.renderOrder=10;scene.add(skeleton);
+ loaded=true;draw();
+}
+function draw(){
+ if(!loaded)return;
+ const characterId=$('#character').value,action=$('#action').value,seat=Number($('#seat').value),hand=handedness(characterId),sign=seat===0?-1:1;
+ const inspecting=action==='elbow'||action==='wrist';
+ const stroke=['run','rescue','fall','victory','bind','elbow','wrist'].includes(action)?'forehand':action;
+ const contact={x:(stroke==='backhand'?.65:stroke==='serve'?0:-.65)*hand*sign,y:stroke==='serve'?2.65:1.2,z:.65*sign};
+ const p={characterId,x:0,z:0,tx:0,tz:0,stamina:1,moving:false,stroke,swing:t>=1?(stroke==='serve'?.72:.44)*(2-t):0,shotQueued:true,contact,preparation:t<1?{stroke,progress:t,contact}:undefined};
+ if(action==='run'){p.x=t*2;p.moving=true;p.preparation=undefined;p.swing=0;}
+ if(action==='rescue'||action==='fall'){p.rescue={startedAt:0,fromX:0,toX:1.2,fromZ:0,toZ:0,contact,hit:t>.34,stroke:'forehand',recovery:action==='rescue'?'step-out':'supported-fall'};p.preparation=undefined;p.swing=0;}
+ if(action!=='bind')athlete.update(inspecting?{...p,characterId:'lin',preparation:undefined,swing:0}:p,action==='rescue'||action==='fall'?t*.59:t,1/60,action==='victory'?t*2.6:undefined);
+ let jointLabel='';
+ if(inspecting){
+  // Lab-only direct control sweep. Use the actual runtime skin adapter, not a
+  // second demonstration rig. Solve canonically and reflect once at the end.
+  const angle=action==='elbow'?t/2*135:(t-1)*55;
+  for(let i=0;i<2;i++){
+   athlete.arms[i].rotation.set(0,0,i?-.32:.32);
+   athlete.elbows[i].rotation.set(action==='elbow'?-angle*Math.PI/180:-Math.PI/2,0,0);
+  }
+  athlete.racket.rotation.set(action==='wrist'?angle*Math.PI/180:0,0,0);
+  athlete.leftHand.quaternion.copy(athlete.racket.quaternion);
+  athlete.root.updateMatrixWorld(true);athlete.generated?.update(playing?1/60:1);
+  athlete.root.scale.x=hand;athlete.root.updateMatrixWorld(true);
+  const pos=n=>athlete.root.getObjectByName(n)?.getWorldPosition(new T.Vector3());
+  const shoulder=pos('UpperArm_R'),elbow=pos('LowerArm_R'),wrist=pos('Hand_R');
+  if(shoulder&&elbow&&wrist)jointLabel=` · ${angle.toFixed(0)}° · 上臂 ${(shoulder.distanceTo(elbow)*100).toFixed(2)}cm / 前臂 ${(elbow.distanceTo(wrist)*100).toFixed(2)}cm`;
+ }
+ if(bindModel){bindModel.rotation.y=seat===0?Math.PI:0;bindModel.scale.x=hand;bindModel.updateMatrixWorld(true);}
+ skeleton.visible=$('#bones').checked;
+ const yaw=seat===0?Math.PI:0,dir=$('#view').value,offset=dir==='side'?new T.Vector3(5.5,2.2,0):new T.Vector3(0,2.2,dir==='front'?5.5:-5.5);offset.applyAxisAngle(new T.Vector3(0,1,0),yaw);
+ camera.position.copy(offset).add(new T.Vector3(p.x,0,0));camera.lookAt(p.x,1.2,0);renderer.render(scene,camera);
+ const detail=$('#detail').value;
+ if(detail!=='body'){
+  const target=detail==='face'?new T.Vector3(p.x,1.79,0):athlete.root.getObjectByName('racket-grip').getWorldPosition(new T.Vector3());
+   const close=dir==='side'?new T.Vector3(1.35,.06,0):new T.Vector3(.20,.06,dir==='front'?1.4:-1.4);
+  close.applyAxisAngle(new T.Vector3(0,1,0),yaw);camera.position.copy(target).add(close);camera.lookAt(target);renderer.render(scene,camera);
+ }
+ $('#phase').value=String(t);$('#status').textContent=`${characterId} · ${action} · ${t.toFixed(3)} · ${$('#revision').selectedOptions[0].textContent}${jointLabel}`;
+}
+$('#character').onchange=load;$('#seat').onchange=load;$('#action').onchange=()=>{t=0;load();};$('#view').onchange=draw;
+$('#bones').onchange=draw;
+$('#revision').onchange=load;$('#detail').onchange=draw;
+$('#play').onclick=()=>{playing=!playing;$('#play').textContent=playing?'暂停':'播放';};
+$('#phase').oninput=()=>{playing=false;t=Number($('#phase').value);draw();};
+window.motionLab={async select(id,action='forehand',view='rear',seat=1){$('#character').value=id;$('#action').value=action;$('#view').value=view;$('#seat').value=String(seat);t=0;await load();},sample(phase){playing=false;t=phase;draw();return $('#status').textContent;},get ready(){return loaded;},play(){playing=true;}};
+addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();draw();});
+await load();renderer.setAnimationLoop(()=>{const now=performance.now();if(playing)t=(t+Math.min(.04,(now-last)/1000)*.55)%2;last=now;draw();});
+</script></html>

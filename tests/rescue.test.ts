@@ -16,13 +16,13 @@ function incoming(random:()=>number,seat:Seat=0){
  rescueIncoming(m,seat);
  return m;
 }
-test('a successful rescue physically jumps into reach on either side and returns a slower scattered ball',()=>{
+test('a successful rescue physically jumps into reach and returns slowly without aim scatter',()=>{
  for(const seat of [0,1] as Seat[]){
   let draws=0;const m=incoming(()=>[0,1,1][draws++]??1,seat);m.input(seat,shot);
   const p=m.state.players[seat];let sawMotion=false;
   for(let i=0;i<40&&m.state.ball.hitter!==seat;i++){const oldX=p.x,oldZ=p.z;m.step(1/60);sawMotion||=!!p.rescue;assert.ok(Math.hypot(p.x-oldX,p.z-oldZ)<.5,'no teleport');}
   assert.ok(sawMotion,'jump must begin');assert.equal(m.state.ball.hitter,seat);assert.equal(m.state.ball.rescue,true);assert.equal(m.state.ball.critical,true);assert.equal(m.state.event,'极限救球');
-  assert.ok(Math.hypot(m.state.ball.vx,m.state.ball.vz)<22,'rescue slowdown still applies');assert.ok(Math.abs(m.state.ball.targetX-.25*4.45*side(seat))>1,'scatter changes real target');assert.equal(draws,3);
+  assert.ok(Math.hypot(m.state.ball.vx,m.state.ball.vz)<22,'rescue slowdown still applies');assert.ok(Math.abs(m.state.ball.targetX-.25*4.45*side(seat))<1e-9,'rescue preserves requested target');assert.equal(draws,1);
   assert.ok(p.stamina<.91);for(let i=0;i<Math.ceil((RESCUE.duration+.1)*60);i++)m.step(1/60);assert.equal(p.rescue,undefined);m.dispose();
  }
 });
@@ -77,7 +77,7 @@ test('rescue rolls against pre-jump stamina and ordinary reachable returns never
   assert.ok(draws>0,`eligible stamina ${stamina}`);
   assert.equal(!!m.state.ball.rescue,succeeds,`stamina ${stamina}, chance ${chance}`);
   assert.ok(atRoll>stamina-.01,'chance sampled before the .1 takeoff cost');
-  assert.equal(draws,succeeds?3:1);m.dispose();
+  assert.equal(draws,1);m.dispose();
  }
  let draws=0;const m=new Match(['lin','lin'],()=>{draws++;return 0;});m.state.phase='rally';m.state.rally=2;m.step(.08);
  Object.assign(m.state.players[0],{x:1.5,tx:1.5,z:10,tz:10});
@@ -86,7 +86,7 @@ test('rescue rolls against pre-jump stamina and ordinary reachable returns never
  for(let i=0;i<60&&m.state.ball.hitter!==0;i++)m.step(1/60);
  assert.equal(m.state.ball.hitter,0);assert.equal(draws,0);assert.equal(m.state.ball.rescue,false);m.dispose();
 });
-test('scattered rescue may land out and next point clears its ball and player flags',()=>{
+test('a deliberately wide rescue may land out and next point clears its ball and player flags',()=>{
  let n=0;const m=incoming(()=>[0,1,1][n++]??1);m.input(0,{...shot,aim:1.1});
  for(let i=0;i<60&&m.state.ball.hitter!==0;i++)m.step(1/60);
  assert.ok(m.state.ball.targetX>4.115);assert.equal(m.state.ball.rescue,true);
@@ -118,13 +118,14 @@ test('upcoming running and volley windows avoid the rescue lottery on both sides
  }
 });
 
-test('automatic positioning forecasts the new ball position before moving, just like a real tick',()=>{
+test('a former single-sample ordinary graze can use a reliable short rescue without losing real contact',()=>{
  for(const seat of [0,1] as Seat[]){
   const sign=side(seat);let draws=0;const m=new Match(['lin','lin'],()=>{draws++;return 0;});m.state.phase='rally';m.state.rally=2;
   Object.assign(m.state.players[seat],{x:1.6880609533*sign,z:9.1569666094*sign,tx:-.6138001657*sign,tz:9.1569666094*sign,vx:0,vz:0});
   m.physics.place({x:1.0594274453*sign,y:2.0692738906,z:1.0028849477*sign},{x:-.7330817170*sign,y:2.0434809271,z:8.2048775163*sign});
   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});m.input(seat,shot);
   for(let i=0;i<70&&m.state.phase==='rally'&&m.state.ball.hitter!==seat;i++)m.step(1/60);
-  assert.equal(m.state.ball.hitter,seat);assert.equal(m.state.ball.rescue,false);assert.equal(draws,0);m.dispose();
+  assert.equal(m.state.ball.hitter,seat);assert.equal(m.state.ball.rescue,true);assert.equal(draws,1);
+  assert.equal(m.rescueDiagnostics.contact,1);m.dispose();
  }
 });

@@ -112,11 +112,11 @@ test('later rescue opportunities use the most recent stored swipe quality and di
    rescueIncoming(m,seat);
    let started=false;
    for(let i=0;i<90&&m.state.rally===2;i++){m.step(1/60);started||=!!p.rescue;}
-   assert.ok(started);assert.equal(m.state.ball.rescue,true);assert.equal(draws,3);
+   assert.ok(started);assert.equal(m.state.ball.rescue,true);assert.equal(draws,1);
    assert.equal(m.state.ball.topspin,.6);
    assert.equal(m.state.ball.tier,'topspin');
-   // RNG zero gives the known negative scatter, but does not erase swipe depth.
-   assert.ok(Math.abs(m.state.ball.targetZ-(-sign*shotDepth(latest,false)-1.8))<1e-8);
+   // Rescue keeps the latest authored depth, with no random displacement.
+   assert.ok(Math.abs(m.state.ball.targetZ-(-sign*shotDepth(latest,false)))<1e-8);
   }finally{m.dispose();}
  }
 });

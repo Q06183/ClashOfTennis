@@ -14,7 +14,10 @@ export const RESCUE={minChance:.10,maxChance:.90,lowStamina:1/3,travel:.20,landA
 export function rescueAge(p:PlayerState,time:number){
  const r=p.rescue;if(!r)return 0;
  const age=Math.max(0,time-r.startedAt),travel=r.travel??RESCUE.travel;
- return r.natural?(age<travel?age/travel*RESCUE.travel:RESCUE.travel+age-travel):age;
+ const canonical=r.natural?(age<travel?age/travel*RESCUE.travel:RESCUE.travel+age-travel):age;
+ // Short step-outs share the exact contact/landing pose and only compress
+ // recovery. The existing long supported fall and .5s push-up stay unchanged.
+ return r.short&&canonical>.48?.48+(canonical-.48)*1.75:canonical;
 }
 /** Total-match stamina drives the smooth 10%–90% rescue lottery. */
 export function rescueChance(stamina:number){
@@ -27,23 +30,52 @@ export function rescueChance(stamina:number){
 export const RESCUE_LABELS:Record<RescueStroke,string>={forehand:'正手飞身救球',backhand:'反手跃步救球',volley:'腾空截击救球',smash:'跃起高压救球'};
 export const rescueHeight=(stroke?:RescueStroke)=>stroke==='smash'?.62:stroke==='volley'?.38:.34;
 export const rescueLift=(stroke:RescueStroke|undefined,age:number)=>rescueHeight(stroke)*Math.sin(Math.PI*clamp(age/.48,0,1));
+/** Cubic Hermite from actual launch velocity to a stopped lateral landing. */
+export function rescueMotion(distance:number,travel:number,velocity:number,u:number){
+ const a=clamp(u,0,1),v=velocity*travel;
+ return distance*(3*a*a-2*a*a*a)+v*(a*a*a-2*a*a+a);
+}
+export function rescueMotionBounds(distance:number,travel:number,velocity:number){
+ const a=6*distance/travel-4*velocity,b=-6*distance/travel+3*velocity;
+ const speedAt=(u:number)=>velocity+a*u+b*u*u;
+ const critical=Math.abs(b)>1e-9?-a/(2*b):-1;
+ const roots=[0,1],discriminant=a*a-4*b*velocity;
+ if(Math.abs(b)>1e-9&&discriminant>=0){
+  for(const u of [(-a-Math.sqrt(discriminant))/(2*b),(-a+Math.sqrt(discriminant))/(2*b)])if(u>0&&u<1)roots.push(u);
+ }else if(Math.abs(b)<=1e-9&&Math.abs(a)>1e-9){const u=-velocity/a;if(u>0&&u<1)roots.push(u);}
+ const positions=roots.map(u=>rescueMotion(distance,travel,velocity,u));
+ return {min:Math.min(...positions),max:Math.max(...positions),speed:Math.max(Math.abs(velocity),Math.abs(speedAt(1)),critical>0&&critical<1?Math.abs(speedAt(critical)):0),
+  acceleration:Math.max(Math.abs(a/travel),Math.abs((a+2*b)/travel))};
+}
+/** Provisional trajectory only. Never sample through a net/out/second bounce.
+ * Slice uses its expected rebound until the real authoritative bounce occurs. */
+function forecastRescueBall(b:BallState,seat:Seat,time:number,landing=b.bounces===0?predictFlight(b):null){
+ const g=flightGravity(b);
+ if(landing?.hitNet)return null;
+ if(landing&&time>landing.duration){
+  if(!isInCourt(landing.landing.x,landing.landing.z,seat))return null;
+  const dt=time-landing.duration,kick=b.slice?.86:1+.12*(b.topspin??0);
+  const v=dropRebound({x:b.vx*kick,y:Math.abs(b.vy-g*landing.duration)*.72*(b.slice?.68:1),z:b.vz*kick},b.drop);
+  const spin=(b.topspin??0)*.55,y=.12+v.y*dt-flightGravity({topspin:spin})*dt*dt/2;
+  if(y<=.12)return null;
+  return {...b,x:landing.landing.x+v.x*dt,y,z:landing.landing.z+v.z*dt,
+   vx:v.x,vy:v.y-flightGravity({topspin:spin})*dt,vz:v.z,bounces:1,topspin:spin};
+ }
+ const y=b.y+b.vy*time-g*time*time/2;
+ if(y<=.12)return null;
+ return {...b,x:b.x+b.vx*time,y,z:b.z+b.vz*time,vy:b.vy-g*time};
+}
 /** Forecast a legal interception, including the expected first bounce when
  * necessary. Never forecast through a second bounce or award predicted contact;
  * actual authority physics and arm reach must still meet before a hold/hit. */
 export function rescueTarget(b:BallState,p:PlayerState,seat:Seat,serviceFlight=false){
- const sign=side(seat),speed2=b.vx*b.vx+b.vz*b.vz;
- if(speed2<9)return null;
+ const sign=side(seat);
  const landing=b.bounces===0?predictFlight(b):null;
  if(landing?.hitNet)return null;
- for(let frame=0;frame<=24;frame++){
-  const travel=.24+frame*.02;
-  let contact={x:b.x+b.vx*travel,y:b.y+b.vy*travel-flightGravity(b)*travel*travel/2,z:b.z+b.vz*travel},bounces=b.bounces;
-  if(landing&&travel>landing.duration){
-   if(!isInCourt(landing.landing.x,landing.landing.z,seat))continue;
-   const after=travel-landing.duration,kick=b.slice?.86:1+.12*(b.topspin??0);
-   const v=dropRebound({x:b.vx*kick,y:Math.abs(b.vy-flightGravity(b)*landing.duration)*.72*(b.slice?.68:1),z:b.vz*kick},b.drop);
-   contact={x:landing.landing.x+v.x*after,y:.12+v.y*after-flightGravity({topspin:(b.topspin??0)*.55})*after*after/2,z:landing.landing.z+v.z*after};bounces=1;
-  }
+ for(let frame=0;frame<=37;frame++){
+  const travel=.16+frame*.02;
+  const projected=forecastRescueBall(b,seat,travel,landing);if(!projected)continue;
+  const {x:cx,y:cy,z:cz,bounces}=projected,contact={x:cx,y:cy,z:cz};
   if(serviceFlight&&!bounces)continue;
   if(contact.y<.35||contact.y>3.05||contact.z*sign<1)continue;
   const backhand=(contact.x-p.x)*sign*handedness(p.characterId)<0;
@@ -53,24 +85,62 @@ export function rescueTarget(b:BallState,p:PlayerState,seat:Seat,serviceFlight=f
   const lateral=stroke==='smash'?.25:backhand?-.35:.6;
   const x=contact.x-sign*handedness(p.characterId)*lateral,z=p.z,distance=Math.abs(x-p.x);
   // Only lateral dives. Forward/backward gaps remain a footwork responsibility.
-  if(Math.abs(contact.x-p.x)<.9||Math.abs(contact.z-p.z)>.75)continue;
-  // Smoothstep has peak speed 1.5*d/t and peak acceleration 6*d/t².
-  // Forecast earlier rather than speeding the body up to catch a late ball.
-  if(distance<.55||distance>RESCUE.reach||1.5*distance/travel>RESCUE.travelSpeed||
-    6*distance/(travel*travel)>RESCUE.acceleration||Math.abs(x)>6.4||z*sign>16.5)continue;
-  const candidate={...p,x,z,rescue:{startedAt:0,fromX:p.x,fromZ:p.z,toX:x,toZ:z,contact,hit:false,stroke,backhand,travel,natural:true}};
+  if(Math.abs(contact.x-p.x)<.75||Math.abs(contact.z-p.z)>.75)continue;
+  const launchVx=p.vx??0,delta=x-p.x,bounds=rescueMotionBounds(delta,travel,launchVx);
+  // Preserve initial velocity, including a bounded brake before reversal.
+  // Check the entire curve, not just endpoints, for reach/court overshoot.
+  if(distance<.35||bounds.max-bounds.min>RESCUE.reach||
+    p.x+bounds.min< -6.4||p.x+bounds.max>6.4||bounds.speed>RESCUE.travelSpeed||
+    bounds.acceleration>RESCUE.acceleration||Math.abs(x)>6.4||z*sign>16.5)continue;
+  const short=distance<=1.2&&stroke!=='smash';
+  const candidate={...p,x,z,rescue:{startedAt:0,fromX:p.x,fromZ:p.z,toX:x,toZ:z,contact,hit:false,stroke,backhand,travel,natural:true,launchVx,short}};
   if(!canReachRescue({...b,...contact},candidate,seat,travel))continue;
-  return {x,z,contact,stroke,backhand,travel};
+  // The new short rescue must improve a marginal ordinary window: require
+  // two contact samples. Keep existing long-rescue physical gates unchanged.
+  const later=short?forecastRescueBall(b,seat,travel+1/30,landing):null;
+  if(short&&(!later||later.bounces!==bounces||!canReachRescue(later,candidate,seat,travel+1/30)))continue;
+  return {x,z,contact,stroke,backhand,travel,launchVx,short};
  }
  return null;
+}
+/** Rehearse at most 240ms of NORMAL ground movement, then a lateral-only
+ * rescue. This is advisory: next frame must revalidate from actual state. */
+export function rescueApproach(b:BallState,p:PlayerState,seat:Seat,serviceFlight=false){
+ const runner={...p},sign=side(seat);
+ const ahead=forecastRescueBall(b,seat,.5);if(!ahead)return null;
+ const x=clamp(ahead.x-sign*handedness(p.characterId)*.45,-6.4,6.4);
+ const z=sign*clamp(ahead.z*sign+.35,.9,16.5);
+ runner.tx=x;runner.tz=z;
+ for(let i=1;i<=6;i++){
+  movePlayer(runner,seat,.04);
+  const e=characterEffects(runner.characterId);
+  if(runner.moving)spendStamina(runner,.013*e.drain*.04);
+  const projected=forecastRescueBall(b,seat,i*.04);if(!projected)return null;
+  const target=rescueTarget(projected,runner,seat,serviceFlight);
+  if(target)return {x,z,wait:i*.04,target};
+ }
+ return null;
+}
+/** Defer only when normal movement still leaves a feasible future rescue.
+ * Keep a speed/acceleration reserve; don't wait until the solver barely passes. */
+export function canDelayRescue(b:BallState,p:PlayerState,seat:Seat,target:NonNullable<ReturnType<typeof rescueTarget>>,serviceFlight=false){
+ if(target.travel<.4||target.short)return false;
+ const runner={...p};
+ movePlayer(runner,seat,.04);
+ const next=forecastRescueBall(b,seat,.04);if(!next)return false;
+ const future=rescueTarget(next,runner,seat,serviceFlight);if(!future)return false;
+ const bounds=rescueMotionBounds(future.x-runner.x,future.travel,future.launchVx);
+ return bounds.speed<RESCUE.travelSpeed*.88&&bounds.acceleration<RESCUE.acceleration*.88&&
+  future.travel<target.travel+.001;
 }
 /** Wait for any ordinary contact on the approaching flight, not one sample at
  * the end of a jump. Predict the same acceleration, stamina and move target
  * as the live player, without mutating authoritative state or drawing RNG. */
-export function hasNormalReturnWindow(b:BallState,p:PlayerState,seat:Seat,options:{time:number;manualUntil:number;serviceFlight:boolean;slice:boolean;planner?:ReturnPlanner;flight?:number;airRequested?:boolean}){
- if(canWaitForBounce(b,p,seat))return true;
+export function hasNormalReturnWindow(b:BallState,p:PlayerState,seat:Seat,options:{time:number;manualUntil:number;serviceFlight:boolean;slice:boolean;planner?:ReturnPlanner;flight?:number;airRequested?:boolean},minimumWindow=.10){
+ if(canWaitForBounce(b,p,seat,minimumWindow))return true;
  const runner={...p},ball={...b},sign=side(seat),dt=1/120,G=flightGravity(b);
  const planner=options.planner?.clone()??new ReturnPlanner();
+ let contactTime=0;
  for(let step=0;step<=72;step++){
   if(step){
    // Match.step advances the ball before updating the player's move target.
@@ -88,7 +158,8 @@ export function hasNormalReturnWindow(b:BallState,p:PlayerState,seat:Seat,option
    if(runner.moving)spendStamina(runner,.013*e.drain*dt);
    else recoverPointStamina(runner,STAMINA.idleRecovery*e.recovery*dt);
   }
-  if(returnHeightLegal(ball)&&(!options.serviceFlight||ball.bounces>0)&&canReturnNormally(ball,runner,seat,options.slice))return true;
+  contactTime=returnHeightLegal(ball)&&(!options.serviceFlight||ball.bounces>0)&&canReturnNormally(ball,runner,seat,options.slice)?contactTime+dt:0;
+  if(contactTime>=minimumWindow-1e-9)return true;
  }
  return false;
 }
@@ -98,21 +169,22 @@ export function rescuePose(p:PlayerState,time:number){
  const age=rescueAge(p,time),air=age>=RESCUE.landAt?0:Math.sin(Math.PI*clamp(age/RESCUE.landAt,0,1));
  const recovery=smooth(RESCUE.riseAt,RESCUE.duration,age);
  const landing=smooth(.38,.58,age)*(1-recovery);
- const prone=smooth(.28,.52,age)*(1-recovery);
- const pitch=Math.PI/2*prone;
+ const stepOut=r.recovery==='step-out';
+ const prone=stepOut?0:smooth(.28,.52,age)*(1-recovery);
+ const pitch=stepOut?.18*smooth(.28,.52,age)*(1-recovery):Math.PI/2*prone;
  // Canonical racket space: seat 0 looks toward -z. Left-hand mirroring is
  // applied to the complete finished rig by the renderer, not to limb lengths.
  const lateral=-(r.toX-r.fromX)*(p.z>=0?1:-1);
  const bank=r.stroke==='smash'?.42:.90; // Keep the shoulder high enough for overhead contact.
  const roll=-Math.sign(lateral)*bank*Math.sin(Math.PI*clamp(age/.48,0,1))*(1-prone);
  return {lift:rescueHeight(r.stroke)*air,lean:.28*Math.sin(Math.PI*clamp(age/RESCUE.duration,0,1)),air,
-  crouch:.30*landing,landing,recovery,pitch,roll,hipHeight:.85+rescueHeight(r.stroke)*air-.60*prone};
+  crouch:.30*landing,landing,recovery,pitch,roll,hipHeight:.85+rescueHeight(r.stroke)*air-.60*prone-(stepOut?.16*landing:0)};
 }
 export function moveRescue(p:PlayerState,time:number,dt:number){
  const r=p.rescue;if(!r)return false;
  const age=time-r.startedAt,u=clamp(age/(r.travel??RESCUE.travel),0,1),ease=r.natural?u*u*(3-2*u):u*(2-u),x=p.x,z=p.z;
- p.x=r.fromX+(r.toX-r.fromX)*ease;p.z=r.fromZ+(r.toZ-r.fromZ)*ease;
- p.vx=(p.x-x)/dt;p.vz=(p.z-z)/dt;p.moving=u<1;
+ p.x=r.fromX+(r.natural?rescueMotion(r.toX-r.fromX,r.travel??RESCUE.travel,r.launchVx??0,u):(r.toX-r.fromX)*ease);p.z=r.fromZ+(r.toZ-r.fromZ)*ease;
+ p.vx=r.natural&&age<=1e-9?(r.launchVx??0):(p.x-x)/dt;p.vz=(p.z-z)/dt;p.moving=u<1;
  if(rescueAge(p,time)>=RESCUE.duration){p.rescue=undefined;p.vx=0;p.vz=0;}
  return true;
 }

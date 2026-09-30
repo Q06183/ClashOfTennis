@@ -41,8 +41,8 @@ test('physical lateral rescue preserves the swipe despite random scatter and low
    m.input(seat,{...shot,swipeAim:captureSwipeAim(camera,shot,ratio*150,-150,390,844)});
    for(let i=0;i<60&&m.state.rally===2;i++)m.step(1/60);
    assert.equal(m.state.ball.rescue,true);
-   assert.equal(draws,3,'keep lottery and depth variation sampling stable');
-   assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844)-expectedControlledAngle(camera,p.contact!,m.state.ball,390,844,ratio))<.001,
+   assert.equal(draws,1,'only the rescue lottery may consume RNG');
+   assert.ok(Math.abs(projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844)-expectedControlledAngle(camera,p.contact!,m.state.ball,390,844,ratio,{shot,player:p}))<.001,
     `${seat}/${scatter}/${ratio}`);
   }finally{m.dispose();}
  }
@@ -63,7 +63,7 @@ test('steep swipe directions do not fall back to a different heading in slow and
    m.input(seat,{...shot,swipeAim:captureSwipeAim(camera,shot,ratio*100*reverse,-100*reverse,390,844)});
    assert.equal(m.state.rally,3,`${kind} legal contact`);
    const angle=projectedOutgoingAngle(camera,p.contact!,m.state.ball,390,844);
-   const expected=expectedControlledAngle(camera,p.contact!,m.state.ball,390,844,ratio);
+   const expected=expectedControlledAngle(camera,p.contact!,m.state.ball,390,844,ratio,{shot,player:p});
    assert.ok(Math.abs(angle-expected)<.001,`${id}/${kind}/${stamina}/${depth}/${x}/${ratio}: ${angle}`);
    const c=p.contact!,from=new Vector3(c.x,c.y,c.z).project(camera);
    for(let i=0;i<6;i++)m.physics.step(1/60);
@@ -91,7 +91,8 @@ test('serve outliers and changing swipe angles stay continuous across both views
     for(let i=0;i<120&&m.state.rally===0;i++)m.step(1/60);
     assert.equal(m.state.rally,1);
     const b=m.state.ball,angle=projectedOutgoingAngle(camera,p.contact!,b,w,h),duration=(b.targetZ-p.contact!.z)/b.vz;
-    assert.ok(Math.abs(angle-Math.atan(ratio))<.001,`${seat}/${distance}/${w}/${total}/${x}/${ratio}: ${angle}`);
+    const expected=expectedControlledAngle(camera,p.contact!,b,w,h,ratio,{shot,player:p});
+    assert.ok(Math.abs(angle-expected)<.001,`${seat}/${distance}/${w}/${total}/${x}/${ratio}: ${angle}`);
     if(previous!==undefined)assert.ok(angle>previous&&angle-previous<.101,'no root-switch discontinuity');
     if(flight!==undefined)assert.ok(Math.abs(duration-flight)<1e-6,'sideways aim cannot recursively inflate flight time');
     previous=angle;flight=duration;

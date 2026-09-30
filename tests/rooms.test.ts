@@ -182,7 +182,7 @@ test('stamina-driven four-style jumps are chosen by the server and shared with b
    assert.deepEqual((await b.wait('state',v=>v.seq===jump.seq)).state,jump.state);
    const hit=await a.wait('state',v=>v.state.rally===3&&v.state.ball.rescue);
    assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
-   assert.equal(hit.state.players[seat].stroke,kind);assert.equal(draws,3);
+   assert.equal(hit.state.players[seat].stroke,kind);assert.equal(draws,1);
    assert.ok(kind==='volley'||kind==='smash'?chance===.1:seat===0?chance>.89:chance===.1);
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
@@ -332,7 +332,7 @@ test('whole-court outgoing direction survives the real WebSocket protocol on bot
    assert.equal(hit.state.players[seat].characterId,seat===0?'wuming':'lin');
    assert.equal(hit.state.ball.bounces,0);
    const angle=projectedOutgoingAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844);
-   assert.ok(Math.abs(angle-expectedControlledAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844,ratio))<.015,`${seat}/${x}/${depth}: ${angle}`);
+   assert.ok(Math.abs(angle-expectedControlledAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844,ratio,{shot,player:hit.state.players[seat]}))<.015,`${seat}/${x}/${depth}: ${angle}`);
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
@@ -425,8 +425,8 @@ test('immediate rescue uses total stamina and a later swipe replaces saved quali
    pause.mock.restore();
    const hit=await a.wait('state',v=>v.state.rally===3&&v.state.ball.rescue);
    assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
-   assert.equal(hit.state.ball.topspin,.6);assert.equal(hit.state.ball.tier,'topspin');assert.equal(rolls,3);
-   assert.ok(Math.abs(projectedOutgoingAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844)-Math.atan(.3))<.001,'latest real outgoing direction survives the rescue');
+   assert.equal(hit.state.ball.topspin,.6);assert.equal(hit.state.ball.tier,'topspin');assert.equal(rolls,1);
+   assert.ok(Math.abs(projectedOutgoingAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844)-expectedControlledAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844,.3,{shot:latest,player:hit.state.players[seat]}))<.001,'latest intended placement survives the rescue');
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
@@ -489,7 +489,7 @@ test('steep swipes and non-neutral slice/rescue randomness retain actual outgoin
    assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
    assert.equal(!!hit.state.ball.rescue,kind==='rescue');assert.equal(!!hit.state.ball.slice,kind==='slice');
    const angle=projectedOutgoingAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844);
-   assert.ok(Math.abs(angle-expectedControlledAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844,ratio))<.001,`${seat}/${kind}/${random}/${ratio}: ${angle}`);
+   assert.ok(Math.abs(angle-expectedControlledAngle(camera,hit.state.players[seat].contact,hit.state.ball,390,844,ratio,{shot,player:hit.state.players[seat]}))<.001,`${seat}/${kind}/${random}/${ratio}: ${angle}`);
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });
@@ -552,7 +552,7 @@ test('expanded lateral rescues cross the old range limit identically on both soc
    assert.equal(r.fromZ,r.toZ);
    const hit=await a.wait('state',v=>v.state.rally===3);
    assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
-   assert.equal(hit.state.ball.rescue,true);assert.equal(rolls,3);
+   assert.equal(hit.state.ball.rescue,true);assert.equal(rolls,1);
   }
  }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });

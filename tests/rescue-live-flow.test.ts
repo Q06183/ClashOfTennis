@@ -34,7 +34,7 @@ test('a full legal crosscourt flight is anticipated before the bounce for a natu
     match.step(1/60);a.update(p,match.state.time,1/60);jumped||=!!p.rescue;
    }
    assert.ok(jumped,`seat ${receiver} must enter the rescue lottery`);
-   assert.equal(draws(),3);assert.equal(match.state.ball.rescue,true);
+   assert.equal(draws(),1);assert.equal(match.state.ball.rescue,true);
    assert.equal(match.state.ball.hitter,receiver);
    const tip=a.root.getObjectByName('racket-sweet-spot')!.getWorldPosition(new Vector3()),c=p.contact!;
    assert.ok(tip.distanceTo(new Vector3(c.x,c.y,c.z))<.1,'actual racket contact');

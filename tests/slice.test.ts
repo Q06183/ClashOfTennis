@@ -21,10 +21,10 @@ test('slice has visible high-to-low preparation and follow-through without a two
  const prep=strokePose({...p,preparation:{stroke:p.stroke,progress:.48,contact}},contact),follow=strokePose({...p,swing:.44*(1-.7)},contact);assert.equal(prep.twoHands,false);assert.equal(follow.twoHands,false);assert.ok(prep.tip.y>1.55);assert.ok(follow.tip.y<.9);
  }
 });
-test('server scatter changes first landing and the irregular bounce, with a bounded low skid',()=>{
+test('slice first landing is deterministic but the irregular low bounce is preserved',()=>{
  const samples=[];for(const random of [()=>0,()=>.5,()=>1]){const m=sliceReturn(0,false,random),expected=predictFlight(m.state.ball);assert.ok(Math.abs(expected.landing.x-m.state.ball.targetX)<.001);assert.ok(Math.abs(expected.landing.z-m.state.ball.targetZ)<.001);const before={...m.state.ball};
   for(let i=0;i<180&&m.state.ball.bounces===0;i++)m.step(1/60);const b=m.state.ball;assert.equal(m.state.phase,'rally');assert.equal(b.bounces,1);assert.ok(Math.hypot(b.x-expected.landing.x,b.z-expected.landing.z)<.5);assert.ok(Math.hypot(b.vx,b.vz)<Math.hypot(before.vx,before.vz)*.95);assert.ok(b.vy>0&&b.vy<6);samples.push({target:before.targetX,angle:Math.atan2(b.vx,-b.vz),up:b.vy});m.dispose();
- }assert.ok(samples[0].target<samples[1].target&&samples[1].target<samples[2].target);assert.ok(new Set(samples.map(s=>s.angle.toFixed(2))).size===3);assert.ok(samples[0].up<samples[2].up);
+ }assert.equal(samples[0].target,samples[1].target);assert.equal(samples[1].target,samples[2].target);assert.ok(new Set(samples.map(s=>s.angle.toFixed(2))).size===3);assert.ok(samples[0].up<samples[2].up);
 });
 test('slice input rejects malformed flags and serving stays an overhead serve',()=>{
  for(const slice of ['yes',1,null]){const m=new Match();m.input(0,{...shot,slice} as any);m.step(.1);assert.equal(m.state.players[0].preparation,undefined);m.dispose();}

@@ -1,11 +1,11 @@
 import {before,test} from 'node:test';import assert from 'node:assert/strict';import {PerspectiveCamera,Vector3} from 'three';import {Match} from '../src/simulation/match.js';import {initPhysics} from '../src/simulation/physics.js';import {frameMatch} from '../src/render/camera.js';import {CourtView} from '../src/render/view.js';import {side,type Seat} from '../src/simulation/types.js';import {predictFlight} from '../src/simulation/trajectory.js';
 import {AimCameraLock} from '../src/render/aim-camera.js';
-import {projectedOutgoingAngle} from './helpers/projected-shot.js';
+import {projectedOutgoingAngle,expectedControlledAngle} from './helpers/projected-shot.js';
 before(initPhysics);
 test('actual serve outgoing motion follows the screen swipe across courts, seats and shot profiles',()=>{
  for(const roster of [['mei','leo'],['noah','luca'],['adrian','noah']] as const)for(const seat of [0,1] as Seat[])for(const court of [-1,1])for(const [w,h] of [[390,844],[320,568],[844,390]])for(const ratio of [-.3,0,.3])for(const kind of ['normal','critical','spin','reverse'] as const){
  const m=new Match(roster);try{const sign=side(seat),x=1.5*court*sign,p=m.state.players[seat];m.state.server=seat;Object.assign(p,{x,tx:x,z:12.4*sign,tz:12.4*sign,stamina:.6});m.physics.place({x,y:1.25,z:12.15*sign});Object.assign(m.state.ball,m.physics.read());const camera=new PerspectiveCamera();frameMatch(camera,w,h,seat,x,12.4,m.state.players[seat===0?1:0]);
  const shot={type:'shot' as const,aim:0,depth:.5,power:kind==='critical'?1:.5,critical:kind==='critical',topspin:kind==='spin'?1:0,slice:kind==='reverse',lob:false};const reverse=kind==='reverse'?-1:1;
- const aimed=CourtView.prototype.aimShot.call({camera,seat,size:{w,h},aimCamera:new AimCameraLock()} as any,shot,m.state,ratio*100*reverse,-100*reverse);m.input(seat,aimed);while(m.state.phase==='serve')m.step(1/120);const b=m.state.ball,actual=projectedOutgoingAngle(camera,p.contact!,b,w,h);assert.ok(Math.abs(actual-Math.atan(ratio))<.001,`${seat}/${court}/${w}/${kind}: ${actual} vs ${ratio}`);
+ const aimed=CourtView.prototype.aimShot.call({camera,seat,size:{w,h},aimCamera:new AimCameraLock()} as any,shot,m.state,ratio*100*reverse,-100*reverse);m.input(seat,aimed);while(m.state.phase==='serve')m.step(1/120);const b=m.state.ball,actual=projectedOutgoingAngle(camera,p.contact!,b,w,h),expected=expectedControlledAngle(camera,p.contact!,b,w,h,ratio,{shot,player:p});assert.ok(Math.abs(actual-expected)<.001,`${seat}/${court}/${w}/${kind}: ${actual} vs ${expected}`);
  }finally{m.dispose();}}
 });

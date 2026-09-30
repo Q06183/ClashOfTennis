@@ -1,5 +1,6 @@
 import {singleBackhand} from '../simulation/characters.js';
 import {motionValue} from './motion-curve.js';
+import {preparationPhase} from './motion-phase.js';
 import {servePhase} from '../simulation/serve-motion.js';
 import {contactTurn} from '../simulation/athlete.js';
 import {Vector3,Euler,Quaternion} from 'three';
@@ -104,7 +105,7 @@ export function strokePose(p:PlayerState,contact:Vector3):StrokePose{
   // clock, so the racket no longer brakes to a stop at every pose or impact.
   const recovery=.44/.65;
   const timeline=[...keys,...follow.map(k=>({...k,t:1+k.t*recovery}))];
-  const t=preparing?(p.shotQueued?preparing.progress:Math.min(preparing.progress,.6)):p.swing>0?1+(1-p.swing/.44)*recovery:0;
+  const t=preparing?preparationPhase(p):p.swing>0?1+(1-p.swing/.44)*recovery:0;
   pose=interpolate(timeline,t);
  }
  // Charged topspin retains the same contact, with a deeper drop and upward brushing extension.
@@ -116,13 +117,13 @@ export function strokePose(p:PlayerState,contact:Vector3):StrokePose{
  // A predicted contact can still be behind a retreating player. Do not drag
  // the racket toward it until the player has caught up and can set the feet.
  let set=preparing&&!serve?ease(Math.max(0,Math.min(1,(contact.z+.05)/.4,(1.85-Math.hypot(contact.x,contact.z))/.5))):1;
- if(preparing&&!serve&&p.shotQueued){
+ if(preparing&&!serve&&(p.shotQueued||stroke==='forehand'||stroke==='backhand')){
   const reach=contact.distanceTo(new Vector3(-.31,1.39,.08));
   const reachable=ease(Math.max(0,Math.min(1,(1.5-reach)/.22)));
   set=Math.max(set,reachable*ease(Math.max(0,Math.min(1,(preparing.progress-.55)/.45))));
  }
  if(set<1){pose.tip.lerp(v(ready.tip),1-set);pose.shaft.lerp(v(ready.shaft).normalize(),1-set).normalize();pose.turn*=set;pose.knee=.3+(pose.knee-.3)*set;}
- const support=one&&!slice&&!volley&&preparing?1-ease(Math.max(0,Math.min(1,(preparing.progress-.52)/.2))):0;
+ const support=one&&!slice&&!volley&&preparing?1-ease(Math.max(0,Math.min(1,(preparationPhase(p)-.52)/.2))):0;
  const toss=serve&&!smash&&preparing?ease(Math.max(0,Math.min(1,preparing.progress/.32,(1-preparing.progress)/.4))):0;
  return {...pose,support,twoHands:set<.5||support===1||bh&&!volley&&!slice&&!singleBackhand(p.characterId)||(!preparing&&!p.swing),toss};
 }

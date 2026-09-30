@@ -1,7 +1,7 @@
 import type { Input, MatchState, RoomView, Seat } from '../simulation/types.js';
 import {saveSeat,clearSeat} from './session.js';
-type Credentials={code:string;seat:Seat;token:string};
-type Callbacks={welcome:(c:Credentials)=>void;room:(r:RoomView)=>void;state:(s:MatchState,paused:boolean)=>void;status:(s:string)=>void;error:(s:string)=>void;latency:(ms:number)=>void;terminal?:(s:string)=>void};
+type Credentials={code:string;seat:Seat;token:string;matched?:boolean};
+type Callbacks={welcome:(c:Credentials)=>void;room:(r:RoomView)=>void;state:(s:MatchState,paused:boolean)=>void;status:(s:string)=>void;error:(s:string)=>void;latency:(ms:number)=>void;matching?:()=>void;terminal?:(s:string)=>void};
 export class NetworkClient {
   private ws:WebSocket|null=null;
   private credentials:Credentials|null=null;
@@ -24,9 +24,10 @@ export class NetworkClient {
       if(m.type==='welcome'){
         awaitingResume=false;
         this.deadline=0;this.credentials={code:m.code,seat:m.seat,token:m.token};
-        const saved=saveSeat(JSON.stringify(this.credentials));this.callbacks.welcome(this.credentials);
+        const saved=saveSeat(JSON.stringify(this.credentials));this.callbacks.welcome({...this.credentials,matched:m.matched===true});
         if(!saved)this.callbacks.error('浏览器无法保存房间，当前对局不受影响；刷新后需重新加入');
-      }else if(m.type==='room')this.callbacks.room(m.room);
+      }else if(m.type==='matchmaking')this.callbacks.matching?.();
+      else if(m.type==='room')this.callbacks.room(m.room);
       else if(m.type==='state')this.callbacks.state(m.state,m.paused);
       else if(m.type==='pong')this.callbacks.latency(Math.max(0,Date.now()-m.at));
       else if(m.type==='error'){

@@ -1,0 +1,59 @@
+[
+  {
+    "id": "lin",
+    "source": "public/models/athlete.glb",
+    "output": "public/models/prototypes/lin.glb",
+    "sourceSha256": "63889b4445d335a860243fd9b4a726037d13b41956e21f829169b8b885368165",
+    "outputSha256": "deacbd83336f7a12247cb116a8a43a2a2c4fe2556fd3622b4dae87e21c505700",
+    "sculptedVertices": 7771,
+    "replacedHandTriangles": 0,
+    "externalCredits": 0,
+    "bodyProportionRevision": 3,
+    "proportions": {
+      "hipHeight": 0.96,
+      "legLength": 0.425,
+      "upperArm": 0.33,
+      "elbowToGrip": 0.34,
+      "handScale": 0.88
+    },
+    "notes": "Original topology/UV retained; source arm axis and anatomical weights calibrated; prototype only."
+  },
+  {
+    "id": "mei",
+    "source": "public/models/characters/mei.glb",
+    "output": "public/models/prototypes/mei.glb",
+    "sourceSha256": "7d09b61a4687cad2e03f38034f04b59fb04d7d2267343c6ff0606594832908a2",
+    "outputSha256": "59b8edfd27465fec36f7d63462d68d3416dfcac5d344de8cc6eea5d8025bb570",
+    "sculptedVertices": 7560,
+    "replacedHandTriangles": 0,
+    "externalCredits": 0,
+    "bodyProportionRevision": 3,
+    "proportions": {
+      "hipHeight": 0.96,
+      "legLength": 0.425,
+      "upperArm": 0.33,
+      "elbowToGrip": 0.34,
+      "handScale": 0.9
+    },
+    "notes": "Original topology/UV retained; source arm axis and anatomical weights calibrated; prototype only."
+  },
+  {
+    "id": "noah",
+    "source": "public/models/characters/noah.glb",
+    "output": "public/models/prototypes/noah.glb",
+    "sourceSha256": "c81c4f0f7530ef2ee12b37f9f7aad1207c7cfae1be0682041ca128da69c76739",
+    "outputSha256": "834ee0ce106095fef90d2bf5ae4f3580b208483b385b2b0d80289b7022e1b544",
+    "sculptedVertices": 8238,
+    "replacedHandTriangles": 0,
+    "externalCredits": 0,
+    "bodyProportionRevision": 3,
+    "proportions": {
+      "hipHeight": 0.96,
+      "legLength": 0.425,
+      "upperArm": 0.33,
+      "elbowToGrip": 0.34,
+      "handScale": 0.86
+    },
+    "notes": "Original topology/UV retained; source arm axis and anatomical weights calibrated; prototype only."
+  }
+]

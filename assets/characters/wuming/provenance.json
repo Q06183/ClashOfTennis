@@ -15,5 +15,12 @@
   "portraitSha256": "73d544c991a3735a94c63a21484212daba0883fd7c35ceb1a6a31a02519b1caa",
   "portraitRenderer": "Local CPU rasterizer; actual shipped GLB texture and geometry, 2x supersampling.",
   "editable": "public/models/characters/wuming.glb",
-  "editableFormat": "GLB (importable into Blender); optional .blend export blocked by host GPU/approval environment."
+  "editableFormat": "GLB (importable into Blender); optional .blend export blocked by host GPU/approval environment.",
+  "rigMigration": {
+    "schema": "tennis-21-v1",
+    "sourceSha256": "63889b4445d335a860243fd9b4a726037d13b41956e21f829169b8b885368165",
+    "modelSha256": "194983a13ee6207a2698360e0984a12165640ff5bef34f0337d588ee1c0c9245",
+    "manifest": "assets/athlete/control-rig-manifest.json",
+    "editable": "assets/characters/wuming/athlete-control-rig.blend"
+  }
 }

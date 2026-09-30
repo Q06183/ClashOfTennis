@@ -52,7 +52,12 @@ for(const id of variants)test(`running ${id} skin stays grounded and bounded thr
     for(const foot of ['foot-0','foot-1']){
       const ankle=a.root.getObjectByName(foot)!;
       const up=new Vector3(0,1,0).applyQuaternion(ankle.getWorldQuaternion(new Quaternion()));
-      assert.ok(up.y>.999,'support/swing soles must not inherit knee rotation');
+      // Heel roll is now intentional, bounded to .28 rad; the forefoot
+      // counter-rotates and must still be level instead of inheriting the knee.
+      assert.ok(up.y>Math.cos(.281),'heel roll exceeds the authored toe-off range');
+      const toe=a.root.getObjectByName(foot==='foot-0'?'toe-0':'toe-1')!;
+      const toeUp=new Vector3(0,1,0).applyQuaternion(toe.getWorldQuaternion(new Quaternion()));
+      assert.ok(toeUp.y>.999,'forefoot must stay level independently of knee and heel');
     }
   }
 });

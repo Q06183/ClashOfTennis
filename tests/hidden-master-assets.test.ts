@@ -9,12 +9,19 @@ async function glb(path:string){
 }
 test('black-gold derivative preserves every original geometry, joint and weight byte',async()=>{
  const source=await glb('public/models/athlete.glb'),target=await glb('public/models/characters/wuming.glb');
- assert.deepEqual(target.json.accessors,source.json.accessors);
  assert.deepEqual(target.json.skins,source.json.skins);
- for(let i=0;i<source.json.bufferViews.length;i++){
-  const v=source.json.bufferViews[i];
-  assert.deepEqual(target.bin.subarray(v.byteOffset??0,(v.byteOffset??0)+v.byteLength),source.bin.subarray(v.byteOffset??0,(v.byteOffset??0)+v.byteLength));
+ // Wuming has an extra image bufferView, so appended rig accessors have
+ // different storage offsets. Compare the actual accessor payloads, not IDs.
+ const payload=(g:Awaited<ReturnType<typeof glb>>,index:number)=>{
+  const a=g.json.accessors[index],v=g.json.bufferViews[a.bufferView];
+  return {type:a.type,count:a.count,componentType:a.componentType,bytes:g.bin.subarray((v.byteOffset??0)+(a.byteOffset??0),(v.byteOffset??0)+v.byteLength)};
+ };
+ for(let m=0;m<source.json.meshes.length;m++)for(let p=0;p<source.json.meshes[m].primitives.length;p++){
+  const a=source.json.meshes[m].primitives[p],b=target.json.meshes[m].primitives[p];
+  assert.deepEqual(payload(target,b.indices),payload(source,a.indices));
+  for(const name of Object.keys(a.attributes))assert.deepEqual(payload(target,b.attributes[name]),payload(source,a.attributes[name]),name);
  }
+ assert.deepEqual(payload(target,target.json.skins[0].inverseBindMatrices),payload(source,source.json.skins[0].inverseBindMatrices));
  assert.notEqual(target.json.images[0].bufferView,source.json.images[0].bufferView);
  assert.equal(target.json.images[0].mimeType,'image/png');
  assert.ok(target.json.materials.some((m:any)=>m.name==='wuming-sweatband-knit'));
@@ -22,6 +29,6 @@ test('black-gold derivative preserves every original geometry, joint and weight 
  assert.equal(portrait.toString('hex',0,8),'89504e470d0a1a0a');
  assert.equal(portrait.readUInt32BE(16),256);assert.equal(portrait.readUInt32BE(20),320);
  const report=JSON.parse(await readFile('assets/characters/wuming/provenance.json','utf8'));
- assert.equal(report.sourceSha256,createHash('sha256').update(source.bytes).digest('hex'));
- assert.equal(report.modelSha256,createHash('sha256').update(target.bytes).digest('hex'));
+ assert.equal(report.rigMigration.sourceSha256,createHash('sha256').update(source.bytes).digest('hex'));
+ assert.equal(report.rigMigration.modelSha256,createHash('sha256').update(target.bytes).digest('hex'));
 });

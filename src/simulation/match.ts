@@ -9,7 +9,7 @@ import { BallPhysics } from './physics.js';
 import {shotDepth,shotTier,SHOT_PROFILES} from './shot-profile.js';
 import {dropStrength,dropRebound} from './drop-shot.js';
 import {placementAssist,controlledPlacement} from './pace-control.js';
-import {RESCUE,rescueChance,rescueTarget,hasNormalReturnWindow,moveRescue,canReachRescue} from './rescue.js';
+import {RESCUE,rescueChance,rescueTarget,rescueApproach,canDelayRescue,hasNormalReturnWindow,moveRescue,canReachRescue} from './rescue.js';
 import {movePlayer} from './movement.js';
 import {beginPointStamina,spendStamina,recoverPointStamina,settlePointStamina,effectiveStamina,STAMINA} from './stamina.js';
 import { COURT, isInCourt, isInServiceBox, serverForPoint, winnerForScore } from './rules.js';
@@ -22,6 +22,15 @@ export class Match {
   private pending: [{shot:Shot;flight:number;airRequested:boolean}|null,{shot:Shot;flight:number;airRequested:boolean}|null] = [null,null];
   private recentContact:{at:number;flight:number;seat:Seat;ball:BallState}|null=null;
   private rescueAttempt=[-1,-1];
+  /** Local diagnostics, once per category/seat/incoming flight; not per-tick telemetry. */
+  readonly rescueDiagnostics={eligible:0,candidate:0,stableVeto:0,staged:0,lottery:0,started:0,contact:0,missed:0};
+  private rescueCounted=new Map<string,number>();
+  private rescuePlans:({x:number;z:number;flight:number;at:number}|null)[]=[null,null];
+  private nextRescueApproach=[0,0];
+  private rescueMetric(key:keyof Match['rescueDiagnostics'],seat:Seat){
+    const id=`${key}/${seat}`;if(this.rescueCounted.get(id)===this.state.rally)return;
+    this.rescueCounted.set(id,this.state.rally);this.rescueDiagnostics[key]++;
+  }
   private manualUntil = [0,0];
   private returnPlanners = [new ReturnPlanner(),new ReturnPlanner()];
   private serveElapsed = 0;
@@ -39,6 +48,7 @@ export class Match {
   }
   private announce(event: string) { this.state.event=event; this.state.eventId++; }
   private clearPreparation(preserveRescue=false) {
+    this.rescuePlans=[null,null];this.nextRescueApproach=[0,0];
     for(const planner of this.returnPlanners)planner.clear();
     this.pending=[null,null];this.serveMotion=null;this.recentContact=null;
     this.state.rescueWindow=undefined;
@@ -46,6 +56,7 @@ export class Match {
     for(const p of this.state.players){p.preparation=undefined;p.shotQueued=false;}
   }
   private resetPoint() {
+    this.rescueCounted.clear();this.rescuePlans=[null,null];this.nextRescueApproach=[0,0];
     for(const planner of this.returnPlanners)planner.clear();
     const s=this.state, total=s.score[0]+s.score[1];
     s.rescueWindow=undefined;
@@ -71,6 +82,7 @@ export class Match {
     if(s.rescueWindow&&(cmd.type!=='shot'||s.rescueWindow.seat!==seat))return;
     if(cmd.type==='move') {
       if(!Number.isFinite(cmd.x)||!Number.isFinite(cmd.z)) return;
+      this.rescuePlans[seat]=null;this.nextRescueApproach[seat]=0;
       if(s.phase==='serve'&&seat===s.server){
         if(this.serveMotion)return;
         const half=side(seat)*((s.score[0]+s.score[1])%2===0?1:-1);
@@ -117,23 +129,51 @@ export class Match {
   }
   private tryRescue(seat:Seat){
     const s=this.state,p=s.players[seat],pending=this.pending[seat],b=s.ball;
+    if(this.returnLegal(seat)&&canReturnNormally(b,p,seat,!!pending?.shot.slice)){this.rescuePlans[seat]=null;return false;}
     if(p.rescue||this.rescueAttempt[seat]===s.rally||
-       s.phase!=='rally'||seat!==other(b.hitter)||this.sinceHit<=.06||b.z*side(seat)<=.35||
-       b.y<=COURT.ballRadius||b.bounces>=2||(this.serviceFlight&&b.bounces===0)||
-       this.returnLegal(seat)&&canReturnNormally(b,p,seat,!!pending?.shot.slice))return false;
-    const target=rescueTarget(b,p,seat,this.serviceFlight);if(!target)return false;
+       s.phase!=='rally'||seat!==other(b.hitter)||this.sinceHit<=.06||
+       b.y<=COURT.ballRadius||b.bounces>=2)return false;
+    this.rescueMetric('eligible',seat);
+    const target=rescueTarget(b,p,seat,this.serviceFlight);
+    if(!target){
+      // Advisory positioning only; no airborne motion, RNG or predicted hit.
+      if(s.time>=this.nextRescueApproach[seat]&&shouldAssist(b,p,s.time,this.manualUntil[seat])){
+        this.nextRescueApproach[seat]=s.time+.08;this.rescuePlans[seat]=null;
+        const approach=rescueApproach(b,p,seat,this.serviceFlight);
+        if(approach&&!hasNormalReturnWindow(b,p,seat,{time:s.time,manualUntil:this.manualUntil[seat],serviceFlight:this.serviceFlight,
+          slice:!!pending?.shot.slice,planner:this.returnPlanners[seat],flight:s.rally,airRequested:pending?.airRequested})){
+          this.rescueMetric('staged',seat);this.rescuePlans[seat]={x:approach.x,z:approach.z,flight:s.rally,at:s.time};
+        }
+      }
+      return false;
+    }
+    this.rescuePlans[seat]=null;
+    this.rescueMetric('candidate',seat);
     if(hasNormalReturnWindow(b,p,seat,{time:s.time,manualUntil:this.manualUntil[seat],serviceFlight:this.serviceFlight,
-      slice:!!pending?.shot.slice,planner:this.returnPlanners[seat],flight:s.rally,airRequested:pending?.airRequested}))return false;
+      slice:!!pending?.shot.slice,planner:this.returnPlanners[seat],flight:s.rally,airRequested:pending?.airRequested})){
+      this.rescueMetric('stableVeto',seat);return false;
+    }
+    // Anticipate serve reception, but never launch on an unbounced serve.
+    if(this.serviceFlight&&b.bounces===0)return false;
+    if(b.z*side(seat)<=.35||canDelayRescue(b,p,seat,target,this.serviceFlight)){
+      this.rescueMetric('staged',seat);return false;
+    }
     this.rescueAttempt[seat]=s.rally;
+    this.rescueMetric('lottery',seat);
     if(this.random()>=rescueChance(p.totalStamina??1))return false;
+    this.rescueMetric('started',seat);
     p.rescue={startedAt:s.time,fromX:p.x,fromZ:p.z,toX:target.x,toZ:target.z,contact:target.contact,
-      hit:false,stroke:target.stroke,backhand:target.backhand,travel:target.travel,natural:true};
+      hit:false,stroke:target.stroke,backhand:target.backhand,travel:target.travel,natural:true,launchVx:target.launchVx,short:target.short,
+      // Authored choice, not a frequency estimated from the reference clips.
+      // Long/low reaches retain support on the floor; shorter high saves step out.
+      recovery:target.short||target.contact.y>=.85&&Math.abs(target.x-p.x)<1.8?'step-out':'supported-fall'};
     p.stroke=target.stroke;p.backhand=target.backhand;p.preparation=undefined;spendStamina(p,.1);
     return true;
   }
   private rescueContact(seat:Seat){
     const s=this.state,p=s.players[seat],r=p.rescue;
     if(!r||r.hit||r.missed||!this.returnLegal(seat)||!this.returnReachable(seat))return false;
+    this.rescueMetric('contact',seat);
     const pending=this.pending[seat];
     if(pending?.flight===s.rally){this.hit(seat,pending.shot);return true;}
     r.contact={x:s.ball.x,y:s.ball.y,z:s.ball.z};
@@ -159,9 +199,10 @@ export class Match {
     let targetX=shot.aim*4.45*sign;
     const drop=serve?0:dropStrength(shot);
     const rescue=!serve&&!!p.rescue&&!p.rescue.hit;
+    if(rescue)this.rescueMetric('contact',seat);
     const smash=!serve&&!rescue&&canSmash(b,p,seat),volley=!serve&&!rescue&&!smash&&b.bounces===0;
     // Preserve the latest swipe's intended depth, heading, spin and pace tier.
-    // Rescue still applies its physical slowdown and scatter below.
+    // Rescue still applies its physical slowdown, never directional scatter.
     if(smash&&drop===0)shot={...shot,power:Math.max(.75,shot.power),critical:false,lob:false,topspin:0,slice:false};
     else if(volley){const difficulty=volleyDifficulty(b,p);shot={...shot,topspin:0,power:shot.power*(1-.48*difficulty),critical:difficulty>.05?false:shot.critical,depth:shot.depth*(1-.32*difficulty)};}
     if(serve)shot={...shot,slice:false};
@@ -173,16 +214,10 @@ export class Match {
     const assist=!serve&&shot.swipeAim?.elevation?placementAssist(intendedPower):0;
     if(serve) {
       targetX=-serveSide*1.75+shot.aim*2.25*sign;
-    } else if(stretch>.65) {
-      targetX+=Math.sign(targetX||1)*stretch*.25;
     }
     const start={x:b.x,y:serve?2.65:b.y,z:b.z};
     const direction=!serve&&shot.swipeAim?directionAtContact(shot.swipeAim,start,shot.directionX??0,sign):shot.directionX;
     if(direction!==undefined)targetX=start.x+direction*Math.abs(targetZ-start.z)*sign;
-    let scatterX=0;
-    const depthSpread=1-.9*drop;
-    if(slice){const spread=.4+.65*shot.power;scatterX+=(this.random()*2-1)*spread;targetZ+=(this.random()*2-1)*(.5+.45*shot.power)*depthSpread;}
-    if(rescue){scatterX+=(this.random()*2-1)*1.6;targetZ+=(this.random()*2-1)*1.8*depthSpread;}
     targetZ=controlledPlacement(0,targetZ,assist).z;
     const power=shot.power*(.65+.35*effectiveStamina(p))*(1-.2*stretch);
     const critical=tier==='critical';
@@ -195,14 +230,17 @@ export class Match {
     if(shot.swipeAim?.elevation){
       // Depth, pace, fatigue and net clearance determine time independently
       // of horizontal aim. Recomputing time after solving x rotates the shot.
-      flight=flightAt(start.x);
-      targetX=outgoingAimTarget(shot.swipeAim,start,targetZ,gravity,flight,
+      // Resolve aim using a neutral, full-stamina flight, BEFORE applying
+      // athlete pace/fatigue/reach penalties. Otherwise a slow/high serve
+      // moves the lateral target just to match its first projected 100 ms.
+      // Preserve neutral Lin's control calibration, including authored skills.
+      const aimFlight=flightTime(start,{x:start.x,y:.12,z:targetZ},shot.power,1,gravity,
+        {smash:smash&&drop===0,critical,lob:shot.lob})*slowdown;
+      targetX=outgoingAimTarget(shot.swipeAim,start,targetZ,gravity,aimFlight,
         bodyAimTarget(shot.swipeAim,p,targetZ,sign));
       targetX=controlledPlacement(targetX,targetZ,assist).x;
-      // Keep depth variation, rescue slowdown and slice bounce effects, but
-      // never randomly rotate a direction explicitly chosen with a swipe.
+      flight=flightAt(start.x);
     }else{
-      targetX+=scatterX;
       flight=flightAt(targetX);
     }
     const velocity={x:(targetX-start.x)/flight,y:(.12-start.y+(gravity/2)*flight*flight)/flight,z:(targetZ-start.z)/flight};
@@ -215,7 +253,7 @@ export class Match {
     p.preparation=undefined;p.shotQueued=false;
     p.contact={...start};if(rescue&&p.rescue){p.rescue.hit=true;p.rescue.contact={...start};}
     spendStamina(p,(.022+.028*power)*effects.drain*strokeSpeed);
-    this.recentContact=null;this.sinceHit=0;this.serviceFlight=serve;this.pending[seat]=null;this.impact=null;this.bouncePoint=null;
+    this.recentContact=null;this.sinceHit=0;this.serviceFlight=serve;this.pending[seat]=null;this.impact=null;this.bouncePoint=null;this.rescuePlans=[null,null];
     // A recovery tap belongs to the previous flight. Fresh incoming-ball taps
     // can still override assistance, but a stale one must not delay the split step.
     this.manualUntil[other(seat)]=0;
@@ -247,7 +285,7 @@ export class Match {
     if(hold){
       const used=Math.min(dt,hold.remaining);hold.remaining=Math.max(0,hold.remaining-used);
       if(hold.remaining>1e-9)return;
-      const r=this.state.players[hold.seat].rescue;if(r)r.missed=true;
+      const r=this.state.players[hold.seat].rescue;if(r)r.missed=true;this.rescueMetric('missed',hold.seat);
       this.state.rescueWindow=undefined;this.pending[hold.seat]=null;
       this.state.players[hold.seat].shotQueued=false;this.announce('未及时回击');
       dt-=used;if(dt<1e-9)return;
@@ -310,6 +348,7 @@ export class Match {
       if(y<COURT.net+COURT.ballRadius) { this.faultOrPoint('下网');return; }
     }
     if(before.vy<0 && b.vy>0 && b.y<.45) {
+      this.rescuePlans=[null,null];this.nextRescueApproach=[0,0];
       b.bounces++;
       const contact=this.impact??b;this.impact=null;
       if(b.bounces===1) {
@@ -319,7 +358,8 @@ export class Match {
         this.bouncePoint={x:contact.x,z:contact.z};
         if(b.topspin){const kick=1+.12*b.topspin;b.vx*=kick;b.vz*=kick;b.topspin*=.55;this.physics.body.setLinvel({x:b.vx,y:b.vy,z:b.vz},true);this.physics.setTopspin(b.topspin);}
         if(b.slice){
-          // Randomness belongs to the authority at the bounce, never to either renderer.
+          // Explicit gameplay exception: retain the irregular slice skid AFTER
+          // landing. Launch and first landing never receive random aim error.
           const angle=(this.random()*2-1)*.16,pace=.8+.12*this.random(),vx=b.vx,vz=b.vz;
           b.vx=(vx*Math.cos(angle)-vz*Math.sin(angle))*pace;b.vz=(vx*Math.sin(angle)+vz*Math.cos(angle))*pace;b.vy*=.58+.2*this.random();
           this.physics.body.setLinvel({x:b.vx,y:b.vy,z:b.vz},true);
@@ -341,7 +381,11 @@ export class Match {
         const assist=shouldAssist(b,p,s.time,this.manualUntil[seat]);
         if(!assist)this.returnPlanners[seat].clear();
         const receiving=this.returnPlanners[seat].update(b,p,seat,this.serviceFlight,s.time,s.rally,!!this.pending[seat]?.airRequested),air=receiving.air;
-        if(assist){p.tx=receiving.x;p.tz=receiving.z;}
+        if(assist){
+          const plan=this.rescuePlans[seat];
+          const staged=plan&&plan.flight===s.rally&&s.time-plan.at<.09;
+          p.tx=staged?plan.x:receiving.x;p.tz=staged?plan.z:receiving.z;
+        }
         else this.returnPlanners[seat].clear();
         const soon=receiving.time;
         if(soon<.65){
@@ -350,7 +394,9 @@ export class Match {
           p.preparation={stroke:smash?'smash':slice?(receiving.backhand?'slice-backhand':'slice-forehand'):air?'volley':this.pending[seat]?.shot.lob?'lob':receiving.backhand?'backhand':'forehand',progress:clamp(1-soon/.65,0,1),contact:receiving.point};p.backhand=receiving.backhand;
         }else p.preparation=undefined;
       }
+      const rescueBefore=p.rescue;
       if(!moveRescue(p,s.time,dt))movePlayer(p,seat,dt);
+      if(rescueBefore&&!p.rescue&&!rescueBefore.hit)this.rescueMetric('missed',seat);
       const endurance=characterEffects(p.characterId);
       if(p.moving)spendStamina(p,.013*endurance.drain*dt);
       else recoverPointStamina(p,STAMINA.idleRecovery*endurance.recovery*dt);

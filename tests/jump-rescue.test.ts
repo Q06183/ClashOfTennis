@@ -52,7 +52,7 @@ test('a successful stamina lottery can physically save all four unreachable shot
    assert.equal(m.state.ball.rescue,true);assert.equal(p.rescue?.stroke,kind);
    assert.equal(p.stroke,kind);
    assert.ok(maxLift>.22,`${kind} must be visible`);
-   assert.equal(rolls,3,'one chance plus two scatter samples');
+   assert.equal(rolls,1,'one chance, no launch scatter samples');
    assert.ok(canReachRescue({...m.state.ball,...p.contact!},p,seat,m.state.time));
    const sweet=a.root.getObjectByName('racket-sweet-spot')!.getWorldPosition(new Vector3());
    assert.ok(sweet.distanceTo(new Vector3(p.contact!.x,p.contact!.y,p.contact!.z))<.1,`${kind}/${id}/${seat} racket misses actual ball: ${sweet.distanceTo(new Vector3(p.contact!.x,p.contact!.y,p.contact!.z))}`);
@@ -69,7 +69,7 @@ test('low-total-stamina lottery is exactly 10 of 100 equally spaced draws and ca
   try{
    for(let i=0;i<45&&m.state.rally===2&&m.state.phase==='rally';i++){m.input(0,shot);m.step(1/60);}
    if(m.state.ball.rescue)jumped++;
-   assert.equal(draws,n<10?3:1);
+   assert.equal(draws,1);
   }finally{m.dispose();}
  }
  assert.equal(jumped,10);

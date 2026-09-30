@@ -44,7 +44,7 @@ test('automatic hold synchronizes both clients, accepts only the receiver, and t
     assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
     assert.equal(hit.state.rescueWindow,undefined);assert.equal(hit.state.ball.rescue,true);
     const c=hit.state.players[seat].contact;
-    assert.deepEqual(c,{x:hold.state.ball.x,y:hold.state.ball.y,z:hold.state.ball.z});assert.equal(rolls,3);
+    assert.deepEqual(c,{x:hold.state.ball.x,y:hold.state.ball.y,z:hold.state.ball.z});assert.equal(rolls,1);
    }else{
     const expired=await a.wait('state',v=>v.seq>later.seq&&!v.state.rescueWindow);
     assert.deepEqual((await b.wait('state',v=>v.seq===expired.seq)).state,expired.state);
@@ -74,4 +74,34 @@ test('disconnect pauses the contact countdown and resume does not clear the rema
   assert.equal(hit.state.ball.hitter,1);assert.equal(hit.state.rescueWindow,undefined);
   assert.deepEqual((await resumed.wait('state',v=>v.seq===hit.seq)).state,hit.state);
  }finally{a.ws.terminate();b.ws.terminate();resumed?.ws.terminate();await server.close();}
+});
+
+test('short momentum rescue serializes launch velocity and preserves the half-second physical hold',async()=>{
+ const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{
+  a.send({type:'create',name:'short A'});const welcome=await a.wait('welcome');
+  b.send({type:'join',code:welcome.code,name:'short B'});await b.wait('welcome');
+  a.send({type:'ready'});b.send({type:'ready'});await a.wait('state');
+  const room=server.rooms.rooms.get(welcome.code)!;
+  for(const seat of [0,1] as const){
+   room.match!.dispose();let rolls=0;
+   const m=room.match=new Match(['lin','lin'],()=>{rolls++;return 0;}),sign=seat===0?1:-1,p=m.state.players[seat];
+   m.state.phase='rally';m.state.rally=2;m.step(.08);
+   Object.assign(p,{x:0,z:10*sign,tx:1.15*sign,tz:10*sign,vx:-3*sign,vz:0,
+    stamina:.15,totalStamina:.15,preparation:undefined,backhand:false});
+   m.physics.place({x:1.15*sign,y:1.7,z:5.95*sign},{x:0,y:1,z:9*sign});
+   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});
+   a.messages.length=0;b.messages.length=0;
+   const hold=await a.wait('state',v=>!!v.state.rescueWindow);
+   assert.deepEqual((await b.wait('state',v=>v.seq===hold.seq)).state,hold.state);
+   const r=hold.state.players[seat].rescue;
+   assert.equal(r.short,true);assert.ok(Number.isFinite(r.launchVx));assert.equal(r.fromZ,r.toZ);
+   assert.equal(rolls,1);assert.ok(hold.state.rescueWindow.remaining<=.5);
+   (seat===0?a:b).send({type:'input',command:{type:'shot',aim:0,depth:.5,power:.5,lob:false}});
+   const hit=await a.wait('state',v=>v.state.rally===3);
+   assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
+   assert.equal(hit.state.ball.rescue,true);assert.equal(m.rescueDiagnostics.contact,1);
+   assert.equal(rolls,1);
+  }
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
 });

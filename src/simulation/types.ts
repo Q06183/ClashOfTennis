@@ -23,7 +23,7 @@ export type PlayerState = {
   shotQueued?: boolean;
   strokeSpin?: number;
   serveCourt?: 'deuce'|'ad';
-  rescue?: {startedAt:number;fromX:number;fromZ:number;toX:number;toZ:number;contact:Vec;hit:boolean;stroke?:RescueStroke;backhand?:boolean;travel?:number;natural?:boolean;missed?:boolean};
+  rescue?: {startedAt:number;fromX:number;fromZ:number;toX:number;toZ:number;contact:Vec;hit:boolean;stroke?:RescueStroke;backhand?:boolean;travel?:number;natural?:boolean;launchVx?:number;short?:boolean;missed?:boolean;recovery?:'step-out'|'supported-fall'};
 };
 export type BallState = Vec & { vx: number; vy: number; vz: number; bounces: number; hitter: Seat; targetX: number; targetZ: number; placementAssist?:number; aimOrigin?:Vec; tier?: ShotTier; critical?: boolean; rescue?: boolean; topspin?: number; slice?: boolean; drop?:number; skill?: 'smash'|'volley'|'slice' };
 export type MatchState = {

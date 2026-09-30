@@ -62,3 +62,18 @@
 .victory-panel{width:min(430px,100%);padding:15px 22px;max-height:36vh;overflow:auto;pointer-events:auto}
 .victory-panel h2{font-size:18px;margin:8px 0}.victory-panel .result-score{font-size:36px;margin:8px 0}.victory-panel .result-stats{margin:8px 0;padding:8px}.victory-panel .primary,.victory-panel .secondary{min-height:36px;margin-top:6px;padding:8px}
 @media(max-height:500px){.victory-overlay{align-items:flex-end;padding:12px}.victory-title{align-self:flex-start;max-width:45%}.victory-panel{width:38%;max-height:90vh}}
+
+.menu .match-button{grid-column:1/-1;font-size:15px;letter-spacing:.5px}.matchmaking-mark{display:flex;justify-content:center;gap:8px;margin:30px 0 22px}.matchmaking-mark i{width:11px;height:11px;border-radius:50%;background:#87a942;animation:match-pulse 1.2s ease-in-out infinite}.matchmaking-mark i:nth-child(2){animation-delay:.18s}.matchmaking-mark i:nth-child(3){animation-delay:.36s}.matchmaking-player{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:12px;padding:14px;margin:22px 0}.matchmaking-player>div:nth-child(2){flex:1}.matchmaking-player strong,.matchmaking-player small{display:block}.matchmaking-player strong{font-size:13px}.matchmaking-player small{font-size:10px;color:var(--muted);margin-top:4px}.matchmaking-player>span{font-size:10px;color:#668238}.matchmaking-player>span:before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:#88aa43;margin-right:5px}@keyframes match-pulse{0%,100%{opacity:.28;transform:scale(.72)}50%{opacity:1;transform:scale(1)}}
+/* Keep the court identity on phones, but anchor it inside the court artwork
+   instead of the action area. The clamped top stays clear of the nickname on
+   both short and tall portrait screens. */
+@media(max-width:700px){.home .court-tag{display:flex;top:clamp(230px,42%,360px);right:24px;bottom:auto;padding:8px 12px;gap:10px;transform:scale(.86);transform-origin:top right}}
+/* A phone browser's visible height can be much shorter than the hardware
+   screen while its address bar is open. On short portrait viewports, turn the
+   fixed hero into a scrollable column instead of clipping the action menu. */
+@media(max-width:700px) and (max-height:620px) and (orientation:portrait){
+  .home{overflow-x:hidden;overflow-y:auto}
+  .home-copy{position:relative;top:auto;left:auto;right:auto;width:auto;height:auto;min-height:568px;box-sizing:border-box;padding:76px 27px 50px}
+  .home-copy .menu{margin-top:auto}
+  .home-footer{position:relative;left:auto;right:auto;bottom:auto;padding:0 27px 14px;margin-top:-34px;box-sizing:border-box}
+}

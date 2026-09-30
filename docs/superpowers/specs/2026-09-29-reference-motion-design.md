@@ -1,7 +1,9 @@
 # Reference-aligned athlete rig and motion — proposed design
 
-**Status: proposed, awaiting user review. No implementation approval inferred
-from automatic goal continuation.**
+**Status: approved in the continuation chat on 2026-09-29.** User explicitly
+selected: preserve all ten appearances; first upgrade chest, shoulders and toes,
+then rebuild and verify actions individually. This is implementation approval,
+not acceptance of the resulting animation.
 
 ## Objective and scope
 

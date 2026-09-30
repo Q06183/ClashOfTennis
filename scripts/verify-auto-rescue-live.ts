@@ -4,6 +4,7 @@ import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 const base=process.env.GAME_URL??'http://100.81.1.29:7470';
+const output=process.env.VERIFY_DIR??'artifacts/auto-rescue';
 const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 async function client(){
  const ws=new WebSocket(base.replace(/^http/,'ws')+'/ws'),messages:any[]=[];
@@ -34,6 +35,7 @@ for(const success of [true,false]){
    const result=await a.wait(m=>m.type==='state'&&(m.state.rescueWindow||m.state.phase==='point'));
    if(!result.state.rescueWindow){attempts.push({success,trial,lotteryMiss:true});continue;}
    const hold=result;
+   assert.ok(Number.isFinite(hold.state.players[1].rescue.launchVx),'updated momentum-aware server is running');
    assert.deepEqual((await b.wait(m=>m.type==='state'&&m.seq===hold.seq)).state,hold.state);
    const still=await a.wait(m=>m.type==='state'&&m.seq>hold.seq&&m.state.rescueWindow?.remaining<hold.state.rescueWindow.remaining-.08);
    assert.equal(still.state.time,hold.state.time);assert.deepEqual(still.state.ball,hold.state.ball);
@@ -46,7 +48,8 @@ for(const success of [true,false]){
    if(success)assert.deepEqual(released.state.players[1].contact,{x:hold.state.ball.x,y:hold.state.ball.y,z:hold.state.ball.z});
    else assert.ok(released.state.ball.z<=hold.state.ball.z);
    attempts.push({success,trial,freezeTime:hold.state.time,remaining:hold.state.rescueWindow.remaining,
-    contact:hold.state.ball,travel:hold.state.players[1].rescue.travel,sameSnapshots:true,releasedRally:released.state.rally});
+    contact:hold.state.ball,travel:hold.state.players[1].rescue.travel,launchVx:hold.state.players[1].rescue.launchVx,
+    short:hold.state.players[1].rescue.short,sameSnapshots:true,releasedRally:released.state.rally});
    verified=true;
   }finally{a.send({type:'leave'});b.send({type:'leave'});await sleep(100);a.ws.close();b.ws.close();}
  }
@@ -54,6 +57,6 @@ for(const success of [true,false]){
 }
 const report={verifiedAt:new Date().toISOString(),base,entry,sha256:createHash('sha256').update(bytes).digest('hex'),attempts,
  scope:'Real deployed serve, automatic no-swipe rescue, frozen snapshots, input/timeout; no browser or phone acceptance.'};
-await mkdir('artifacts/auto-rescue',{recursive:true});
-await writeFile('artifacts/auto-rescue/live-verification.json',JSON.stringify(report,null,2));
+await mkdir(output,{recursive:true});
+await writeFile(output+'/live-verification.json',JSON.stringify(report,null,2));
 console.log(JSON.stringify(report,null,2));

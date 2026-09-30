@@ -1,0 +1,341 @@
+{
+  "source": "artifacts/bob-saba-2026-09-30/original/saba_glb.glb",
+  "sourceSha256": "721192d2ed8be4ba6fb8b52896ef83fe237fca569462a68fe8c191924f281138",
+  "outputSha256": "f484d166c83ea7b3ffa3f310ada57d9788b66001e349ba9e797ac81e16ae3d62",
+  "originalBinarySha256": "b29a84c17f3750d6336f26e7af10e8f278b914c18b486daa03c930ad251e3c82",
+  "originalBinaryBytes": 6562364,
+  "vertices": 39118,
+  "triangles": 49804,
+  "preserved": [
+    "POSITION",
+    "NORMAL",
+    "TEXCOORD_0",
+    "indices",
+    "materials",
+    "textures",
+    "images"
+  ],
+  "profile": {
+    "schema": "direct-original-v1",
+    "character": "saba",
+    "scale": 1.15294114413146,
+    "offset": [
+      0,
+      0.98,
+      0
+    ],
+    "joints": [
+      {
+        "name": "Hips",
+        "at": [
+          0,
+          1.045,
+          -0.02
+        ],
+        "tail": [
+          0,
+          1.165,
+          -0.02
+        ]
+      },
+      {
+        "name": "Spine",
+        "at": [
+          0,
+          1.165,
+          -0.025
+        ],
+        "tail": [
+          0,
+          1.36,
+          -0.025
+        ],
+        "parent": "Hips"
+      },
+      {
+        "name": "Chest",
+        "at": [
+          0,
+          1.36,
+          -0.025
+        ],
+        "tail": [
+          0,
+          1.646,
+          -0.025
+        ],
+        "parent": "Spine"
+      },
+      {
+        "name": "Neck",
+        "at": [
+          0,
+          1.646,
+          -0.025
+        ],
+        "tail": [
+          0,
+          1.696,
+          -0.025
+        ],
+        "parent": "Chest"
+      },
+      {
+        "name": "Head",
+        "at": [
+          0,
+          1.696,
+          -0.025
+        ],
+        "tail": [
+          0,
+          1.94,
+          -0.025
+        ],
+        "parent": "Neck"
+      },
+      {
+        "name": "Clavicle_L",
+        "at": [
+          0.08,
+          1.55,
+          -0.043
+        ],
+        "tail": [
+          0.225,
+          1.565,
+          -0.043
+        ],
+        "parent": "Chest"
+      },
+      {
+        "name": "UpperArm_L",
+        "at": [
+          0.225,
+          1.565,
+          -0.043
+        ],
+        "tail": [
+          0.374,
+          1.27,
+          -0.025
+        ],
+        "parent": "Clavicle_L"
+      },
+      {
+        "name": "LowerArm_L",
+        "at": [
+          0.374,
+          1.27,
+          -0.025
+        ],
+        "tail": [
+          0.492,
+          1.145,
+          0.012
+        ],
+        "parent": "UpperArm_L"
+      },
+      {
+        "name": "Hand_L",
+        "at": [
+          0.492,
+          1.145,
+          0.012
+        ],
+        "tail": [
+          0.535,
+          1.077,
+          0.012
+        ],
+        "parent": "LowerArm_L"
+      },
+      {
+        "name": "UpperLeg_L",
+        "at": [
+          0.14,
+          1.045,
+          -0.02
+        ],
+        "tail": [
+          0.151,
+          0.59,
+          -0.025
+        ],
+        "parent": "Hips"
+      },
+      {
+        "name": "LowerLeg_L",
+        "at": [
+          0.151,
+          0.59,
+          -0.025
+        ],
+        "tail": [
+          0.166,
+          0.13,
+          -0.047
+        ],
+        "parent": "UpperLeg_L"
+      },
+      {
+        "name": "Foot_L",
+        "at": [
+          0.166,
+          0.13,
+          -0.047
+        ],
+        "tail": [
+          0.17,
+          0.055,
+          0.11
+        ],
+        "parent": "LowerLeg_L"
+      },
+      {
+        "name": "Toe_L",
+        "at": [
+          0.17,
+          0.055,
+          0.11
+        ],
+        "tail": [
+          0.17,
+          0.05,
+          0.18
+        ],
+        "parent": "Foot_L"
+      },
+      {
+        "name": "Clavicle_R",
+        "at": [
+          -0.08,
+          1.55,
+          -0.043
+        ],
+        "tail": [
+          -0.225,
+          1.565,
+          -0.043
+        ],
+        "parent": "Chest"
+      },
+      {
+        "name": "UpperArm_R",
+        "at": [
+          -0.225,
+          1.565,
+          -0.043
+        ],
+        "tail": [
+          -0.374,
+          1.27,
+          -0.025
+        ],
+        "parent": "Clavicle_R"
+      },
+      {
+        "name": "LowerArm_R",
+        "at": [
+          -0.374,
+          1.27,
+          -0.025
+        ],
+        "tail": [
+          -0.492,
+          1.145,
+          0.012
+        ],
+        "parent": "UpperArm_R"
+      },
+      {
+        "name": "Hand_R",
+        "at": [
+          -0.492,
+          1.145,
+          0.012
+        ],
+        "tail": [
+          -0.535,
+          1.077,
+          0.012
+        ],
+        "parent": "LowerArm_R"
+      },
+      {
+        "name": "UpperLeg_R",
+        "at": [
+          -0.14,
+          1.045,
+          -0.02
+        ],
+        "tail": [
+          -0.151,
+          0.59,
+          -0.025
+        ],
+        "parent": "Hips"
+      },
+      {
+        "name": "LowerLeg_R",
+        "at": [
+          -0.151,
+          0.59,
+          -0.025
+        ],
+        "tail": [
+          -0.166,
+          0.13,
+          -0.047
+        ],
+        "parent": "UpperLeg_R"
+      },
+      {
+        "name": "Foot_R",
+        "at": [
+          -0.166,
+          0.13,
+          -0.047
+        ],
+        "tail": [
+          -0.17,
+          0.055,
+          0.11
+        ],
+        "parent": "LowerLeg_R"
+      },
+      {
+        "name": "Toe_R",
+        "at": [
+          -0.17,
+          0.055,
+          0.11
+        ],
+        "tail": [
+          -0.17,
+          0.05,
+          0.18
+        ],
+        "parent": "Foot_R"
+      }
+    ],
+    "hipY": 1.045,
+    "kneeY": 0.59,
+    "ankleY": 0.13,
+    "headY": 1.696,
+    "neckY": 1.646,
+    "shoulderX": 0.225,
+    "shoulderY": 1.565,
+    "shoulderZ": -0.043,
+    "upperLength": 0.33098338326870724,
+    "forearmLength": 0.17583515006960354,
+    "palmOffset": 0.103,
+    "gripLength": 0.2788351500696035,
+    "palmCenter": [
+      0.553,
+      1.055,
+      0.043
+    ]
+  },
+  "status": "direct-rig-awaiting-match-validation"
+}

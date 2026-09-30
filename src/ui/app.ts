@@ -21,7 +21,7 @@ import {invitationLink} from '../network/invite.js';
 import { CourtAudio } from './audio.js';
 
 const escape=(value:string)=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
-type Screen='home'|'join'|'setup'|'room'|'playing'|'result'|'characters';
+type Screen='home'|'join'|'setup'|'matching'|'room'|'playing'|'result'|'characters';
 const brand='<div class="brand"><img src="/icon.svg" alt=""/><div>Rally Club<small>好友网球俱乐部</small></div></div>';
 const close='<button class="icon-button" data-action="back" aria-label="返回">×</button>';
 
@@ -166,6 +166,7 @@ export class App {
       this.seat=0;this.paused=false;this.connected=true;this.screen='playing';this.lastEvent=-1;this.accumulator=0;
       this.help=!readPreference('rally-tutorial');this.renderScreen();
     }
+    else if(action==='match'&&!this.busy)this.connect({type:'match',name:this.name,characterId:this.characterId});
     else if(action==='create'&&!this.busy)this.connect({type:'create',name:this.name,characterId:this.characterId});
     else if(action==='join'){this.screen='join';this.renderScreen();}
     else if(action==='join-submit'&&!this.busy){
@@ -206,11 +207,12 @@ export class App {
     this.playback.reset();this.predictedMove=null;this.networkError='';
     this.net?.close();this.remote=null;this.drawState=null;this.busy=true;this.status='正在连接球场…';this.renderScreen();
     this.net=new NetworkClient({
-      welcome:c=>{this.seat=c.seat;this.busy=false;this.connected=true;this.screen='room';this.lastEvent=-1;this.renderScreen();},
+      welcome:c=>{this.seat=c.seat;this.busy=false;this.connected=true;this.screen=c.matched?'matching':'room';this.lastEvent=-1;this.renderScreen();},
+      matching:()=>{this.busy=false;this.connected=true;this.status='正在寻找同样在匹配的球友…';this.screen='matching';this.renderScreen();},
       room:r=>{
         this.room=r;this.paused=r.paused;
         if(r.seats[this.seat]?.characterId)this.characterId=this.hiddenMaster.selectable(r.seats[this.seat]!.characterId);
-        if(this.screen==='room'||this.screen==='result')this.renderScreen();
+        if(this.screen==='room'||this.screen==='result'||this.screen==='matching')this.renderScreen();
       },
       state:(s,paused)=>{
         this.remote=s;this.paused=paused;this.playback.push(s,performance.now());
@@ -222,7 +224,7 @@ export class App {
       },
       status:s=>{
         this.status=s;this.connected=s==='已连接';
-        if(this.screen==='room'||this.screen==='join'||this.screen==='home')this.renderScreen();
+        if(this.screen==='room'||this.screen==='join'||this.screen==='home'||this.screen==='matching')this.renderScreen();
       },
       error:s=>{this.busy=false;this.toast(s);this.status=s;this.renderScreen();},
       terminal:s=>{
@@ -238,13 +240,15 @@ export class App {
     <main class="home-copy"><div class="eyebrow">A LITTLE COURT. A GOOD TIME.</div><h1>Rally<br/><em>together.</em></h1>
     <p class="subtitle">约一场，刚刚好。</p><p class="description">一片球场，一位朋友。<br/>把好球留给彼此，把胜负留在场上。</p>
     <div class="menu"><label class="name-label" for="nickname">你的昵称<input id="nickname" maxlength="16" value="${escape(this.name)}" autocomplete="nickname"/></label>
-    <button class="primary" data-action="create" ${this.busy?'disabled':''}>${this.busy?'连接中…':'邀请好友'} <span>↗</span></button>
+    <button class="primary lime match-button" data-action="match" ${this.busy?'disabled':''}>${this.busy?'连接中…':'快速匹配'} <span>⚡</span></button>
+    <button class="primary" data-action="create" ${this.busy?'disabled':''}>邀请好友 <span>↗</span></button>
     <button class="secondary" data-action="join">加入房间 <span>＋</span></button>
     <button class="character-choice" data-action="characters">球员：${getCharacter(this.characterId).name} · ${getCharacter(this.characterId).role} <span>更换 →</span></button>
     <button class="practice" data-action="practice">先热热身 · 单人练习 <span>→</span></button>${this.networkError?`<div class="error-inline" role="alert" style="grid-column:1/-1">${escape(this.networkError)}</div>`:''}</div></main>
     <aside class="court-tag"><strong>01</strong><span>THE GARDEN COURT<br/>花园球场 · 硬地</span></aside>
     <footer class="home-footer"><b>点按跑位 / 滑动击球 / 好友对战</b><span>NO PRESSURE. JUST PLAY.</span></footer></div>`;}
   private panel(content:string){return `<div class="overlay"><section class="panel">${content}</section></div>`;}
+  private matchingPanel(){return this.panel(`<div class="panel-top"><span>QUICK MATCH</span>${close}</div><div class="matchmaking-mark"><i></i><i></i><i></i></div><h2>正在寻找对手…</h2><p>另一位正在匹配的球友出现后，会直接为你们开赛。</p><div class="matchmaking-player"><div class="avatar">${escape(this.name.slice(0,1))}</div><div><strong>${escape(this.name)}</strong><small>${getCharacter(this.characterId).name} · ${getCharacter(this.characterId).role}</small></div><span>匹配中</span></div><button class="secondary" data-action="back">取消匹配</button><div class="status-line">${escape(this.status)}</div>`);}
   private roomPanel(){
     const r=this.room;if(!r)return this.panel(`<h2>正在打开球场</h2><p>${escape(this.status)}</p>${close}`);
     const me=r.seats[this.seat],both=r.seats.every(p=>p?.connected),shareable=!!invitationLink(location.origin,r.code);
@@ -263,7 +267,7 @@ export class App {
     <div class="tutorial-steps"><div class="tutorial-step"><b>1</b><div><strong>轻点球场，移动到位</strong><span>发球前可以点按调整站位，发球者限当前半区底线后，开始抛球后锁定位置。普通球员优先接落地球，伊内丝主动上前截击。本分消耗按20%折算到总体力，一分最多扣总体力20%；分末按角色返还部分消耗，最多90%。下一分以恢复后的总体力作为本分初始值，不再回满100%；二发不重置。跑动和击球使用“本分×总体”的有效体力，跳接概率只看总体力。</span></div></div>
     <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>短而慢地滑动可放小球：显示“放小球”，落在网后约1～2米、低弹跳。普通及中慢速回球有落点辅助，接近边线时柔和收回，并保留底线余量；越快越用力，辅助越少，强力球和暴击球更容易出界。球场中央的小幅方向不改，边缘辅助会有意收敛角度，不再要求慢球与原始手势完全同角度。发球仍需主动斜划进对角发球区，不自动纠正发球方向。手指按住再划是上旋，右侧按钮可选高吊；近远景不改变规则。跑动时可提前滑动，保存最后一次方向和球质。</span></div></div>
     <div class="tutorial-step"><b>3</b><div><strong>认颜色，控制速度与深度</strong><span>绿普通、蓝快速、橙强力、玫红暴击、青绿上旋、金色高压、冰白切削、紫色高吊。长按蓄力上旋，下划反向切削，右侧按钮选择高吊。不必先滑动：预测普通跑动接不到、侧扑来得及时，角色会自动尝试飞身。总体力满时90%，1/3及以下10%，中间平滑变化；每记来球只抽一次。已提前滑动就直接回球；未滑动则在球拍真正够到球时，双方人物和球一起定格最多0.5秒，显示“滑动回击”。窗口内滑动立即击球，超时球继续原轨迹，不自动击中或倒带。救球保留减速和深浅波动；切削落地后仍有侧偏，接发仍须落地，出界或二跳后不能救。</span></div></div></div>
-    <p>右下角“近景 / 远景”切换镜头距离；瞄准和触球定格期间不切镜头。侧扑最多横移3.5米，但受速度、加速与来球时间限制，来不及就不会瞬移补接。起跳到伸拍按距离使用约0.24～0.72秒，之后趴地缓冲、双手撑地起身0.5秒。定格期间双方都不能移动或恢复体力；救球者落地起身前不能再次击球。</p>
+    <p>右下角“近景 / 远景”切换镜头距离；瞄准和触球定格期间不切镜头。侧扑最多横移3.5米，但受速度、加速与来球时间限制，来不及就不会瞬移补接。起跳到伸拍按距离使用约0.24～0.72秒；较短且较高的救球先单脚落地再跟步，长距离或低位救球保留撑地恢复。恢复锁定时长不变。定格期间双方都不能移动或恢复体力；救球者恢复站稳前不能再次击球。</p>
     <p id="performance-stats" class="small-note"></p><p id="performance-sync" class="small-note"></p><button class="primary" data-action="close-help">知道了，上场 →</button><p class="small-note">先到 7 分且领先 2 分获胜 · 发球限时 12 秒</p>`);}
   private result(){
     const s=this.remote??this.local.state,won=s.winner===this.seat;
@@ -280,6 +284,7 @@ export class App {
     this.controls.enabled=this.screen==='playing'&&!this.help;
     if(this.screen==='characters')this.ui.innerHTML=characterPicker(this.choosingOpponent?this.opponentId:this.characterId,this.choosingOpponent,this.hiddenMaster.unlocked);
     else if(this.screen==='home')this.ui.innerHTML=this.home();
+    else if(this.screen==='matching')this.ui.innerHTML=this.matchingPanel();
     else if(this.screen==='room')this.ui.innerHTML=this.roomPanel();
     else if(this.screen==='join')this.ui.innerHTML=this.panel(`<div class="panel-top"><span>YOUR FRIEND IS WAITING</span>${close}</div><h2>加入朋友的球场。</h2><p>输入 6 位房间号，下一场好球等你来。</p><label class="name-label" for="nickname">昵称<input id="nickname" value="${escape(this.name)}" maxlength="16"/></label><button class="secondary" data-action="characters">球员 · ${getCharacter(this.characterId).name} / 更换</button><input id="room-input" class="code-input" aria-label="六位房间号" placeholder="000000" maxlength="6" inputmode="numeric" pattern="[0-9]{6}" value="${escape(this.code)}"/><button class="primary" data-action="join-submit" ${this.busy?'disabled':''}>${this.busy?'正在加入…':'加入球场 →'}</button><div class="status-line">${escape(this.status)}</div>`);
     else if(this.screen==='setup')this.ui.innerHTML=this.panel(`<div class="panel-top"><span>TAKE A FEW PRACTICE SWINGS</span>${close}</div><div class="panel-heading">Warm up.</div><h2>先和搭档热热身。</h2><p>同一片球场，同样的操作。找找击球节奏，再叫上朋友。</p><div class="character-matchup"><button class="secondary" data-action="characters">你 · ${getCharacter(this.characterId).name}</button><button class="secondary" data-action="opponent-characters">搭档 · ${getCharacter(this.opponentId).name}</button></div><div class="select-row"><button class="${this.difficulty==='relaxed'?'selected':''}" data-action="relaxed">轻松练习</button><button class="${this.difficulty==='standard'?'selected':''}" data-action="standard">认真对打</button></div><button class="primary" data-action="start-practice">开始练习 →</button><p class="small-note">点按移动 · 滑动击球 · 7 分制</p>`);

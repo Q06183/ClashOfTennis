@@ -1,6 +1,7 @@
 import {handedness} from '../simulation/characters.js';
 import * as T from 'three';
 import {AthleteSkin} from './athlete-skin.js';
+import {DirectOriginalSkin,type DirectOriginalProfile} from './direct-original-skin.js';
 import {solveGrip} from './grip.js';
 import {strokeBody} from './stroke-body.js';
 import {strokePose} from './strokes.js';
@@ -8,6 +9,7 @@ import {RACKET,contactCrouch} from '../simulation/athlete.js';
 import {rescuePose,rescueAge,RESCUE} from '../simulation/rescue.js';
 import {rescueStroke} from './rescue-strokes.js';
 import {Footwork} from './footwork.js';
+import {bodyControls} from './body-controls.js';
 import {victoryPose,victoryEase} from './victory.js';
 import {type PlayerState,type Seat} from '../simulation/types.js';
 const material=(color:number)=>new T.MeshStandardMaterial({color,roughness:.72});
@@ -16,6 +18,10 @@ const down=new T.Vector3(0,-1,0);
 export class Athlete {
   readonly root=new T.Group();
   private torso=new T.Group();
+  private spine=new T.Group();
+  private chest=new T.Group();
+  private clavicles=[new T.Group(),new T.Group()];
+  private toes=[new T.Group(),new T.Group()];
   private hips=new T.Group();
   private head=new T.Group();
   private arms=[new T.Group(),new T.Group()];
@@ -24,6 +30,7 @@ export class Athlete {
   private knees=[new T.Group(),new T.Group()];
   private feet=[new T.Group(),new T.Group()];
   private footwork=new Footwork();
+  private wasRescuing=false;
   private lastTime=0;
   private hasRendered=false;
   private celebrating=false;
@@ -31,7 +38,12 @@ export class Athlete {
   private racket=new T.Group();
   private leftHand=new T.Group();
   modelSource:'procedural'|'lux3d'='procedural';
-  private generated?:AthleteSkin;
+  private generated?:AthleteSkin|DirectOriginalSkin;
+  private directProfile?:DirectOriginalProfile;
+  private upperLength=.36;
+  private gripLength=.31;
+  private legLength=.37;
+  private hipHeight=.85;
   private skin=material(0xd5a07d);
   constructor(readonly seat:Seat){
     this.torso.name='athlete-torso';this.leftHand.name='left-hand-grip';this.racket.name='racket-grip';
@@ -40,6 +52,8 @@ export class Athlete {
       const o=new T.Mesh(g,m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;o.userData.fallbackBody=true;parent.add(o);return o;
     };
     this.root.add(this.torso);this.head.name='head-tracking';this.head.position.y=1.5;this.torso.add(this.head);
+    this.spine.name='spine-control';this.torso.add(this.spine);
+    this.chest.name='chest-control';this.chest.position.y=1.25;this.torso.add(this.chest);
     this.hips.position.y=.85;this.root.add(this.hips);
     mesh(new T.CapsuleGeometry(.255,.37,6,16),shirt,this.torso,0,1.19,0).scale.set(1.15,1,.65);
     mesh(new T.SphereGeometry(.26,16,12),shorts,this.torso,0,.88,0).scale.set(1.08,.65,.78);
@@ -56,7 +70,9 @@ export class Athlete {
     }
     for(const part of [...this.torso.children])if(part instanceof T.Mesh&&part.position.y>=1.56){part.position.y-=1.5;this.head.add(part);}
     for(let i=0;i<2;i++){
-      const sign=i?-1:1,arm=this.arms[i],elbow=this.elbows[i];arm.position.set(sign*.31,1.39,0);this.torso.add(arm);
+      const sign=i?-1:1,arm=this.arms[i],elbow=this.elbows[i],clavicle=this.clavicles[i];
+      clavicle.name=`clavicle-${i?'R':'L'}`;clavicle.position.set(sign*.12,.14,0);this.chest.add(clavicle);
+      arm.position.set(sign*.19,0,0);clavicle.add(arm);
       mesh(new T.CapsuleGeometry(.107,.10,5,12),shirt,arm,0,-.07,0);
       mesh(new T.CapsuleGeometry(.074,.18,5,12),this.skin,arm,0,-.23,0);
       elbow.position.y=-.36;arm.add(elbow);
@@ -72,6 +88,7 @@ export class Athlete {
       mesh(new T.CapsuleGeometry(.07,.18,5,12),this.skin,knee,0,-.16,0);
       mesh(new T.CylinderGeometry(.081,.073,.17,12),white,knee,0,-.28,0);
       const foot=this.feet[i];foot.name=`foot-${i}`;foot.position.y=-.37;knee.add(foot);
+      const toe=this.toes[i];toe.name=`toe-${i}`;toe.position.set(0,-.035,.11);foot.add(toe);
       mesh(new T.SphereGeometry(.128,16,10),white,foot,0,-.02,.063).scale.set(.81,.52,1.65);
       mesh(new T.BoxGeometry(.20,.034,.32),shorts,foot,0,-.07,.075);
     }
@@ -89,12 +106,48 @@ export class Athlete {
   }
   clearModel(){
     if(this.generated){this.generated.scene.removeFromParent();this.generated.scene.traverse(o=>{if(o instanceof T.SkinnedMesh)o.skeleton.dispose();});this.generated=undefined;}
+    this.setProportions(false);
     this.root.traverse(o=>{if(o.userData.fallbackBody)o.visible=true;});this.modelSource='procedural';
+  }
+  private setProportions(calibrated:boolean){
+    this.directProfile=undefined;
+    this.head.position.y=1.5;
+    for(let i=0;i<2;i++)this.clavicles[i].position.set((i?-1:1)*.12,.14,0);
+    this.upperLength=calibrated?.33:.36;this.gripLength=calibrated?.34:.31;
+    this.legLength=calibrated?.425:.37;this.hipHeight=calibrated?.96:.85;
+    for(let i=0;i<2;i++){
+      this.elbows[i].position.y=-this.upperLength;this.knees[i].position.y=-this.legLength;
+      this.feet[i].position.y=-this.legLength;
+    }
+    this.racket.position.y=this.leftHand.position.y=-this.gripLength;
+    this.hips.position.y=this.hipHeight;
+    this.footwork=new Footwork();
   }
   attachModel(scene:T.Object3D){
     this.clearModel();
+    this.setProportions(scene.userData.bodyProportionRevision===3);
+    this.directProfile=scene.userData.directOriginalRig;
+    if(this.directProfile){
+      const p=this.directProfile;
+      this.hipHeight=p.hipY;
+      this.legLength=p.hipY-p.kneeY;
+      this.upperLength=p.upperLength;
+      // Keep the same authoritative arm-to-grip reach; source skin is mapped
+      // along its own segment axes, not rebuilt around old joints.
+      this.gripLength=.67-this.upperLength;
+      this.head.position.y=p.headY;
+      for(let i=0;i<2;i++){
+        this.clavicles[i].position.set((i?-1:1)*.12,p.shoulderY-1.25,p.shoulderZ);
+        this.arms[i].position.set((i?-1:1)*(p.shoulderX-.12),0,0);
+        this.elbows[i].position.y=-this.upperLength;
+        this.knees[i].position.y=-this.legLength;
+        this.feet[i].position.y=-(p.kneeY-p.ankleY);
+      }
+      this.hips.position.y=this.hipHeight;
+      this.racket.position.y=this.leftHand.position.y=-this.gripLength;
+    }
     const anchors:Record<string,T.Object3D>={};
-    anchors.Hips=this.hips;anchors.Head=this.head;
+    anchors.Hips=this.hips;anchors.Head=this.head;anchors.Spine=this.spine;anchors.Chest=this.chest;
     // The source Neck also weights the collar and shoulder seam. Keep it on
     // the trunk; ball-tracking head rotation must not pull those vertices.
     for(let i=0;i<2;i++){
@@ -102,22 +155,23 @@ export class Athlete {
       anchors['UpperArm_'+suffix]=this.arms[i];anchors['LowerArm_'+suffix]=this.elbows[i];
       anchors['UpperLeg_'+suffix]=this.legs[i];anchors['LowerLeg_'+suffix]=this.knees[i];
       anchors['Foot_'+suffix]=this.feet[i];
+      anchors['Clavicle_'+suffix]=this.clavicles[i];anchors['Toe_'+suffix]=this.toes[i];
       if(i)anchors.Hand_R=this.racket;
       else anchors.Hand_L=this.leftHand;
     }
-    this.generated=new AthleteSkin(scene,this.torso,anchors);
+    this.generated=this.directProfile?new DirectOriginalSkin(scene,this.torso,anchors):new AthleteSkin(scene,this.torso,anchors);
     this.root.traverse(o=>{if(o.userData.fallbackBody)o.visible=false;});
     this.root.add(scene);this.modelSource='lux3d';
   }
   private armTo(index:number,hand:T.Vector3,elbowPole?:T.Vector3,softReach=0){
     this.root.updateMatrixWorld(true);
-    const arm=this.arms[index],elbow=this.elbows[index],target=this.torso.worldToLocal(hand.clone()).sub(arm.position);
+    const arm=this.arms[index],elbow=this.elbows[index],target=arm.parent!.worldToLocal(hand.clone()).sub(arm.position);
     const reach=target.length(),extension=T.MathUtils.clamp(reach-.56,0,.218);
     // Ease into full extension instead of snapping a bent elbow straight at the reach limit.
     const eased=reach<=.56?reach:.56+extension-extension*extension/.436;
     const d=T.MathUtils.clamp(T.MathUtils.lerp(reach,eased,softReach),.051,.669),axis=target.normalize();
     const pole=elbowPole?.clone()??new T.Vector3(index?-.7:.7,-1,.35);pole.addScaledVector(axis,-pole.dot(axis)).normalize();
-    const along=(.36**2+d*d-.31**2)/(2*d),height=Math.sqrt(Math.max(0,.36**2-along*along));
+    const along=(this.upperLength**2+d*d-this.gripLength**2)/(2*d),height=Math.sqrt(Math.max(0,this.upperLength**2-along*along));
     const upper=axis.clone().multiplyScalar(along).addScaledVector(pole,height);
     arm.quaternion.setFromUnitVectors(down,upper.clone().normalize());
     const lower=axis.multiplyScalar(d).sub(upper).normalize().applyQuaternion(arm.quaternion.clone().invert());
@@ -154,19 +208,26 @@ export class Athlete {
       this.leftHand.quaternion.copy(this.elbows[0].getWorldQuaternion(new T.Quaternion()).invert().multiply(q));
     }
   }
-  private legTo(index:number,target:T.Vector3,turn:number){
+  private legTo(index:number,target:T.Vector3,turn:number,heelRoll=0){
     const leg=this.legs[index],knee=this.knees[index],foot=this.feet[index];
-    const offset=this.root.worldToLocal(target.clone()).sub(leg.position),length=.37;
-    const d=T.MathUtils.clamp(offset.length(),.08,.739),axis=offset.normalize();
+    const flat=new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),(this.seat===0?Math.PI:0)+turn);
+    const rolled=flat.clone().multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(1,0,0),heelRoll));
+    // Keep the forefoot contact in world space while the heel rises.
+    const pivot=new T.Vector3(0,-.035,.11);
+    target=target.clone().add(pivot.clone().applyQuaternion(flat)).sub(pivot.applyQuaternion(rolled));
+    const offset=this.root.worldToLocal(target.clone()).sub(leg.position),length=this.legLength;
+    const lowerLength=this.directProfile?this.directProfile.kneeY-this.directProfile.ankleY:length;
+    const d=T.MathUtils.clamp(offset.length(),Math.abs(length-lowerLength)+.001,length+lowerLength-.001),axis=offset.normalize();
     const pole=new T.Vector3(Math.sin(turn),0,Math.cos(turn));pole.addScaledVector(axis,-pole.dot(axis)).normalize();
-    const upper=axis.clone().multiplyScalar(d/2).addScaledVector(pole,Math.sqrt(Math.max(0,length*length-d*d/4)));
+    const along=(length*length-lowerLength*lowerLength+d*d)/(2*d);
+    const upper=axis.clone().multiplyScalar(along).addScaledVector(pole,Math.sqrt(Math.max(0,length*length-along*along)));
     leg.quaternion.setFromUnitVectors(down,upper.clone().normalize());
     const lower=axis.multiplyScalar(d).sub(upper).normalize().applyQuaternion(leg.quaternion.clone().invert());
     knee.quaternion.setFromUnitVectors(down,lower);
     // Keep the ankle level independently of the bending knee.
-    const flat=new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),(this.seat===0?Math.PI:0)+turn);
     foot.quaternion.copy(leg.quaternion).multiply(knee.quaternion).invert()
-      .multiply(this.root.quaternion.clone().invert()).multiply(flat);
+      .multiply(this.root.quaternion.clone().invert()).multiply(rolled);
+    this.toes[index].rotation.x=-heelRoll;
   }
   private celebrate(p:PlayerState,time:number){
     const hand=handedness(p.characterId),yaw=this.seat===0?Math.PI:0;
@@ -175,15 +236,18 @@ export class Athlete {
       // Return the previous reflected rig to canonical solve space before
       // capturing it. Keep the entry blend independent of stale shot metadata.
       if(hand===-1){this.root.position.x*=-1;this.root.quaternion.y*=-1;this.root.quaternion.z*=-1;}
-      this.celebrationEntry=this.hasRendered?[this.root,this.torso,this.hips,this.head,...this.arms,...this.elbows,...this.legs,...this.knees,...this.feet,this.racket,this.leftHand]
+      this.celebrationEntry=this.hasRendered?[this.root,this.torso,this.spine,this.chest,...this.clavicles,...this.toes,this.hips,this.head,...this.arms,...this.elbows,...this.legs,...this.knees,...this.feet,this.racket,this.leftHand]
         .map(node=>({node,position:node.position.clone(),rotation:node.quaternion.clone()})):[];
       this.celebrating=true;
     }
     const pose=victoryPose(time),station=new T.Vector3(p.x*hand,0,p.z);
     this.root.quaternion.setFromAxisAngle(new T.Vector3(0,1,0),yaw);
     this.root.position.copy(station).add(new T.Vector3(pose.rootX,0,0).applyQuaternion(this.root.quaternion));
-    this.hips.position.set(0,.85-pose.drop,0);this.hips.rotation.set(0,pose.hipTurn,0);
+    this.hips.position.set(0,this.hipHeight-pose.drop,0);this.hips.rotation.set(0,pose.hipTurn,0);
     this.torso.rotation.set(pose.lean,pose.turn,pose.bank);
+    this.spine.rotation.y=-pose.turn*.28;this.chest.quaternion.identity();
+    for(const node of [...this.clavicles,...this.toes])node.quaternion.identity();
+    for(let i=0;i<2;i++)this.arms[i].position.set((i?-1:1)*(this.directProfile?this.directProfile.shoulderX-.12:.19),0,0);
     const pivot=new T.Vector3(0,.85,0);
     this.torso.position.copy(pivot).sub(pivot.clone().applyQuaternion(this.torso.quaternion));
     this.torso.position.y-=pose.drop;
@@ -226,6 +290,7 @@ export class Athlete {
         rescue:p.rescue?{...p.rescue,fromX:-p.rescue.fromX,toX:-p.rescue.toX,contact:point(p.rescue.contact)}:undefined};
     }
     const rescue=rescuePose(p,time);
+    const stepOut=p.rescue?.recovery==='step-out';
     const yaw=this.seat===0?Math.PI:0;
     this.root.quaternion.setFromAxisAngle(new T.Vector3(0,1,0),yaw);
     if(p.rescue){
@@ -241,9 +306,18 @@ export class Athlete {
     const jump=p.rescue?rescueStroke(p,time,contact):undefined;
     if(jump)Object.assign(pose,jump);
     const dt=deltaTime??Math.max(1/60,Math.min(.08,time-this.lastTime));this.lastTime=time;
+    // A rescue pivots the visual root around the hip. Its offset is not travel
+    // and must not become a phantom running stride on return to standing.
+    if(this.wasRescuing&&!p.rescue)this.footwork=new Footwork();
+    this.wasRescuing=!!p.rescue;
     const body=strokeBody(p),gait=this.footwork.update(this.root.position,this.root.quaternion,dt),movement=gait.localDirection;
     const stride=Math.sin(gait.phase*Math.PI*2)*Math.min(1,gait.speed/2);
-    const running=T.MathUtils.smoothstep(gait.speed,2.2,4.5)*(p.rescue||p.swing>0?0:p.preparation?1-T.MathUtils.smoothstep(p.preparation.progress,.2,.55):1);
+    // The last 120ms of a groundstroke already returns the racket to ready.
+    // Release it into the gait over that interval instead of a one-frame
+    // switch when swing reaches zero. Contact and the main follow-through
+    // stay fully authored, including two-handed backhand support.
+    const recoveryRun=p.stroke==='forehand'||p.stroke==='backhand'?1-T.MathUtils.smoothstep(p.swing,0,.12):0;
+    const running=T.MathUtils.smoothstep(gait.speed,2.2,4.5)*(p.rescue?0:p.swing>0?recoveryRun:p.preparation?1-T.MathUtils.smoothstep(p.preparation.progress,.2,.55):1);
     const runTurn=gait.turn*.65;
     if(running>0){
       pose.tip.lerp(new T.Vector3(-.4,1.28+stride*.035,.66+stride*.10).applyAxisAngle(new T.Vector3(0,1,0),runTurn),running);
@@ -261,23 +335,38 @@ export class Athlete {
     const hipDrop=p.rescue?0:
       T.MathUtils.lerp(gait.hipDrop,body.hipDrop-body.lift,action)+contactCrouching;
     const hipTurn=T.MathUtils.lerp(gait.turn,body.hipTurn,lower);
-    this.hips.position.y=.85-hipDrop;this.hips.rotation.y=hipTurn;
+    this.hips.position.y=this.hipHeight-hipDrop;this.hips.rotation.y=hipTurn;
     for(let i=0;i<2;i++){
-      this.legs[i].position.set((i?-1:1)*.15,.85-hipDrop,0).applyAxisAngle(new T.Vector3(0,1,0),hipTurn);
+      this.legs[i].position.set((i?-1:1)*.15,this.hipHeight-hipDrop,0).applyAxisAngle(new T.Vector3(0,1,0),hipTurn);
       const posed=this.root.localToWorld(body.feet[i].clone());
       const foot=jump?this.root.localToWorld(jump.feet[i].clone()):
         gait.feet[i].lerp(posed,lower).add(new T.Vector3(0,rescue.lift+rescue.air*(i?.05:.1),0));
       if(jump&&rescue.landing>0){
         const settle=T.MathUtils.smoothstep(rescueAge(p,time),.35,.52);
-        const recoveryFoot=groundTarget(i?-.22:.22,.105,-.68*(1-rescue.recovery));
+        const age=rescueAge(p,time);
+        const trailing=stepOut&&i===1?.10*(1-T.MathUtils.smoothstep(age,.48,.65)):0;
+        const recoveryFoot=groundTarget(i?-.22:.22,.105+trailing,(stepOut?(i?-.14:.17):-.68)*(1-rescue.recovery));
         foot.lerp(recoveryFoot,settle);
       }
-      this.legTo(i,foot,T.MathUtils.lerp(hipTurn*.6,body.footYaw[i],lower));
+      this.legTo(i,foot,T.MathUtils.lerp(hipTurn*.6,body.footYaw[i],lower),p.rescue?0:gait.heelRoll[i]*(1-lower));
     }
     this.torso.position.y=-hipDrop;
     const motionStrength=p.rescue?contactWeight:action;
     const lean=Math.min(.18,gait.speed*.028)*(1-motionStrength);
     this.torso.rotation.set(T.MathUtils.lerp(.035,body.lean,action)+movement.z*lean,pose.turn+gait.turn*.65*(1-motionStrength)+stride*.045*running,body.sideBend*action-movement.x*lean*.65);
+    // Distribute axial rotation through the waist/chest instead of rotating
+    // the entire shirt as one rigid segment. Shoulder centres remain on the
+    // contact solver's existing reach envelope.
+    const controls=bodyControls(p,this.torso.rotation.y,body.feet.map(f=>f.y));
+    this.spine.rotation.y=controls.waistCounterTurn;
+    this.chest.quaternion.identity();
+    for(let i=0;i<2;i++){
+      this.clavicles[i].rotation.set(0,controls.shoulderYaw[i],0);
+      // Preserve shoulder location and thus authoritative reach while allowing
+      // the clavicle skin to protract. Arm IK uses this parent's full transform.
+      this.arms[i].position.set((i?-1:1)*(this.directProfile?this.directProfile.shoulderX-.12:.19),0,0).applyQuaternion(this.clavicles[i].quaternion.clone().invert());
+      this.toes[i].rotation.x-=controls.toes[i]*lower;
+    }
     const serving=(p.preparation?.stroke??p.stroke)==='serve';
     this.head.rotation.set(serving?body.headPitch*action:T.MathUtils.clamp(Math.atan2(1.7-contact.y,Math.max(.7,contact.z)), -.55,.4)*action, -pose.turn*.55*action,0);
     if(p.rescue){
@@ -287,7 +376,7 @@ export class Athlete {
       this.head.rotation.set(-.12*rescue.landing,0,0);
     }
     this.arms[0].rotation.set(-.45-stride*.3,0,-.3);this.elbows[0].rotation.set(-.6,0,0);this.leftHand.quaternion.identity();
-    if(p.rescue){
+    if(p.rescue&&!stepOut){
       this.root.updateMatrixWorld(true);
       const shoulder=this.root.worldToLocal(this.arms[1].getWorldPosition(new T.Vector3()));
       // Keep the shaft pointing away from the shoulder during the roll to the
@@ -326,7 +415,7 @@ export class Athlete {
       if(!tossing&&!serving)this.leftHand.rotation.y=-.5;
       if(support){const gripQ=this.elbows[0].getWorldQuaternion(new T.Quaternion()).invert().multiply(this.racket.getWorldQuaternion(new T.Quaternion()));this.leftHand.quaternion.slerp(gripQ,support);}
     }
-    if(p.rescue&&rescueAge(p,time)>.32){
+    if(p.rescue&&!stepOut&&rescueAge(p,time)>.32){
       const plant=T.MathUtils.smoothstep(rescueAge(p,time),.32,RESCUE.riseAt);
       const release=T.MathUtils.smoothstep(rescue.recovery,.48,1);
       for(const i of [0,1]){
@@ -347,7 +436,7 @@ export class Athlete {
       swing.slerp(new T.Quaternion(),1-plant*(1-release));
       this.racket.quaternion.copy(this.elbows[1].getWorldQuaternion(new T.Quaternion()).invert().multiply(swing.multiply(world)));
     }
-    if(this.generated){this.root.updateMatrixWorld(true);this.generated.update();}
+    if(this.generated){this.root.updateMatrixWorld(true);this.generated.update(dt);}
     this.root.position.x=worldX+hand*(this.root.position.x-p.x);
     // S R S: mirroring local scale alone is insufficient once the root banks.
     if(hand===-1){this.root.quaternion.y*=-1;this.root.quaternion.z*=-1;}

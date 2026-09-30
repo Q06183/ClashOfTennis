@@ -1,4 +1,4 @@
-import {Quaternion,Vector3} from 'three';
+import {MathUtils,Quaternion,Vector3} from 'three';
 import {clamp} from '../simulation/types.js';
 /** Feet are planted in world space; stride phase advances with travelled distance. */
 export class Footwork {
@@ -62,6 +62,16 @@ export class Footwork {
   this.last=position.clone();
   const moving=clamp(this.speed/1.5,0,1);
   const hipDrop=.02+moving*(.05+.012*Math.cos(this.phase*Math.PI*4));
-  return {feet:this.feet.map(f=>f.at.clone()),planted:this.feet.map(f=>f.planted),phase:this.phase,speed:this.speed,hipDrop,localDirection,turn:this.turn};
+  // Roll over the ball of the foot near toe-off. Backpedal/side adjustment
+  // retain their own level support; do not fake a forward heel roll there.
+  const heelRoll=this.feet.map((f,i)=>{
+   const phase=(this.phase+i*.5)%1;
+   if(resting)return 0;
+   const envelope=phase<stance?MathUtils.smoothstep(phase,stance*.25,stance):
+    1-MathUtils.smoothstep((phase-stance)/(1-stance),0,.55);
+   return .28*envelope*
+    MathUtils.smoothstep(localDirection.z,.3,.85)*moving;
+  });
+  return {feet:this.feet.map(f=>f.at.clone()),planted:this.feet.map(f=>f.planted),heelRoll,phase:this.phase,speed:this.speed,hipDrop,localDirection,turn:this.turn};
  }
 }

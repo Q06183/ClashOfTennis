@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Saba · 两种建模方案动作对比</title>
+  <style>
+    :root{color-scheme:light;--ink:#173638;--muted:#627675;--line:#d5dfdc;--green:#235c51}
+    *{box-sizing:border-box}
+    body{margin:0;background:#eef2ee;color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    header{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:17px 26px;background:#163b36;color:#fff}
+    .eyebrow{font-size:10px;letter-spacing:.22em;color:#b7d7bd;margin-bottom:3px}
+    h1{font-size:23px;letter-spacing:-.02em;margin:0;font-weight:650}
+    header p{margin:0;color:#bed0c7;font-size:12px;text-align:right;max-width:370px}
+    .toolbar{padding:13px 24px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;background:#fff;border-bottom:1px solid var(--line)}
+    label{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}
+    select,button{font:inherit;color:var(--ink);border:1px solid #cbd8d0;border-radius:7px;background:#fff;padding:7px 11px}
+    select:focus,button:focus-visible,input:focus-visible{outline:2px solid #519b7c;outline-offset:2px}
+    button{cursor:pointer;transition:background .12s}button:hover{background:#edf5ec}
+    button:disabled,select:disabled,input:disabled{opacity:.4;cursor:wait}
+    .segmented{display:flex;gap:3px;padding:3px;background:#ecf1ed;border-radius:9px}
+    .segmented button{border:none;background:transparent;font-size:12px;padding:7px 12px}
+    .segmented button[aria-pressed="true"]{background:#245c51;color:#fff;box-shadow:0 1px 3px #17363822}
+    .spacer{flex:1}.view-buttons{display:flex;gap:5px}
+    .view-buttons button{font-size:12px}
+    #stage{height:clamp(440px,calc(100dvh - 275px),1000px);position:relative;touch-action:none;background:#e4e9e8}
+    canvas{display:block;width:100%;height:100%}
+    .panel-title{position:absolute;top:17px;padding:12px 16px;background:#ffffffe8;border:1px solid #ffffff99;border-radius:10px;pointer-events:none;backdrop-filter:blur(8px);max-width:calc(50% - 40px)}
+    .panel-title.a{left:20px}.panel-title.b{left:calc(50% + 20px)}
+    .panel-title .badge{display:inline-grid;place-items:center;width:25px;height:25px;border-radius:6px;background:#e2ecd9;color:#245c51;font-weight:750;margin-right:6px}
+    .panel-title.b .badge{background:#f4dedf;color:#954552}
+    .panel-title strong{font-size:15px}.panel-title p{font-size:11px;color:var(--muted);margin:5px 0 0}
+    #divider{position:absolute;left:50%;top:0;bottom:0;border-left:1px solid #869d9c44;pointer-events:none}
+    #stage[data-mode="original"] .b,#stage[data-mode="original"] #divider{display:none}
+    #stage[data-mode="prototype"] .a,#stage[data-mode="prototype"] #divider{display:none}
+    #stage[data-mode="prototype"] .b{left:20px}
+    #stage:not([data-mode="split"]) .panel-title{max-width:calc(100% - 40px)}
+    .hint{position:absolute;bottom:12px;right:16px;color:#46615c;font-size:11px;background:#ffffffbd;border-radius:6px;padding:6px 10px;pointer-events:none}
+    #loading{position:absolute;inset:45% 15% auto;text-align:center;background:#fff;padding:20px;border-radius:12px;box-shadow:0 4px 30px #1c3b3822}
+    #loading[hidden]{display:none}
+    .playbar{display:flex;align-items:center;gap:9px;padding:14px 24px;background:#fff;border-top:1px solid var(--line)}
+    #play{background:var(--green);color:#fff;border-color:var(--green);min-width:68px}
+    #scrub{flex:1;min-width:80px;accent-color:#2a7059}
+    #clock{font:12px ui-monospace,SFMono-Regular,monospace;white-space:nowrap}
+    #frame{font-size:11px;color:var(--muted);white-space:nowrap;min-width:58px}
+    .footer{display:flex;justify-content:space-between;gap:24px;padding:12px 24px;font-size:11px;color:var(--muted);border-top:1px solid var(--line)}
+    .footer p{margin:0;max-width:830px}.footer b{color:#8a643a}
+    @media(max-width:800px){
+      header{padding:14px 16px;gap:10px}header p{display:none}h1{font-size:20px}
+      .toolbar{padding:10px 12px;gap:9px}.spacer{display:none}.view-buttons{flex-wrap:wrap}
+      #stage{height:62dvh;min-height:440px}.panel-title{top:12px;padding:8px;max-width:calc(50% - 18px)}
+      .panel-title.a{left:8px}.panel-title.b{left:calc(50% + 8px)}
+      .panel-title strong{font-size:12px}.panel-title p{display:none}.panel-title .badge{width:20px;height:20px;font-size:11px}
+      .playbar{padding:10px 12px;gap:6px;flex-wrap:wrap}#frame{display:none}#scrub{order:2;flex-basis:75%}
+      .footer{padding:12px;display:block}.footer #status{margin-top:6px}.hint{font-size:10px}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div><div class="eyebrow">SABA / MOTION STUDY</div><h1>两种模型，放在同一个动作里看。</h1></div>
+    <p>仅演示 Saba · 两边同步播放<br>不隐藏现有变形，不代表最终比赛验收。</p>
+  </header>
+  <div class="toolbar">
+    <div class="segmented" aria-label="显示模式">
+      <button data-mode="split" aria-pressed="true">左右对比</button>
+      <button data-mode="original" aria-pressed="false">只看 A</button>
+      <button data-mode="prototype" aria-pressed="false">只看 B</button>
+    </div>
+    <label>动作
+      <select id="action" data-wait disabled>
+        <option value="forehand">正手挥拍</option><option value="backhand">双手反拍</option>
+        <option value="serve">发球</option><option value="volley">截击</option>
+        <option value="run">跑动</option><option value="rescue">侧扑救球</option>
+        <option value="victory">庆祝</option><option value="idle">持拍准备</option><option value="bind">原始静止姿态</option>
+      </select>
+    </label>
+    <label>B 的服装
+      <select id="outfit" data-wait disabled>
+        <option value="reference">参考配色裙装</option><option value="training">替换训练服</option>
+      </select>
+    </label>
+    <span class="spacer"></span>
+    <div class="view-buttons">
+      <button data-view="front">正</button><button data-view="left">左</button><button data-view="right">右</button>
+      <button data-view="back">背</button><button data-view="three">斜侧</button><button id="closeup">上半身</button>
+    </div>
+    <label><input id="skeleton" type="checkbox" data-wait disabled>骨骼</label>
+  </div>
+  <main id="stage" data-mode="split">
+    <canvas id="canvas" aria-label="Saba 原始绑定与换装原型同步动作比较"></canvas>
+    <div class="panel-title a"><strong><span class="badge">A</span> 原始模型直接绑定</strong><p>保留原始生成外观 · 当前比赛绑定与握拍修正</p></div>
+    <div class="panel-title b"><strong><span class="badge">B</span> 骨骼 / 换装工作原型</strong><p>使用之前的工作原型 · 可切换服装</p></div>
+    <div id="divider"></div>
+    <div class="hint">拖拽旋转 · 滚轮缩放 · 空格暂停 · ← → 逐帧</div>
+    <div id="loading">正在加载两份本地模型，请稍候…</div>
+  </main>
+  <div class="playbar">
+    <button id="play" data-wait disabled>播放</button>
+    <button id="restart" aria-label="回到动作开头" data-wait disabled>重来</button>
+    <button id="prev" aria-label="上一帧" data-wait disabled>−1 帧</button>
+    <button id="next" aria-label="下一帧" data-wait disabled>+1 帧</button>
+    <label>速度<select id="speed"><option value=".25">0.25×</option><option value=".5">0.5×</option><option value="1" selected>1×</option></select></label>
+    <input id="scrub" type="range" min="0" max="120" step="1" value="0" aria-label="动作帧" data-wait disabled>
+    <output id="clock">0.00 / 2.00 s</output><span id="frame">第 0 帧</span>
+  </div>
+  <div class="footer">
+    <p><b>演示说明：</b>A 使用当前比赛控制器；B 保留原型网格、材质和权重，经演示专用适配器接收 A 的关节目标，裙摆辅助骨跟随骨盆。两边都不是已验收成品；换装只影响 B。本页不修改正式角色。</p>
+    <div id="status" role="status">等待模型…</div>
+  </div>
+  <!-- ASSET_DATA -->
+  <!-- APP_SCRIPT -->
+</body>
+</html>
