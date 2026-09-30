@@ -1,6 +1,8 @@
 import type { Seat, Team, MatchMode } from './types.js';
 import { side, other } from './types.js';
 export const COURT = { halfWidth: 4.115, doublesHalfWidth:5.485, halfLength: 11.885, service: 6.4, net: 0.95, ballRadius: 0.12 };
+/** Player runoff is independent of the regulation lines and service box. */
+export const MOVEMENT_HALF_WIDTH=8;
 export const courtHalfWidth=(mode?:MatchMode)=>mode==='doubles'?COURT.doublesHalfWidth:COURT.halfWidth;
 export function serverForPoint(total: number,mode:MatchMode='singles'): Seat {
   return (total===0?0:(Math.floor((total-1)/2)+1)%(mode==='doubles'?4:2)) as Seat;

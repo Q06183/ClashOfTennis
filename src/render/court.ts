@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {SURFACES,surfaceProfile,type SurfaceId} from '../simulation/surfaces.js';
+import {MOVEMENT_HALF_WIDTH} from '../simulation/rules.js';
 /** Mutate only court materials; stands, models and lighting remain in place. */
 export function setCourtSurface(scene:T.Scene,id:SurfaceId){
  const profile=surfaceProfile(id);
@@ -74,8 +75,9 @@ export function makeCourt(scene:T.Scene){
     for(let y=1.3;y<3;y+=.3)box(0x53806a,x,y,0,.018,.02,36);
     for(let z=-17;z<18;z+=.45)box(0x53806a,x,2.1,z,.02,1.6,.018);
     for(const z of [-9,9]){
-      box(0xe9d9ad,x*.68,.5,z,.8,.14,2.6);
-      for(const dz of [-.9,.9])box(0x174444,x*.68,.24,z+dz,.6,.5,.1);
+      const benchX=Math.sign(x)*(MOVEMENT_HALF_WIDTH+2);
+      box(0xe9d9ad,benchX,.5,z,.8,.14,2.6);
+      for(const dz of [-.9,.9])box(0x174444,benchX,.24,z+dz,.6,.5,.1);
     }
   }
   // Light towers and a calm green backdrop.

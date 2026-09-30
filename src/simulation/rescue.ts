@@ -5,7 +5,7 @@ import {spendStamina,recoverPointStamina,STAMINA} from './stamina.js';
 import {canReturnNormally,returnHeightLegal} from './skills.js';
 import {flightGravity} from './flight.js';
 import {predictFlight} from './trajectory.js';
-import {isInCourt} from './rules.js';
+import {isInCourt,MOVEMENT_HALF_WIDTH} from './rules.js';
 import {bounceVelocity} from './surfaces.js';
 import {clamp,side,type BallState,type PlayerState,type Seat,type RescueStroke} from './types.js';
 export const RESCUE={minChance:.10,maxChance:.90,lowStamina:1/3,travel:.20,landAt:.48,riseAt:.68,duration:1.18,shortReach:1.2,reach:3.5,travelSpeed:9,acceleration:65,window:.5,slowdown:1.7};
@@ -87,8 +87,8 @@ export function rescueTarget(b:BallState,p:PlayerState,seat:Seat,serviceFlight=f
   // Preserve initial velocity, including a bounded brake before reversal.
   // Check the entire curve, not just endpoints, for reach/court overshoot.
   if(distance<.35||bounds.max-bounds.min>RESCUE.reach||
-    p.x+bounds.min< -6.4||p.x+bounds.max>6.4||bounds.speed>RESCUE.travelSpeed||
-    bounds.acceleration>RESCUE.acceleration||Math.abs(x)>6.4||z*sign>16.5)continue;
+    p.x+bounds.min< -MOVEMENT_HALF_WIDTH||p.x+bounds.max>MOVEMENT_HALF_WIDTH||bounds.speed>RESCUE.travelSpeed||
+    bounds.acceleration>RESCUE.acceleration||Math.abs(x)>MOVEMENT_HALF_WIDTH||z*sign>16.5)continue;
   const short=distance<=RESCUE.shortReach;
   const candidate={...p,x,z,rescue:{startedAt:0,fromX:p.x,fromZ:p.z,toX:x,toZ:z,contact,hit:false,stroke,backhand,travel,natural:true,launchVx,short}};
   if(!canReachRescue({...b,...contact},candidate,seat,travel))continue;
@@ -105,7 +105,7 @@ export function rescueTarget(b:BallState,p:PlayerState,seat:Seat,serviceFlight=f
 export function rescueApproach(b:BallState,p:PlayerState,seat:Seat,serviceFlight=false){
  const runner={...p},sign=side(seat,p);
  const ahead=forecastRescueBall(b,seat,.5);if(!ahead)return null;
- const x=clamp(ahead.x-sign*handedness(p.characterId)*.45,-6.4,6.4);
+ const x=clamp(ahead.x-sign*handedness(p.characterId)*.45,-MOVEMENT_HALF_WIDTH,MOVEMENT_HALF_WIDTH);
  const z=sign*clamp(ahead.z*sign+.35,.9,16.5);
  runner.tx=x;runner.tz=z;
  for(let i=1;i<=6;i++){

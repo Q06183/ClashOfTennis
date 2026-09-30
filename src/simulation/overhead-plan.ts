@@ -2,7 +2,8 @@ import {flightGravity} from './flight.js';
 import {handedness} from './characters.js';
 import {movePlayer} from './movement.js';
 import {canSmash} from './skills.js';
-import {side,type BallState,type PlayerState,type Seat} from './types.js';
+import {MOVEMENT_HALF_WIDTH} from './rules.js';
+import {clamp,side,type BallState,type PlayerState,type Seat} from './types.js';
 
 /** Rehearse a small set of descending high contacts using the normal mover.
  * No new reach or jump height: impact still has to pass canSmash in Match. */
@@ -16,8 +17,8 @@ export function overheadPlan(b:BallState,p:PlayerState,seat:Seat){
   const time=(b.vy+Math.sqrt(d))/g;
   if(time<.04||time>2.5)continue;
   const ball={...b,x:b.x+b.vx*time,y:height,z:b.z+b.vz*time,vy:b.vy-g*time};
-  if(ball.z*sign<1||ball.z*sign>15.6||Math.abs(ball.x)>6)continue;
-  const x=ball.x-sign*hand*.31,z=ball.z+sign*.12;
+  if(ball.z*sign<1||ball.z*sign>15.6||Math.abs(ball.x)>MOVEMENT_HALF_WIDTH)continue;
+  const x=clamp(ball.x-sign*hand*.31,-MOVEMENT_HALF_WIDTH,MOVEMENT_HALF_WIDTH),z=ball.z+sign*.12;
   const runner={...p,tx:x,tz:z};
   // Leave one frame to stabilize the racket before predicted contact.
   for(let t=0;t<time-1/60;t+=1/60)movePlayer(runner,seat,Math.min(1/60,time-1/60-t));

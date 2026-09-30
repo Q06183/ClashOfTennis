@@ -1,6 +1,7 @@
 import {characterEffects} from './characters.js';
 import {effectiveStamina} from './stamina.js';
 import {surfaceProfile} from './surfaces.js';
+import {MOVEMENT_HALF_WIDTH} from './rules.js';
 import {clamp,side,type PlayerState,type Seat} from './types.js';
 /** Acceleration, braking and direction-dependent court movement, in metres/sec. */
 export function movePlayer(p:PlayerState,seat:Seat,dt:number){
@@ -17,7 +18,7 @@ export function movePlayer(p:PlayerState,seat:Seat,dt:number){
  if(change>0){const amount=Math.min(1,acceleration*dt/change);vx+=changeX*amount;vz+=changeZ*amount;}
  if(distance<.04&&Math.hypot(vx,vz)<.4){p.x=p.tx;p.z=p.tz;vx=0;vz=0;}
  else {p.x+=vx*dt;p.z+=vz*dt;}
- const x=clamp(p.x,-6.4,6.4),z=sign*clamp(p.z*sign,.9,16.5);
+ const x=clamp(p.x,-MOVEMENT_HALF_WIDTH,MOVEMENT_HALF_WIDTH),z=sign*clamp(p.z*sign,.9,16.5);
  if(x!==p.x)vx=0;if(z!==p.z)vz=0;p.x=x;p.z=z;
  p.vx=vx;p.vz=vz;p.moving=Math.hypot(vx,vz)>.12;
 }

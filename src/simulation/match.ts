@@ -13,7 +13,7 @@ import {placementAssist,controlledPlacement} from './pace-control.js';
 import {RESCUE,rescueChance,rescueTarget,rescueApproach,canDelayRescue,hasNormalReturnWindow,moveRescue,canReachRescue} from './rescue.js';
 import {movePlayer} from './movement.js';
 import {beginPointStamina,spendStamina,recoverPointStamina,settlePointStamina,effectiveStamina,STAMINA} from './stamina.js';
-import { COURT, courtHalfWidth, isInCourt, isInServiceBox, receiverForPoint, winnerForScore } from './rules.js';
+import { COURT, MOVEMENT_HALF_WIDTH, courtHalfWidth, isInCourt, isInServiceBox, receiverForPoint, winnerForScore } from './rules.js';
 import {createScoring,scorePoint,matchServer,type ScoringFormat} from './scoring.js';
 import {assistedReceiver,supportPosition} from './team-play.js';
 import {bodyContactTime} from './body-contact.js';
@@ -103,7 +103,7 @@ export class Match {
         const half=side(seat,s)*((s.score[0]+s.score[1])%2===0?1:-1);
         p.tx=half*clamp(cmd.x*half,.25,courtHalfWidth(s.mode)-.15);
         p.tz=side(seat,s)*clamp(cmd.z*side(seat,s),COURT.halfLength+.25,16.3);
-      }else{p.tx=clamp(cmd.x,-6,6);p.tz=side(seat,s)*clamp(cmd.z*side(seat,s),.9,16.3);}
+      }else{p.tx=clamp(cmd.x,-MOVEMENT_HALF_WIDTH,MOVEMENT_HALF_WIDTH);p.tz=side(seat,s)*clamp(cmd.z*side(seat,s),.9,16.3);}
       this.returnPlanners[seat].clear();
       this.manualUntil[seat]=s.time+.8; return;
     }

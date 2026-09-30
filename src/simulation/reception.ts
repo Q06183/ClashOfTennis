@@ -3,6 +3,7 @@ import {clamp,side,type BallState,type PlayerState,type Seat,type Vec} from './t
 import {flightGravity} from './flight.js';
 import {bounceVelocity} from './surfaces.js';
 import {canReachContact} from './athlete.js';
+import {MOVEMENT_HALF_WIDTH} from './rules.js';
 const R=.12;
 /** Predict the rising waist-height contact, rather than chasing the bounce. */
 export function reception(b:BallState,p:PlayerState,seat:Seat){
@@ -26,10 +27,17 @@ export function reception(b:BallState,p:PlayerState,seat:Seat){
   }
   // Freeze the intended side while preparing so it cannot flip at the last step.
   const backhand=(p.preparation?.stroke==='backhand'||p.preparation?.stroke==='slice-backhand'||p.preparation?.stroke==='lob'&&p.backhand)||(!p.preparation&&(point.x-p.x)*sign*handedness(p.characterId)<-.25);
-  const lateral=backhand?-.65:.8,forward=backhand&&singleBackhand(p.characterId)?.8:.65;
+  // Fast outward balls outrun lateral footwork (~6m/s). Both backhand styles
+  // need a closer, less deep station to leave chase/braking margin for the
+  // hitting arm across the body. Keep normal spacing for slow/central balls
+  // rather than strengthening every backhand rally, and never add arm reach.
+  const chase=backhand&&(point.x-p.x)*b.vx>0?clamp((Math.abs(b.vx)-5)/2,0,1):0;
+  const lateral=backhand?-.65+.35*chase:.8;
+  const normalForward=backhand&&singleBackhand(p.characterId)?.8:.65;
+  const forward=normalForward+(.35-normalForward)*chase;
   let spacing=1;
   // Waiting at our own target must put the predicted ball inside the same
   // physical grip envelope used for impact, especially a low two-hand backhand.
   while(spacing>.6&&!canReachContact(-lateral*spacing,point.y,forward*spacing,backhand,singleBackhand(p.characterId)))spacing-=.1;
-  return {point,time:t,backhand,x:clamp(point.x-sign*handedness(p.characterId)*lateral*spacing,-6.4,6.4),z:sign*clamp(point.z*sign+forward*spacing,1.1,16.5)};
+  return {point,time:t,backhand,x:clamp(point.x-sign*handedness(p.characterId)*lateral*spacing,-MOVEMENT_HALF_WIDTH,MOVEMENT_HALF_WIDTH),z:sign*clamp(point.z*sign+forward*spacing,1.1,16.5)};
 }

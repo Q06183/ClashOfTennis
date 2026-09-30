@@ -6,6 +6,7 @@ import {spendStamina,recoverPointStamina,STAMINA} from './stamina.js';
 import {reception} from './reception.js';
 import {canSmash,canReturnNormally,returnHeightLegal} from './skills.js';
 import {overheadPlan} from './overhead-plan.js';
+import {MOVEMENT_HALF_WIDTH} from './rules.js';
 import {clamp,side,type BallState,type PlayerState,type Seat} from './types.js';
 
 /** A tap remains useful for a small positioning adjustment. A distant return
@@ -73,8 +74,8 @@ export function returnPlan(b:BallState,p:PlayerState,seat:Seat,serviceFlight:boo
  const bounce=(b.vy+Math.sqrt(b.vy*b.vy+2*G*Math.max(0,b.y-.12)))/G,horizon=Math.min(2.5,bounce-.035);
  for(let time=.08;time<=horizon;time+=.08){
   const ball={...b,x:b.x+b.vx*time,y:b.y+b.vy*time-G*time*time/2,z:b.z+b.vz*time,vy:b.vy-G*time};
-  if(ball.z*sign<.9||ball.z*sign>16||Math.abs(ball.x)>5.8||ball.y<.4||ball.y>2.65)continue;
-  const candidates=[.65,-.55].map(lateral=>({x:clamp(ball.x-sign*hand*lateral,-6.4,6.4),z:sign*clamp(ball.z*sign+.45,.9,16.5)}));
+  if(ball.z*sign<.9||ball.z*sign>16||Math.abs(ball.x)>MOVEMENT_HALF_WIDTH||ball.y<.4||ball.y>2.65)continue;
+  const candidates=[.65,-.55].map(lateral=>({x:clamp(ball.x-sign*hand*lateral,-MOVEMENT_HALF_WIDTH,MOVEMENT_HALF_WIDTH),z:sign*clamp(ball.z*sign+.45,.9,16.5)}));
   candidates.sort((a,c)=>Math.hypot(a.x-p.x,a.z-p.z)-Math.hypot(c.x-p.x,c.z-p.z));
   for(const target of candidates){
    const runner={...p,tx:target.x,tz:target.z};

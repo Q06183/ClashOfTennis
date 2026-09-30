@@ -1,6 +1,7 @@
 import {handedness,singleBackhand} from './characters.js';
 import {canReachContact} from './athlete.js';
 import {flightGravity} from './flight.js';
+import {MOVEMENT_HALF_WIDTH} from './rules.js';
 import {clamp,side,type BallState,type PlayerState,type Seat} from './types.js';
 export function canSmash(b:BallState,p:PlayerState,seat:Seat){
  const sign=side(seat,p),x=-(b.x-p.x)*sign*handedness(p.characterId),z=-(b.z-p.z)*sign;
@@ -15,7 +16,7 @@ export function airInterception(b:BallState,p:PlayerState,seat:Seat){
  const t=b.vz*sign>.1?clamp((plane-b.z)/b.vz,0,.55):0;
  const point={x:b.x+b.vx*t,y:b.y+b.vy*t-flightGravity(b)*t*t/2,z:b.z+b.vz*t};
  const backhand=(point.x-p.x)*sign*handedness(p.characterId)<-.25,smash=point.y>=1.85&&point.y<2.7&&b.vy-flightGravity(b)*t<=1;
- return {time:t,point,backhand,smash,x:clamp(point.x-sign*handedness(p.characterId)*(smash?.25:backhand?-.55:.65),-6.4,6.4),z:depth*sign};
+ return {time:t,point,backhand,smash,x:clamp(point.x-sign*handedness(p.characterId)*(smash?.25:backhand?-.55:.65),-MOVEMENT_HALF_WIDTH,MOVEMENT_HALF_WIDTH),z:depth*sign};
 }
 
 /** Shared ordinary reach for both live contact and the last-chance rescue gate. */
