@@ -37,5 +37,22 @@
 
 ## 交付状态
 
-本文件先记录已验证修复。主分支合并与7470发布后的回执另追加，不能把本地通过
-当作在线已更新。独立 worktree 继续保留，不动其他双打/场地开发分支。
+修复提交 `b86235a` 已快进合入本地 `main`，`codex/friends-tennis` 同步。
+主目录合并后再次运行 **521/521**、TypeScript 检查均通过。
+
+2026-09-30 16:54:10（上海时间），零房间检查后重启7470：PID 33645→40289。
+前端更新为 `/assets/index-Np0lR9Ve.js`，SHA-256
+`a4cd67fa6e1c1fb5bf6c9376c616d7cccf4b27b4c088c03e2d44e76e95819bcc`。
+旧静态资源及人物模型不删不改，回滚代码分支为
+`codex/backup-before-nearby-rescue-20260930`（1683b44）。
+
+主目录 `artifacts/rescue-nearby-7470-2026-09-30/` 保存：
+- `publication.json` / `merged-tests.log`：发布和合并回归回执。
+- `live/nearby-return.json`：真实服务两组正常发球/移动命令后，均普通回球，
+  无飞身/定格，两个客户端同序号快照一致。没有注入状态或固定概率。
+- `emergency/live-verification.json`：真正远球仍自动救球，补滑成功/超时保持。
+- `browser.json` / `browser.png`：7470新入口、练习加载和空error日志。
+- `dist-before/` / `source-before.tar`：本轮更新前的完整前端与服务端源码备份。
+
+独立 worktree 保留，未更改其他双打/场地分支，未推送远端。
+上述为自动化与浏览器证据，真人手机连续对局手感待复验。
