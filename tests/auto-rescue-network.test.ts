@@ -4,6 +4,7 @@ import {WebSocket} from 'ws';
 import {createGameServer} from '../server/app.js';
 import {Match} from '../src/simulation/match.js';
 import {RESCUE} from '../src/simulation/rescue.js';
+import {handedness} from '../src/simulation/characters.js';
 import {rescueIncoming} from './helpers/rescue-incoming.js';
 const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 async function client(url:string){
@@ -15,6 +16,31 @@ async function client(url:string){
   throw Error(`Timeout ${type}: ${JSON.stringify(messages.slice(-1))}`);
  }};
 }
+test('both clients see ordinary nearby returns instead of an unnecessary automatic rescue',async()=>{
+ const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{
+  a.send({type:'create',name:'near A'});const welcome=await a.wait('welcome');
+  b.send({type:'join',code:welcome.code,name:'near B'});await b.wait('welcome');
+  a.send({type:'ready'});b.send({type:'ready'});await a.wait('state');
+  const room=server.rooms.rooms.get(welcome.code)!;
+  for(const id of ['lin','noah'])for(const seat of [0,1] as const){
+   room.match!.dispose();let draws=0;
+   const m=room.match=new Match([id,id],()=>{draws++;return 0;}),sign=seat===0?1:-1,hand=handedness(id);
+   m.state.phase='rally';m.state.rally=2;m.step(.08);
+   Object.assign(m.state.players[seat],{x:0,z:10*sign,tx:0,tz:10*sign,vx:0,vz:0,
+    stamina:.7,totalStamina:1,preparation:undefined,backhand:false});
+   m.physics.place({x:1.8*sign*hand,y:1.7,z:6*sign},{x:0,y:1,z:9*sign});
+   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});
+   a.messages.length=0;b.messages.length=0;
+   (seat===0?a:b).send({type:'input',command:{type:'shot',aim:0,depth:.5,power:.5,lob:false}});
+   const hit=await a.wait('state',v=>v.state.rally===3);
+   assert.deepEqual((await b.wait('state',v=>v.seq===hit.seq)).state,hit.state);
+   assert.equal(hit.state.ball.rescue,false);assert.equal(hit.state.ball.hitter,seat);
+   assert.equal(hit.state.players[seat].rescue,undefined);assert.equal(draws,0);
+   assert.equal(m.rescueDiagnostics.started,0);
+  }
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
+});
 test('automatic hold synchronizes both clients, accepts only the receiver, and times out without a fabricated return',async()=>{
  const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
  try{

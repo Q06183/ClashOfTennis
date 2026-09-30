@@ -141,7 +141,7 @@ export class Match {
         this.nextRescueApproach[seat]=s.time+.08;this.rescuePlans[seat]=null;
         const approach=rescueApproach(b,p,seat,this.serviceFlight);
         if(approach&&!hasNormalReturnWindow(b,p,seat,{time:s.time,manualUntil:this.manualUntil[seat],serviceFlight:this.serviceFlight,
-          slice:!!pending?.shot.slice,planner:this.returnPlanners[seat],flight:s.rally,airRequested:pending?.airRequested})){
+          slice:!!pending?.shot.slice,planner:this.returnPlanners[seat],flight:s.rally,airRequested:pending?.airRequested},approach.target.short?1/120:.10)){
           this.rescueMetric('staged',seat);this.rescuePlans[seat]={x:approach.x,z:approach.z,flight:s.rally,at:s.time};
         }
       }
@@ -149,8 +149,10 @@ export class Match {
     }
     this.rescuePlans[seat]=null;
     this.rescueMetric('candidate',seat);
+    // A nearby ordinary contact must not lose to a short hop just because its
+    // window is under 100ms. Keep the stability reserve for distant dives only.
     if(hasNormalReturnWindow(b,p,seat,{time:s.time,manualUntil:this.manualUntil[seat],serviceFlight:this.serviceFlight,
-      slice:!!pending?.shot.slice,planner:this.returnPlanners[seat],flight:s.rally,airRequested:pending?.airRequested})){
+      slice:!!pending?.shot.slice,planner:this.returnPlanners[seat],flight:s.rally,airRequested:pending?.airRequested},target.short?1/120:.10)){
       this.rescueMetric('stableVeto',seat);return false;
     }
     // Anticipate serve reception, but never launch on an unbounced serve.
