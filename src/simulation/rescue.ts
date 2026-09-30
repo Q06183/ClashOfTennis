@@ -8,16 +8,13 @@ import {predictFlight} from './trajectory.js';
 import {isInCourt} from './rules.js';
 import {bounceVelocity} from './surfaces.js';
 import {clamp,side,type BallState,type PlayerState,type Seat,type RescueStroke} from './types.js';
-export const RESCUE={minChance:.10,maxChance:.90,lowStamina:1/3,travel:.20,landAt:.48,riseAt:.68,duration:1.18,reach:3.5,travelSpeed:9,acceleration:65,window:.5,slowdown:1.7};
+export const RESCUE={minChance:.10,maxChance:.90,lowStamina:1/3,travel:.20,landAt:.48,riseAt:.68,duration:1.18,shortReach:1.2,reach:3.5,travelSpeed:9,acceleration:65,window:.5,slowdown:1.7};
 /** Existing authored poses use a 200ms reach phase. Natural dives stretch only
  * that phase; landing and the 500ms push-up keep their original duration. */
 export function rescueAge(p:PlayerState,time:number){
  const r=p.rescue;if(!r)return 0;
  const age=Math.max(0,time-r.startedAt),travel=r.travel??RESCUE.travel;
- const canonical=r.natural?(age<travel?age/travel*RESCUE.travel:RESCUE.travel+age-travel):age;
- // Short step-outs share the exact contact/landing pose and only compress
- // recovery. The existing long supported fall and .5s push-up stay unchanged.
- return r.short&&canonical>.48?.48+(canonical-.48)*1.75:canonical;
+ return r.natural?(age<travel?age/travel*RESCUE.travel:RESCUE.travel+age-travel):age;
 }
 /** Total-match stamina drives the smooth 10%–90% rescue lottery. */
 export function rescueChance(stamina:number){
@@ -92,7 +89,7 @@ export function rescueTarget(b:BallState,p:PlayerState,seat:Seat,serviceFlight=f
   if(distance<.35||bounds.max-bounds.min>RESCUE.reach||
     p.x+bounds.min< -6.4||p.x+bounds.max>6.4||bounds.speed>RESCUE.travelSpeed||
     bounds.acceleration>RESCUE.acceleration||Math.abs(x)>6.4||z*sign>16.5)continue;
-  const short=distance<=1.2&&stroke!=='smash';
+  const short=distance<=RESCUE.shortReach;
   const candidate={...p,x,z,rescue:{startedAt:0,fromX:p.x,fromZ:p.z,toX:x,toZ:z,contact,hit:false,stroke,backhand,travel,natural:true,launchVx,short}};
   if(!canReachRescue({...b,...contact},candidate,seat,travel))continue;
   // The new short rescue must improve a marginal ordinary window: require
@@ -167,9 +164,11 @@ export function rescuePose(p:PlayerState,time:number){
  const r=p.rescue;if(!r)return {lift:0,lean:0,air:0,crouch:0,landing:0,recovery:1,pitch:0,roll:0,hipHeight:.85};
  const smooth=(a:number,b:number,x:number)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
  const age=rescueAge(p,time),air=age>=RESCUE.landAt?0:Math.sin(Math.PI*clamp(age/RESCUE.landAt,0,1));
- const recovery=smooth(RESCUE.riseAt,RESCUE.duration,age);
+ // Small jumps collect their limbs while descending; no post-landing get-up.
+ // Contact geometry through .28s and the long fall's .5s push-up are unchanged.
+ const recovery=r.short?smooth(.28,RESCUE.landAt,age):smooth(RESCUE.riseAt,RESCUE.duration,age);
  const landing=smooth(.38,.58,age)*(1-recovery);
- const stepOut=r.recovery==='step-out';
+ const stepOut=r.short||r.recovery==='step-out';
  const prone=stepOut?0:smooth(.28,.52,age)*(1-recovery);
  const pitch=stepOut?.18*smooth(.28,.52,age)*(1-recovery):Math.PI/2*prone;
  // Canonical racket space: seat 0 looks toward -z. Left-hand mirroring is
@@ -185,7 +184,12 @@ export function moveRescue(p:PlayerState,time:number,dt:number){
  const age=time-r.startedAt,u=clamp(age/(r.travel??RESCUE.travel),0,1),ease=r.natural?u*u*(3-2*u):u*(2-u),x=p.x,z=p.z;
  p.x=r.fromX+(r.natural?rescueMotion(r.toX-r.fromX,r.travel??RESCUE.travel,r.launchVx??0,u):(r.toX-r.fromX)*ease);p.z=r.fromZ+(r.toZ-r.fromZ)*ease;
  p.vx=r.natural&&age<=1e-9?(r.launchVx??0):(p.x-x)/dt;p.vz=(p.z-z)/dt;p.moving=u<1;
- if(rescueAge(p,time)>=RESCUE.duration){p.rescue=undefined;p.vx=0;p.vz=0;}
+ if(rescueAge(p,time)>=(r.short?RESCUE.landAt:RESCUE.duration)-1e-9){
+  p.rescue=undefined;p.vx=0;p.vz=0;p.moving=false;
+  // The short landing already returned the racket to ready; do not resume
+  // a residual groundstroke follow-through on the first free movement tick.
+  if(r.short)p.swing=0;
+ }
  return true;
 }
 

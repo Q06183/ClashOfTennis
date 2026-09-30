@@ -118,14 +118,14 @@ test('upcoming running and volley windows avoid the rescue lottery on both sides
  }
 });
 
-test('a former single-sample ordinary graze can use a reliable short rescue without losing real contact',()=>{
+test('a short ordinary contact window wins over a nearby rescue without losing real contact',()=>{
  for(const seat of [0,1] as Seat[]){
   const sign=side(seat);let draws=0;const m=new Match(['lin','lin'],()=>{draws++;return 0;});m.state.phase='rally';m.state.rally=2;
   Object.assign(m.state.players[seat],{x:1.6880609533*sign,z:9.1569666094*sign,tx:-.6138001657*sign,tz:9.1569666094*sign,vx:0,vz:0});
   m.physics.place({x:1.0594274453*sign,y:2.0692738906,z:1.0028849477*sign},{x:-.7330817170*sign,y:2.0434809271,z:8.2048775163*sign});
   Object.assign(m.state.ball,m.physics.read(),{hitter:seat===0?1:0,bounces:1});m.input(seat,shot);
   for(let i=0;i<70&&m.state.phase==='rally'&&m.state.ball.hitter!==seat;i++)m.step(1/60);
-  assert.equal(m.state.ball.hitter,seat);assert.equal(m.state.ball.rescue,true);assert.equal(draws,1);
-  assert.equal(m.rescueDiagnostics.contact,1);m.dispose();
+  assert.equal(m.state.ball.hitter,seat);assert.equal(m.state.ball.rescue,false);assert.equal(draws,0);
+  assert.equal(m.rescueDiagnostics.contact,0);m.dispose();
  }
 });

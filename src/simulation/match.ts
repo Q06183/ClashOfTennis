@@ -168,7 +168,7 @@ export class Match {
         this.nextRescueApproach[seat]=s.time+.08;this.rescuePlans[seat]=null;
         const approach=rescueApproach(b,p,seat,this.serviceFlight);
         if(approach&&!hasNormalReturnWindow(b,p,seat,{time:s.time,manualUntil:this.manualUntil[seat],serviceFlight:this.serviceFlight,
-          slice:!!pending?.shot.slice,planner:this.returnPlanners[seat],flight:s.rally,airRequested:pending?.airRequested})){
+          slice:!!pending?.shot.slice,planner:this.returnPlanners[seat],flight:s.rally,airRequested:pending?.airRequested},approach.target.short?1/120:.10)){
           this.rescueMetric('staged',seat);this.rescuePlans[seat]={x:approach.x,z:approach.z,flight:s.rally,at:s.time};
         }
       }
@@ -176,8 +176,10 @@ export class Match {
     }
     this.rescuePlans[seat]=null;
     this.rescueMetric('candidate',seat);
+    // A nearby ordinary contact must not lose to a short hop just because its
+    // window is under 100ms. Keep the stability reserve for distant dives only.
     if(hasNormalReturnWindow(b,p,seat,{time:s.time,manualUntil:this.manualUntil[seat],serviceFlight:this.serviceFlight,
-      slice:!!pending?.shot.slice,planner:this.returnPlanners[seat],flight:s.rally,airRequested:pending?.airRequested})){
+      slice:!!pending?.shot.slice,planner:this.returnPlanners[seat],flight:s.rally,airRequested:pending?.airRequested},target.short?1/120:.10)){
       this.rescueMetric('stableVeto',seat);return false;
     }
     // Anticipate serve reception, but never launch on an unbounced serve.
@@ -191,9 +193,10 @@ export class Match {
     this.rescueMetric('started',seat);
     p.rescue={startedAt:s.time,fromX:p.x,fromZ:p.z,toX:target.x,toZ:target.z,contact:target.contact,
       hit:false,stroke:target.stroke,backhand:target.backhand,travel:target.travel,natural:true,launchVx:target.launchVx,short:target.short,
-      // Authored choice, not a frequency estimated from the reference clips.
-      // Long/low reaches retain support on the floor; shorter high saves step out.
-      recovery:target.short||target.contact.y>=.85&&Math.abs(target.x-p.x)<1.8?'step-out':'supported-fall'};
+      recovery:target.short?'step-out':'supported-fall'};
+    // The dive replaces the old approach destination. Do this at takeoff,
+    // not at release, so new movement inputs during flight remain queued.
+    p.tx=target.x;p.tz=target.z;this.returnPlanners[seat].clear();
     p.stroke=target.stroke;p.backhand=target.backhand;p.preparation=undefined;spendStamina(p,.1);
     return true;
   }

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>救球落地修复 · 独立 worktree 验证</title>
+<style>
+body{margin:0;font:14px system-ui;color:#16342f;background:#dbe5df}
+header{position:absolute;left:14px;top:14px;right:14px;background:#fffffff0;padding:12px;border-radius:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+button,select,input{font:inherit;padding:7px}canvas{display:block;width:100vw;height:100vh}
+footer{position:absolute;left:14px;bottom:14px;background:#fffffff0;padding:12px;border-radius:10px;max-width:90%;line-height:1.6}
+#phase{width:230px}small{display:block;font-size:12px;color:#50655c}
+</style>
+<header><strong>救球落地 · 真实 Match 回放</strong><select id="case"></select><button id="play">播放</button>
+<button id="contact">触球</button><button id="land">落地</button><button id="rise">起身中</button><button id="free">恢复移动</button>
+<input id="phase" type="range" min="0" max="1" step="1"><output id="time"></output></header>
+<canvas></canvas>
+<footer><div id="status">加载正式 GLB…</div><small>橙圈：起跳点；蓝圈：落点。确定性来球＋真实模拟，不是线上随机触发频率或手机验收。可切换左右手、双座位和落地后新移动。</small></footer>
+<script type="module" src="./rescue-landing-lab.ts"></script>
+</html>
