@@ -7,7 +7,8 @@ import {canSmash,canReturnNormally,returnHeightLegal,volleyDifficulty} from './s
 import {getCharacter,characterEffects} from './characters.js';
 import { BallPhysics } from './physics.js';
 import {shotDepth,shotTier,SHOT_PROFILES} from './shot-profile.js';
-import {dropStrength,dropRebound} from './drop-shot.js';
+import {dropStrength} from './drop-shot.js';
+import {adjustRebound,surfaceProfile,type SurfaceId} from './surfaces.js';
 import {placementAssist,controlledPlacement} from './pace-control.js';
 import {RESCUE,rescueChance,rescueTarget,rescueApproach,canDelayRescue,hasNormalReturnWindow,moveRescue,canReachRescue} from './rescue.js';
 import {movePlayer} from './movement.js';
@@ -17,7 +18,7 @@ import { clamp, other, side, type BallState, type Input, type MatchState, type P
 
 const player = (seat: Seat, characterId: string): PlayerState => ({characterId:getCharacter(characterId).id,x:0,z:side(seat)*10,tx:0,tz:side(seat)*10,stamina:1,totalStamina:1,swing:0,stroke:'forehand',moving:false});
 export class Match {
-  readonly physics = new BallPhysics();
+  readonly physics:BallPhysics;
   readonly state: MatchState;
   private pending: [{shot:Shot;flight:number;airRequested:boolean}|null,{shot:Shot;flight:number;airRequested:boolean}|null] = [null,null];
   private recentContact:{at:number;flight:number;seat:Seat;ball:BallState}|null=null;
@@ -40,9 +41,11 @@ export class Match {
   private serviceFlight = false;
   private faultReset = false;
   private impact: {x:number;z:number}|null = null;
-  constructor(characters:readonly [string,string]=['lin','lin'],private random:()=>number=Math.random) {
-    this.state = {time:0,phase:'serve',score:[0,0],players:[player(0,characters[0]),player(1,characters[1])],
-      ball:{x:0,y:2.5,z:11.8,vx:0,vy:0,vz:0,bounces:0,hitter:0,targetX:0,targetZ:-5},
+  constructor(characters:readonly [string,string]=['lin','lin'],private random:()=>number=Math.random,options:{surface?:SurfaceId}={}) {
+    const surface=surfaceProfile(options.surface).id;
+    this.physics=new BallPhysics(surface);
+    this.state = {surface,time:0,phase:'serve',score:[0,0],players:[{...player(0,characters[0]),surface},{...player(1,characters[1]),surface}],
+      ball:{surface,x:0,y:2.5,z:11.8,vx:0,vy:0,vz:0,bounces:0,hitter:0,targetX:0,targetZ:-5},
       server:0,fault:0,pointTimer:0,rally:0,maxRally:0,winner:null,event:'准备发球',eventId:0,lastPoint:null};
     this.resetPoint();
   }
@@ -356,19 +359,10 @@ export class Match {
           this.faultOrPoint('出界');return;
         }
         this.bouncePoint={x:contact.x,z:contact.z};
-        if(b.topspin){const kick=1+.12*b.topspin;b.vx*=kick;b.vz*=kick;b.topspin*=.55;this.physics.body.setLinvel({x:b.vx,y:b.vy,z:b.vz},true);this.physics.setTopspin(b.topspin);}
-        if(b.slice){
-          // Explicit gameplay exception: retain the irregular slice skid AFTER
-          // landing. Launch and first landing never receive random aim error.
-          const angle=(this.random()*2-1)*.16,pace=.8+.12*this.random(),vx=b.vx,vz=b.vz;
-          b.vx=(vx*Math.cos(angle)-vz*Math.sin(angle))*pace;b.vz=(vx*Math.sin(angle)+vz*Math.cos(angle))*pace;b.vy*=.58+.2*this.random();
-          this.physics.body.setLinvel({x:b.vx,y:b.vy,z:b.vz},true);
-        }
-        if(b.drop){
-          const rebound=dropRebound({x:b.vx,y:b.vy,z:b.vz},b.drop);
-          b.vx=rebound.x;b.vy=rebound.y;b.vz=rebound.z;
-          this.physics.body.setLinvel(rebound,true);
-        }
+        const rebound=adjustRebound({x:b.vx,y:b.vy,z:b.vz},b,this.random);
+        b.vx=rebound.x;b.vy=rebound.y;b.vz=rebound.z;
+        this.physics.body.setLinvel(rebound,true);
+        if(b.topspin){b.topspin*=.55;this.physics.setTopspin(b.topspin);}
         this.announce(b.slice?'切削弹跳':'落地');
       } else {this.award(b.hitter,'二跳');return;}
     }

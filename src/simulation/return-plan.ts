@@ -1,6 +1,6 @@
 import {characterEffects,getCharacter,handedness} from './characters.js';
 import {flightGravity} from './flight.js';
-import {dropRebound} from './drop-shot.js';
+import {bounceVelocity} from './surfaces.js';
 import {movePlayer} from './movement.js';
 import {spendStamina,recoverPointStamina,STAMINA} from './stamina.js';
 import {reception} from './reception.js';
@@ -35,15 +35,16 @@ export function canWaitForBounce(b:BallState,p:PlayerState,seat:Seat,minimumWind
  if(b.bounces>0)return false;
  const G=flightGravity(b),drop=(b.vy+Math.sqrt(b.vy*b.vy+2*G*Math.max(0,b.y-.12)))/G;
  const ball={...b},runner={...p},effects=characterEffects(p.characterId),dt=1/60;
- const ground=reception(b,p,seat),kick=b.slice?.86:1+.12*(b.topspin??0);
+ const ground=reception(b,p,seat);
  let elapsed=0,bounced=false,contactFrames=0;
  for(let i=0;i<300;i++){
   const step=!bounced?Math.min(dt,Math.max(0,drop-elapsed)):dt;
   const gravity=flightGravity(ball);
   ball.x+=ball.vx*step;ball.z+=ball.vz*step;ball.y+=ball.vy*step-gravity*step*step/2;ball.vy-=gravity*step;elapsed+=step;
   if(!bounced&&elapsed>=drop-1e-8){
-   bounced=true;ball.bounces=1;ball.y=.12;ball.vy=Math.abs(ball.vy)*.72*(b.slice?.68:1);ball.vx*=kick;ball.vz*=kick;ball.topspin=(ball.topspin??0)*.55;
-   const rebound=dropRebound({x:ball.vx,y:ball.vy,z:ball.vz},b.drop);
+   bounced=true;ball.bounces=1;ball.y=.12;
+   const rebound=bounceVelocity({x:ball.vx,y:ball.vy,z:ball.vz},ball);
+   ball.topspin=(ball.topspin??0)*.55;
    ball.vx=rebound.x;ball.vy=rebound.y;ball.vz=rebound.z;
   }else if(bounced&&ball.y<=.12)break;
   const target=bounced?reception(ball,runner,seat):ground;runner.tx=target.x;runner.tz=target.z;

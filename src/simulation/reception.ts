@@ -1,7 +1,7 @@
 import {handedness,singleBackhand} from './characters.js';
 import {clamp,side,type BallState,type PlayerState,type Seat,type Vec} from './types.js';
 import {flightGravity} from './flight.js';
-import {dropRebound} from './drop-shot.js';
+import {bounceVelocity} from './surfaces.js';
 import {canReachContact} from './athlete.js';
 const R=.12;
 /** Predict the rising waist-height contact, rather than chasing the bounce. */
@@ -10,12 +10,12 @@ export function reception(b:BallState,p:PlayerState,seat:Seat){
   let t=0,point:Vec;
   if(b.bounces===0){
     const drop=(b.vy+Math.sqrt(b.vy*b.vy+2*G*Math.max(0,b.y-R)))/G;
-    const rebound=dropRebound({x:1,y:Math.abs(b.vy-G*drop)*.72*(b.slice?.68:1),z:1},b.drop);
+    const rebound=bounceVelocity({x:b.vx,y:b.vy-G*drop,z:b.vz},b);
     const up=rebound.y;
-    const afterG=flightGravity({topspin:(b.topspin??0)*.55}),kick=(b.slice?.86:1+.12*(b.topspin??0))*rebound.x;
+    const afterG=flightGravity({topspin:(b.topspin??0)*.55});
     const height=Math.min(.98,up*up/(2*afterG)*.8);
     const rise=clamp((up-Math.sqrt(Math.max(0,up*up-2*afterG*height)))/afterG,.16,.34);
-    t=drop+rise;point={x:b.x+b.vx*(drop+kick*rise),y:R+up*rise-afterG*rise*rise/2,z:b.z+b.vz*(drop+kick*rise)};
+    t=drop+rise;point={x:b.x+b.vx*drop+rebound.x*rise,y:R+up*rise-afterG*rise*rise/2,z:b.z+b.vz*drop+rebound.z*rise};
   }else{
     // Low rebounds may never reach 1.1m. Aim below their actual apex instead
     // of abruptly chasing the current ball as soon as a bounce is reported.

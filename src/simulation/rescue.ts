@@ -6,7 +6,7 @@ import {canReturnNormally,returnHeightLegal} from './skills.js';
 import {flightGravity} from './flight.js';
 import {predictFlight} from './trajectory.js';
 import {isInCourt} from './rules.js';
-import {dropRebound} from './drop-shot.js';
+import {bounceVelocity} from './surfaces.js';
 import {clamp,side,type BallState,type PlayerState,type Seat,type RescueStroke} from './types.js';
 export const RESCUE={minChance:.10,maxChance:.90,lowStamina:1/3,travel:.20,landAt:.48,riseAt:.68,duration:1.18,reach:3.5,travelSpeed:9,acceleration:65,window:.5,slowdown:1.7};
 /** Existing authored poses use a 200ms reach phase. Natural dives stretch only
@@ -54,8 +54,8 @@ function forecastRescueBall(b:BallState,seat:Seat,time:number,landing=b.bounces=
  if(landing?.hitNet)return null;
  if(landing&&time>landing.duration){
   if(!isInCourt(landing.landing.x,landing.landing.z,seat))return null;
-  const dt=time-landing.duration,kick=b.slice?.86:1+.12*(b.topspin??0);
-  const v=dropRebound({x:b.vx*kick,y:Math.abs(b.vy-g*landing.duration)*.72*(b.slice?.68:1),z:b.vz*kick},b.drop);
+  const dt=time-landing.duration;
+  const v=bounceVelocity({x:b.vx,y:b.vy-g*landing.duration,z:b.vz},b);
   const spin=(b.topspin??0)*.55,y=.12+v.y*dt-flightGravity({topspin:spin})*dt*dt/2;
   if(y<=.12)return null;
   return {...b,x:landing.landing.x+v.x*dt,y,z:landing.landing.z+v.z*dt,

@@ -1,3 +1,4 @@
+import type {SurfaceId} from './surfaces.js';
 export type ShotTier = 'normal'|'fast'|'power'|'critical'|'lob'|'topspin'|'smash'|'slice';
 export type Seat = 0 | 1;
 export type RescueStroke = 'forehand'|'backhand'|'volley'|'smash';
@@ -6,6 +7,7 @@ export type SwipeAim = {projection:number[];elevation?:number[];dx:number;dy:num
 export type Shot = { type: 'shot'; aim: number; depth: number; power: number; lob: boolean; critical?: boolean; directionX?: number; swipeAim?: SwipeAim; topspin?: number; slice?: boolean };
 export type Input = Shot | { type: 'move'; x: number; z: number };
 export type PlayerState = {
+  surface?:SurfaceId;
   characterId?: string;
   x: number; z: number; tx: number; tz: number; stamina: number;
   /** stamina is the per-point bar; optional fields support older snapshots. */
@@ -25,8 +27,9 @@ export type PlayerState = {
   serveCourt?: 'deuce'|'ad';
   rescue?: {startedAt:number;fromX:number;fromZ:number;toX:number;toZ:number;contact:Vec;hit:boolean;stroke?:RescueStroke;backhand?:boolean;travel?:number;natural?:boolean;launchVx?:number;short?:boolean;missed?:boolean;recovery?:'step-out'|'supported-fall'};
 };
-export type BallState = Vec & { vx: number; vy: number; vz: number; bounces: number; hitter: Seat; targetX: number; targetZ: number; placementAssist?:number; aimOrigin?:Vec; tier?: ShotTier; critical?: boolean; rescue?: boolean; topspin?: number; slice?: boolean; drop?:number; skill?: 'smash'|'volley'|'slice' };
+export type BallState = Vec & { surface?:SurfaceId; vx: number; vy: number; vz: number; bounces: number; hitter: Seat; targetX: number; targetZ: number; placementAssist?:number; aimOrigin?:Vec; tier?: ShotTier; critical?: boolean; rescue?: boolean; topspin?: number; slice?: boolean; drop?:number; skill?: 'smash'|'volley'|'slice' };
 export type MatchState = {
+  surface?:SurfaceId;
   /** Match time and all physics are held; only this real-step countdown runs. */
   rescueWindow?: {seat:Seat;remaining:number;flight:number};
   time: number; phase: 'serve' | 'rally' | 'point' | 'over';

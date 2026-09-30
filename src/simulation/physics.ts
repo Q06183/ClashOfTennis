@@ -1,16 +1,18 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import {flightGravity} from './flight.js';
+import {surfaceProfile,type SurfaceId} from './surfaces.js';
 import type { Vec } from './types.js';
 let initialized: Promise<void> | undefined;
 export function initPhysics() { return initialized ??= RAPIER.init(); }
 export class BallPhysics {
   readonly world = new RAPIER.World({x:0,y:-9.81,z:0});
   readonly body: RAPIER.RigidBody;
-  constructor() {
+  constructor(surface:SurfaceId='hard') {
+    const restitution=surfaceProfile(surface).restitution;
     this.world.timestep = 1/60;
-    this.world.createCollider(RAPIER.ColliderDesc.cuboid(40,.1,50).setTranslation(0,-.1,0).setFriction(0).setRestitution(.72));
+    this.world.createCollider(RAPIER.ColliderDesc.cuboid(40,.1,50).setTranslation(0,-.1,0).setFriction(0).setRestitution(restitution));
     this.body = this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(0,1,10).setCcdEnabled(true).setCanSleep(false));
-    this.world.createCollider(RAPIER.ColliderDesc.ball(.12).setMass(.058).setFriction(0).setRestitution(.72), this.body);
+    this.world.createCollider(RAPIER.ColliderDesc.ball(.12).setMass(.058).setFriction(0).setRestitution(restitution), this.body);
   }
   place(position: Vec, velocity: Vec = {x:0,y:0,z:0},topspin=0) {
     this.setTopspin(topspin);
