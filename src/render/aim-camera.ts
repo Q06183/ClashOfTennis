@@ -1,4 +1,4 @@
-import type {MatchState,Seat} from '../simulation/types.js';
+import {teamOf,type MatchState,type Seat} from '../simulation/types.js';
 
 /** Presentation-only lock. Never changes movement or authoritative shot timing. */
 export class AimCameraLock {
@@ -6,7 +6,7 @@ export class AimCameraLock {
  private pending:{rally:number;seat:Seat;score:string;remaining:number}|null=null;
  pointer(active:boolean){this.touching=active;}
  shot(s:MatchState,seat:Seat){
-  if(!(s.phase==='serve'&&s.server===seat||s.phase==='rally'&&s.ball.hitter!==seat))return;
+  if(!(s.phase==='serve'&&s.server===seat||s.phase==='rally'&&teamOf(s.ball.hitter)!==teamOf(seat)))return;
   this.pending={rally:s.rally,seat,score:s.score.join(':'),remaining:8};
  }
  reset(){this.touching=false;this.pending=null;}

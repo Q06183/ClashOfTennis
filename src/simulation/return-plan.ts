@@ -53,7 +53,7 @@ export function canWaitForBounce(b:BallState,p:PlayerState,seat:Seat,minimumWind
   else recoverPointStamina(runner,STAMINA.idleRecovery*effects.recovery*step);
   // Require a contact window, not one grazing sample: Rapier may report
   // the bounce a frame after the analytic floor crossing.
-  contactFrames=bounced&&ball.z*side(seat)>.35&&returnHeightLegal(ball)&&canReturnNormally(ball,runner,seat)?contactFrames+1:0;
+  contactFrames=bounced&&ball.z*side(seat,p)>.35&&returnHeightLegal(ball)&&canReturnNormally(ball,runner,seat)?contactFrames+1:0;
   if(contactFrames*dt>=minimumWindow-1e-9)return true;
  }
  return false;
@@ -64,7 +64,7 @@ export const prefersBounce=(b:BallState,p:PlayerState,seat:Seat)=>getCharacter(p
 export function returnPlan(b:BallState,p:PlayerState,seat:Seat,serviceFlight:boolean,airRequested=false){
  const ground=()=>({...reception(b,p,seat),air:false,smash:false});
  if(serviceFlight||b.bounces>0||!airRequested&&prefersBounce(b,p,seat))return ground();
- const sign=side(seat),hand=handedness(p.characterId),G=flightGravity(b);
+ const sign=side(seat,p),hand=handedness(p.characterId),G=flightGravity(b);
  if(b.z*sign>.35&&returnHeightLegal(b)&&canReturnNormally(b,p,seat))return {point:{x:b.x,y:b.y,z:b.z},time:0,x:p.x,z:p.z,backhand:(b.x-p.x)*sign*hand<0,smash:canSmash(b,p,seat),air:true};
  const bounce=(b.vy+Math.sqrt(b.vy*b.vy+2*G*Math.max(0,b.y-.12)))/G,horizon=Math.min(2.5,bounce-.035);
  for(let time=.08;time<=horizon;time+=.08){

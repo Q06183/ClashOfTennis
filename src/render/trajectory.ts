@@ -4,7 +4,7 @@ import {LineGeometry} from 'three/addons/lines/LineGeometry.js';
 import {LineMaterial} from 'three/addons/lines/LineMaterial.js';
 import {predictFlight} from '../simulation/trajectory.js';
 import {SHOT_PROFILES} from '../simulation/shot-profile.js';
-import {COURT,isInServiceBox} from '../simulation/rules.js';
+import {COURT,courtHalfWidth,isInServiceBox} from '../simulation/rules.js';
 import type {MatchState,Seat} from '../simulation/types.js';
 export class FlightGuide {
   readonly root=new T.Group();
@@ -28,7 +28,7 @@ export class FlightGuide {
     this.root.visible=visible&&state.phase==='rally'&&state.ball.bounces===0;
     if(!this.root.visible)return;
     const f=predictFlight(state.ball);
-    const out=f.hitNet||Math.abs(f.landing.x)>COURT.halfWidth||Math.abs(f.landing.z)>COURT.halfLength||(state.rally===1&&!isInServiceBox(f.landing.x,f.landing.z,state.server,state.score[0]+state.score[1]));
+    const out=f.hitNet||Math.abs(f.landing.x)>courtHalfWidth(state.mode)||Math.abs(f.landing.z)>COURT.halfLength||(state.rally===1&&!isInServiceBox(f.landing.x,f.landing.z,state.server,state.score[0]+state.score[1],state.ends));
     const color=SHOT_PROFILES[state.ball.tier??(state.ball.critical?'critical':'normal')].color;
     this.line.material.color.setHex(color);
     (this.ring.material as T.MeshBasicMaterial).color.setHex(out?0xff453a:color);

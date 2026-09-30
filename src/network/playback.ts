@@ -35,11 +35,11 @@ export class SnapshotPlayback {
   return {hz:mean?Math.round(1000/mean):0,jitterMs:mean?Math.round(Math.sqrt(this.intervals.reduce((n,x)=>n+(x-mean)**2,0)/this.intervals.length)):0,gapMs:Math.max(0,Math.round(now-(this.queue.at(-1)?.at??now)))};
  }
  private copy(state:MatchState){
-  if(!this.draw)this.draw=structuredClone(state);
+  if(!this.draw||this.draw.players.length!==state.players.length)this.draw=structuredClone(state);
   const out=this.draw,players=out.players,ball=out.ball;
   Object.assign(out,state,{players,ball,rescueWindow:state.rescueWindow?{...state.rescueWindow}:undefined});Object.assign(ball,state.ball);
   for(const key of ['tier','skill','topspin','slice','drop','placementAssist','aimOrigin'] as const)if(!(key in state.ball))delete ball[key];
-  for(let i=0;i<2;i++)Object.assign(players[i],state.players[i],{
+  for(let i=0;i<state.players.length;i++)Object.assign(players[i],state.players[i],{
    serveCourt:state.players[i].serveCourt,strokeSpin:state.players[i].strokeSpin,preparation:state.players[i].preparation,contact:state.players[i].contact,rescue:state.players[i].rescue,
    totalStamina:state.players[i].totalStamina,pointStaminaStart:state.players[i].pointStaminaStart,pointStaminaSpent:state.players[i].pointStaminaSpent,
    pointStaminaCost:state.players[i].pointStaminaCost,pointStaminaSettled:state.players[i].pointStaminaSettled,
@@ -57,10 +57,10 @@ export class SnapshotPlayback {
   for(const item of this.queue){if(item.state.time<=time)a=item.state;else{b=item.state;break;}}
   const out=this.copy(a),age=Math.max(0,time-a.time);out.time=time;
   // Never blend across a point reset, score change, or new character selection.
-  const continuous=b&&a.phase===b.phase&&a.score[0]===b.score[0]&&a.score[1]===b.score[1]&&a.players.every((p,i)=>p.characterId===b!.players[i].characterId);
+  const continuous=b&&a.ends===b.ends&&a.mode===b.mode&&a.scoring?.totalPoints===b.scoring?.totalPoints&&a.phase===b.phase&&a.score[0]===b.score[0]&&a.score[1]===b.score[1]&&a.players.length===b.players.length&&a.players.every((p,i)=>p.characterId===b!.players[i].characterId);
   if(continuous&&b){
    const t=clamp(age/(b.time-a.time),0,1);
-   for(let i=0;i<2;i++){
+   for(let i=0;i<a.players.length;i++){
     const p=out.players[i],from=a.players[i],to=b.players[i];
     p.x=mix(from.x,to.x,t);p.z=mix(from.z,to.z,t);p.vx=mix(from.vx??0,to.vx??0,t);p.vz=mix(from.vz??0,to.vz??0,t);p.stamina=mix(from.stamina,to.stamina,t);
     if(from.totalStamina!==undefined&&to.totalStamina!==undefined)p.totalStamina=mix(from.totalStamina,to.totalStamina,t);
@@ -72,7 +72,7 @@ export class SnapshotPlayback {
    }else this.advanceBall(out,Math.min(age,.05));
   }else if(!b){
    const dt=Math.min(age,.05);
-   if(a.phase==='rally')for(let i=0;i<2;i++){const p=out.players[i];p.x+=(p.vx??0)*dt;p.z+=(p.vz??0)*dt;this.animate(p,a.players[i],dt);}
+   if(a.phase==='rally')for(let i=0;i<a.players.length;i++){const p=out.players[i];p.x+=(p.vx??0)*dt;p.z+=(p.vz??0)*dt;this.animate(p,a.players[i],dt);}
    this.advanceBall(out,dt);
   }
   // Keep the toss moving up to the known hit packet, without predicting a hit

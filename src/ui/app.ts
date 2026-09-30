@@ -19,6 +19,10 @@ import {readSeat,clearSeat} from '../network/session.js';
 import {SnapshotPlayback} from '../network/playback.js';
 import {invitationLink} from '../network/invite.js';
 import { CourtAudio } from './audio.js';
+import {surfaceProfile,isSurfaceId,type SurfaceId} from '../simulation/surfaces.js';
+import {courtButton,surfaceChoices,roomSeats,formatChoice} from './match-settings.js';
+import {pointLabel,isScoringFormat} from '../simulation/scoring.js';
+import {teamOf,partner} from '../simulation/types.js';
 
 const escape=(value:string)=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 type Screen='home'|'join'|'setup'|'matching'|'room'|'playing'|'result'|'characters';
@@ -52,6 +56,9 @@ export class App {
   private latency=0;
   private busy=false;
   private help=false;
+  private surface:SurfaceId=surfaceProfile(readPreference('rally-surface')).id;
+  private surfaceOpen=false;
+  private lobbyReturn=false;
   private toastTimer:ReturnType<typeof setTimeout>|null=null;
   private feedbackTimer:ReturnType<typeof setTimeout>|null=null;
   private lastEvent=-1;
@@ -63,6 +70,7 @@ export class App {
   private networkError='';
   private predictedMove:{x:number;z:number;until:number}|null=null;
   constructor(){
+    this.local.dispose();this.local=new Match([this.characterId,this.opponentId],Math.random,{surface:this.surface});
     this.view=new CourtView(document.querySelector('#court')!,lost=>{
       this.connected=!lost;
       if(lost)this.toast('图形连接中断，正在恢复球场…');
@@ -125,6 +133,31 @@ export class App {
   }
   private async action(action:string){
     if(action!=='hidden-master')this.hiddenMaster.reset();
+    if(action==='surfaces'){
+      if(this.screen==='playing'||this.screen==='result'||this.screen==='matching')return;
+      if(this.room&&this.room.host!==this.seat){this.toast('由房主选择场地');return;}
+      this.surfaceOpen=true;this.renderScreen();return;
+    }
+    if(action==='close-surfaces'){this.surfaceOpen=false;this.renderScreen();return;}
+    if(action.startsWith('surface-')){
+      const id=action.slice(8);if(!this.surfaceOpen||!isSurfaceId(id))return;
+      this.surfaceOpen=false;
+      if(this.room){this.net?.send({type:'configure',surface:id});}
+      else {this.surface=id;writePreference('rally-surface',id);this.local.dispose();this.local=new Match([this.characterId,this.opponentId],Math.random,{surface:this.surface});}
+      this.renderScreen();return;
+    }
+    if(action.startsWith('bot-')){
+      if(!this.room||this.room.host!==this.seat)return;
+      const [,index,operation]=action.split('-');this.net?.send({type:'configure',bot:{seat:Number(index),enabled:operation==='add',characterId:this.opponentId}});return;
+    }
+    if(action.startsWith('move-')){
+      if(!this.room||this.room.host!==this.seat)return;
+      const [,from,to]=action.split('-');this.net?.send({type:'configure',move:{from:Number(from),to:Number(to)}});return;
+    }
+    if(action.startsWith('format-')){
+      const format=action.slice(7);if(isScoringFormat(format))this.net?.send({type:'configure',format});return;
+    }
+    if(action==='return-lobby'&&this.net){this.lobbyReturn=true;this.screen='room';this.renderScreen();return;}
     if(action==='camera-distance'){
       const choice=this.cameraChoice.toggle();this.view.setCameraDistance(choice.distance);
       this.renderScreen();
@@ -161,13 +194,13 @@ export class App {
     }
     else if(action==='practice'){this.screen='setup';this.renderScreen();}
     else if(action==='start-practice'){
-      this.net?.close();this.net=null;this.remote=null;this.drawState=null;this.room=null;this.playback.reset();this.local.dispose();this.local=new Match([this.characterId,this.opponentId]);
+      this.net?.close();this.net=null;this.remote=null;this.drawState=null;this.room=null;this.playback.reset();this.local.dispose();this.local=new Match([this.characterId,this.opponentId],Math.random,{surface:this.surface});
       this.networkError='';
       this.seat=0;this.paused=false;this.connected=true;this.screen='playing';this.lastEvent=-1;this.accumulator=0;
       this.help=!readPreference('rally-tutorial');this.renderScreen();
     }
-    else if(action==='match'&&!this.busy)this.connect({type:'match',name:this.name,characterId:this.characterId});
-    else if(action==='create'&&!this.busy)this.connect({type:'create',name:this.name,characterId:this.characterId});
+    else if(action==='match'&&!this.busy)this.connect({type:'match',name:this.name,characterId:this.characterId,surface:this.surface});
+    else if((action==='create'||action==='create-doubles')&&!this.busy)this.connect({type:'create',name:this.name,characterId:this.characterId,mode:action==='create-doubles'?'doubles':'singles',surface:this.surface});
     else if(action==='join'){this.screen='join';this.renderScreen();}
     else if(action==='join-submit'&&!this.busy){
       if(!/^\d{6}$/.test(this.code)){this.toast('请输入朋友的 6 位房间号');return;}
@@ -182,7 +215,7 @@ export class App {
     }
     else if(action==='back'||action==='quit'){
       this.net?.close();this.net=null;this.remote=null;this.room=null;this.drawState=null;this.screen='home';this.help=false;
-      this.busy=false;this.connected=true;this.paused=false;this.local.dispose();this.local=new Match();
+      this.busy=false;this.connected=true;this.paused=false;this.surfaceOpen=false;this.local.dispose();this.local=new Match([this.characterId,this.opponentId],Math.random,{surface:this.surface});
       history.replaceState(null,'',location.pathname);this.renderScreen();
     }
     else if(action==='rematch'){
@@ -204,22 +237,26 @@ export class App {
     }
   }
   private connect(action:unknown){
-    this.playback.reset();this.predictedMove=null;this.networkError='';
+    this.playback.reset();this.predictedMove=null;this.networkError='';this.lobbyReturn=false;
     this.net?.close();this.remote=null;this.drawState=null;this.busy=true;this.status='正在连接球场…';this.renderScreen();
     this.net=new NetworkClient({
       welcome:c=>{this.seat=c.seat;this.busy=false;this.connected=true;this.screen=c.matched?'matching':'room';this.lastEvent=-1;this.renderScreen();},
       matching:()=>{this.busy=false;this.connected=true;this.status='正在寻找同样在匹配的球友…';this.screen='matching';this.renderScreen();},
       room:r=>{
         this.room=r;this.paused=r.paused;
+        if(!r.playing){
+          this.remote=null;this.drawState=null;this.playback.reset();this.screen='room';
+          if(this.local.state.surface!==r.surface){this.local.dispose();this.local=new Match([this.characterId,this.opponentId],Math.random,{surface:r.surface});}
+        }
         if(r.seats[this.seat]?.characterId)this.characterId=this.hiddenMaster.selectable(r.seats[this.seat]!.characterId);
         if(this.screen==='room'||this.screen==='result'||this.screen==='matching')this.renderScreen();
       },
       state:(s,paused)=>{
         this.remote=s;this.paused=paused;this.playback.push(s,performance.now());
         if(s.phase==='over'){
-          if(this.screen!=='result'){this.screen='result';this.renderScreen();}
+          if(this.screen!=='result'&&!this.lobbyReturn){this.screen='result';this.renderScreen();}
         }else if(this.screen!=='playing'){
-          this.screen='playing';this.connected=true;this.renderScreen();
+          this.lobbyReturn=false;this.screen='playing';this.connected=true;this.renderScreen();
         }
       },
       status:s=>{
@@ -230,7 +267,7 @@ export class App {
       terminal:s=>{
         this.net=null;this.remote=null;this.drawState=null;this.room=null;this.busy=false;this.paused=false;this.connected=true;
         this.screen='home';this.help=false;this.networkError=s;this.status='';this.predictedMove=null;
-        this.local.dispose();this.local=new Match();this.renderScreen();
+        this.local.dispose();this.local=new Match([this.characterId,this.opponentId],Math.random,{surface:this.surface});this.renderScreen();
       },
       latency:ms=>this.latency=ms
     });
@@ -241,11 +278,12 @@ export class App {
     <p class="subtitle">约一场，刚刚好。</p><p class="description">一片球场，一位朋友。<br/>把好球留给彼此，把胜负留在场上。</p>
     <div class="menu"><label class="name-label" for="nickname">你的昵称<input id="nickname" maxlength="16" value="${escape(this.name)}" autocomplete="nickname"/></label>
     <button class="primary lime match-button" data-action="match" ${this.busy?'disabled':''}>${this.busy?'连接中…':'快速匹配'} <span>⚡</span></button>
-    <button class="primary" data-action="create" ${this.busy?'disabled':''}>邀请好友 <span>↗</span></button>
+    <button class="primary" data-action="create" ${this.busy?'disabled':''}>单打开房 <span>↗</span></button>
     <button class="secondary" data-action="join">加入房间 <span>＋</span></button>
+    <button class="secondary doubles-button" data-action="create-doubles" ${this.busy?'disabled':''}>双打开房 · 2 对 2 <span>好友 / 电脑 ↗</span></button>
     <button class="character-choice" data-action="characters">球员：${getCharacter(this.characterId).name} · ${getCharacter(this.characterId).role} <span>更换 →</span></button>
     <button class="practice" data-action="practice">先热热身 · 单人练习 <span>→</span></button>${this.networkError?`<div class="error-inline" role="alert" style="grid-column:1/-1">${escape(this.networkError)}</div>`:''}</div></main>
-    <aside class="court-tag"><strong>01</strong><span>THE GARDEN COURT<br/>花园球场 · 硬地</span></aside>
+    <button class="court-tag" data-action="surfaces" aria-label="选择场地：${surfaceProfile(this.surface).name}"><strong>${this.surface==='hard'?'01':this.surface==='clay'?'02':'03'}</strong><span>CHOOSE YOUR COURT<br/>${surfaceProfile(this.surface).title} · ${surfaceProfile(this.surface).name} ›</span></button>
     <footer class="home-footer"><b>点按跑位 / 滑动击球 / 好友对战</b><span>NO PRESSURE. JUST PLAY.</span></footer></div>`;}
   private panel(content:string){return `<div class="overlay"><section class="panel">${content}</section></div>`;}
   private matchingPanel(){return this.panel(`<div class="panel-top"><span>QUICK MATCH</span>${close}</div><div class="matchmaking-mark"><i></i><i></i><i></i></div><h2>正在寻找对手…</h2><p>另一位正在匹配的球友出现后，会直接为你们开赛。</p><div class="matchmaking-player"><div class="avatar">${escape(this.name.slice(0,1))}</div><div><strong>${escape(this.name)}</strong><small>${getCharacter(this.characterId).name} · ${getCharacter(this.characterId).role}</small></div><span>匹配中</span></div><button class="secondary" data-action="back">取消匹配</button><div class="status-line">${escape(this.status)}</div>`);}
@@ -255,29 +293,35 @@ export class App {
     return this.panel(`<div class="panel-top"><span>FRIENDS ON COURT</span>${close}</div><h2>球场已为你留好。</h2><p>${shareable?'把邀请链接发给朋友，准备好就开打。':'当前地址只能在这台设备打开。手机请先打开电脑的 Wi-Fi 地址，再用房间号加入。'}</p>
       <div class="room-code" aria-label="房间号">${r.code}</div><div class="room-caption">私人球场 · 6 位房间号</div>
       <div class="copy-row"><button class="secondary" data-action="copy-code">复制房间号</button><button class="secondary" data-action="copy-link" ${shareable?'':'disabled'}>复制邀请链接 ↗</button></div>
-      <div class="seats">${r.seats.map((p,i)=>`<div class="seat"><div class="avatar ${i?'orange':''}">${p?escape(p.name.slice(0,1)):'＋'}</div><div class="seat-name">${p?escape(p.name):'等待朋友加入'}${i===this.seat?' · 你':''}${p?`<small>${getCharacter(p.characterId).name} · ${getCharacter(p.characterId).role}</small>`:''}</div><span class="seat-status">${p?p.connected?p.ready?'已准备':'已就位':'重连中':'空位'}</span></div>`).join('')}</div>
+      ${courtButton(r.surface??'hard',r.host!==this.seat)}${formatChoice(r,this.seat)}${roomSeats(r,this.seat)}
       <button class="secondary" data-action="characters">更换球员 · ${getCharacter(this.characterId).name}</button><button class="primary" data-action="ready" ${!both||me?.ready?'disabled':''}>${!both?'等朋友一起上场':me?.ready?'已准备，等待朋友…':'准备开赛 →'}</button>
-      <p class="small-note">7 分制 · 领先 2 分获胜 · 角色各有所长 · 全部免费</p><div class="status-line">${escape(this.status)}</div>`);
+      <p class="small-note">${r.format==='standard'?'标准一盘 · 六局领先两局，六平抢七':'抢七短赛 · 先到 7 分且领先 2 分'}${r.mode==='doubles'?'<br/>右区 / 左区接发固定 · 调整席位可选择队伍与顺序':''}</p><div class="status-line">${escape(this.status)}</div>`);
   }
-  private playing(){return `<div class="match-top"><button class="icon-button" data-action="quit" aria-label="退出比赛">‹</button><div class="match-label">GARDEN COURT <span class="connection" id="connection"></span></div><button class="icon-button" data-action="mute" aria-label="${this.audio.muted?'开启声音':'关闭声音'}">${this.audio.muted?'♪̸':'♪'}</button></div>
+  private playing(){const s=this.remote??this.local.state;return `<div class="match-top"><button class="icon-button" data-action="quit" aria-label="退出比赛">‹</button><div class="match-label">${surfaceProfile(s.surface).title} · ${surfaceProfile(s.surface).name} <span class="connection" id="connection"></span></div><button class="icon-button" data-action="mute" aria-label="${this.audio.muted?'开启声音':'关闭声音'}">${this.audio.muted?'♪̸':'♪'}</button></div>
     <div class="scoreboard"><div class="score-player"><div class="score-name" id="name-me"></div><div class="score-value" id="score-me">0</div>${staminaBars('me')}</div><div class="score-divider">vs</div><div class="score-player"><div class="score-name" id="name-them"></div><div class="score-value" id="score-them">0</div>${staminaBars('them')}</div></div>
-    <div class="rally-count" id="rally-count">FIRST TO 7</div><div id="point-slot"></div><div id="reconnect-slot"></div>
-    <div class="match-bottom"><div class="serve-notice" id="serve-notice" role="status" aria-live="polite" hidden><strong id="serve-title"></strong><span id="serve-detail"></span></div><div class="hint" id="rally-hint"><strong id="match-hint">斜向滑动，发进对角发球区</strong><small id="match-subhint">绿普通 · 蓝快速 · 橙强力 · 玫红暴击</small></div><div class="court-actions">${this.cameraChoice.button()}<button class="lob-button" id="lob-mode" data-action="lob" aria-label="选择下一拍高吊球" aria-pressed="false">高吊</button><button class="help-button" data-action="help" aria-label="查看操作帮助">?</button></div></div>`;}
-  private helpPanel(){return this.panel(`<div class="panel-top"><span>JUST THREE MOVES</span><button class="icon-button" data-action="close-help" aria-label="关闭帮助">×</button></div><h2>好球，从这一拍开始。</h2><p>${this.net?'线上对局仍在进行，请尽快回到球场。':'先记住三个动作，马上就能打出回合。'}</p>
+    <div class="rally-count" id="rally-count">FIRST TO 7</div><div class="team-status" id="team-status"></div><div id="point-slot"></div><div id="reconnect-slot"></div>
+    <div class="match-bottom"><div class="serve-notice" id="serve-notice" role="status" aria-live="polite" hidden><strong id="serve-title"></strong><span id="serve-detail"></span></div><div class="hint" id="rally-hint"><strong id="match-hint">斜向滑动，发进对角发球区</strong><small id="match-subhint">绿普通 · 蓝快速 · 橙强力 · 玫红暴击</small></div><div class="court-actions">${s.mode==='doubles'?'<span class="lob-button" title="双打保留全场视野，避免裁掉队友">双打全场</span>':this.cameraChoice.button()}<button class="lob-button" id="lob-mode" data-action="lob" aria-label="选择下一拍高吊球" aria-pressed="false">高吊</button><button class="help-button" data-action="help" aria-label="查看操作帮助">?</button></div></div>`;}
+  private helpPanel(){const state=this.remote??this.local.state;return this.panel(`<div class="panel-top"><span>JUST THREE MOVES</span><button class="icon-button" data-action="close-help" aria-label="关闭帮助">×</button></div><h2>好球，从这一拍开始。</h2><p>${this.net?'线上对局仍在进行，请尽快回到球场。':'先记住三个动作，马上就能打出回合。'}</p>
+    ${state.mode==='doubles'?'<p><strong>双打规则</strong>：队友分别固定右区和左区接发，不能凌空接发；接发完成后任一队友都可回击，但不能传球给队友。发球仍须落入原对角发球区，回合中双打边廊有效。抢七首人发一分，之后四人各发两分；每六分换边。标准赛每局换发，双方队友交替发球。双打固定全场镜头，避免裁掉队友。</p>':''}
     <div class="tutorial-steps"><div class="tutorial-step"><b>1</b><div><strong>轻点球场，移动到位</strong><span>发球前可以点按调整站位，发球者限当前半区底线后，开始抛球后锁定位置。普通球员优先接落地球，伊内丝主动上前截击。本分消耗按20%折算到总体力，一分最多扣总体力20%；分末按角色返还部分消耗，最多90%。下一分以恢复后的总体力作为本分初始值，不再回满100%；二发不重置。跑动和击球使用“本分×总体”的有效体力，跳接概率只看总体力。</span></div></div>
     <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>短而慢地滑动可放小球：显示“放小球”，落在网后约1～2米、低弹跳。普通及中慢速回球有落点辅助，接近边线时柔和收回，并保留底线余量；越快越用力，辅助越少，强力球和暴击球更容易出界。球场中央的小幅方向不改，边缘辅助会有意收敛角度，不再要求慢球与原始手势完全同角度。发球仍需主动斜划进对角发球区，不自动纠正发球方向。手指按住再划是上旋，右侧按钮可选高吊；近远景不改变规则。跑动时可提前滑动，保存最后一次方向和球质。</span></div></div>
     <div class="tutorial-step"><b>3</b><div><strong>认颜色，控制速度与深度</strong><span>绿普通、蓝快速、橙强力、玫红暴击、青绿上旋、金色高压、冰白切削、紫色高吊。长按蓄力上旋，下划反向切削，右侧按钮选择高吊。不必先滑动：预测普通跑动接不到、侧扑来得及时，角色会自动尝试飞身。总体力满时90%，1/3及以下10%，中间平滑变化；每记来球只抽一次。已提前滑动就直接回球；未滑动则在球拍真正够到球时，双方人物和球一起定格最多0.5秒，显示“滑动回击”。窗口内滑动立即击球，超时球继续原轨迹，不自动击中或倒带。救球保留减速和深浅波动；切削落地后仍有侧偏，接发仍须落地，出界或二跳后不能救。</span></div></div></div>
     <p>右下角“近景 / 远景”切换镜头距离；瞄准和触球定格期间不切镜头。侧扑最多横移3.5米，但受速度、加速与来球时间限制，来不及就不会瞬移补接。起跳到伸拍按距离使用约0.24～0.72秒；较短且较高的救球先单脚落地再跟步，长距离或低位救球保留撑地恢复。恢复锁定时长不变。定格期间双方都不能移动或恢复体力；救球者恢复站稳前不能再次击球。</p>
-    <p id="performance-stats" class="small-note"></p><p id="performance-sync" class="small-note"></p><button class="primary" data-action="close-help">知道了，上场 →</button><p class="small-note">先到 7 分且领先 2 分获胜 · 发球限时 12 秒</p>`);}
+    <p id="performance-stats" class="small-note"></p><p id="performance-sync" class="small-note"></p><button class="primary" data-action="close-help">知道了，上场 →</button><p class="small-note">${state.scoring?.format==='standard'?'标准一盘 · 六局领先两局，六平抢七':'先到 7 分且领先 2 分获胜'} · 发球限时 12 秒</p>`);}
   private result(){
-    const s=this.remote??this.local.state,won=s.winner===this.seat;
-    const me=this.room?.seats[this.seat]?.name??this.name,them=this.room?.seats[other(this.seat)]?.name??'练习搭档';
+    const s=this.remote??this.local.state,won=s.winner===teamOf(this.seat);
+    const me=this.teamName(teamOf(this.seat)),them=this.teamName(other(this.seat));
     const ready=this.room?.seats[this.seat]?.ready;
-    const winner=s.winner===null?null:s.players[s.winner],winnerName=s.winner===this.seat?me:them;
-    return `<div class="victory-overlay"><div class="victory-title"><span>MATCH WINNER</span><h2>${escape(winnerName)} · ${winner?getCharacter(winner.characterId).name:''}</h2><p>${won?'你赢了！':'获胜方庆祝中'} · 持拍庆祝</p></div><section class="panel victory-panel"><div class="panel-top"><span>THAT WAS A GOOD RALLY</span>${close}</div><h2>${won?'好球，这场属于你。':'再来一场，找回手感。'}</h2><p>${escape(s.event)}</p>
-      <div class="result-score">${s.score[this.seat]} <span style="color:#a4af98">:</span> ${s.score[other(this.seat)]}</div><div class="result-names">${escape(me)} &nbsp; / &nbsp; ${escape(them)}</div>
+    const winner=s.winner===null?null:s.players[s.winner],winnerName=won?me:them;
+    return `<div class="victory-overlay"><div class="victory-title"><span>${s.mode==='doubles'?'WINNING TEAM':'MATCH WINNER'}</span><h2>${escape(winnerName)}${s.mode==='doubles'?'':` · ${winner?getCharacter(winner.characterId).name:''}`}</h2><p>${won?'你赢了！':'获胜方庆祝中'} · 持拍庆祝</p></div><section class="panel victory-panel"><div class="panel-top"><span>THAT WAS A GOOD RALLY</span>${close}</div><h2>${won?'好球，这场属于你。':'再来一场，找回手感。'}</h2><p>${escape(s.event)}</p>
+      <div class="result-score">${(s.scoring?.format==='standard'?s.scoring.games:s.score)[teamOf(this.seat)]} <span style="color:#a4af98">:</span> ${(s.scoring?.format==='standard'?s.scoring.games:s.score)[other(this.seat)]}</div><div class="result-names">${escape(me)} &nbsp; / &nbsp; ${escape(them)}</div>
       <div class="result-stats"><div><strong>${s.maxRally}</strong>最长回合</div><div><strong>${Math.floor(s.time/60)}:${String(Math.floor(s.time%60)).padStart(2,'0')}</strong>对局时间</div></div>
-      <button class="primary" data-action="rematch" ${ready?'disabled':''}>${ready?'已准备，等待朋友…':'再来一场 ↗'}</button><button class="secondary" data-action="back">回到首页</button></section></div>`;
+      <button class="primary" data-action="rematch" ${ready?'disabled':''}>${ready?'已准备，等待朋友…':'再来一场 ↗'}</button>${this.net?'<button class="secondary" data-action="return-lobby">返回房间 · 调整队伍 / 场地</button>':''}<button class="secondary" data-action="back">回到首页</button></section></div>`;
+  }
+  private teamName(team:0|1){
+    const s=this.remote??this.local.state;
+    if(s.mode==='doubles')return (this.room?.seats??[]).flatMap((p,i)=>p&&i%2===team?[p.name]:[]).join(' / ')||`${team===0?'A':'B'} 队`;
+    return this.room?.seats[team]?.name??(team===0?this.name:'练习搭档');
   }
   private renderScreen(){
     this.view.setMode(this.screen==='result'?'result':this.screen==='playing'?'match':'home',this.seat);
@@ -290,6 +334,9 @@ export class App {
     else if(this.screen==='setup')this.ui.innerHTML=this.panel(`<div class="panel-top"><span>TAKE A FEW PRACTICE SWINGS</span>${close}</div><div class="panel-heading">Warm up.</div><h2>先和搭档热热身。</h2><p>同一片球场，同样的操作。找找击球节奏，再叫上朋友。</p><div class="character-matchup"><button class="secondary" data-action="characters">你 · ${getCharacter(this.characterId).name}</button><button class="secondary" data-action="opponent-characters">搭档 · ${getCharacter(this.opponentId).name}</button></div><div class="select-row"><button class="${this.difficulty==='relaxed'?'selected':''}" data-action="relaxed">轻松练习</button><button class="${this.difficulty==='standard'?'selected':''}" data-action="standard">认真对打</button></div><button class="primary" data-action="start-practice">开始练习 →</button><p class="small-note">点按移动 · 滑动击球 · 7 分制</p>`);
     else if(this.screen==='playing'){this.ui.innerHTML=this.playing()+(this.help?this.helpPanel():'');this.lastPhase='';this.updateHud();}
     else this.ui.innerHTML=this.result();
+    if(this.screen==='setup')this.ui.querySelector('[data-action="start-practice"]')?.insertAdjacentHTML('beforebegin',courtButton(this.surface));
+    if(this.screen==='matching')this.ui.querySelector('.matchmaking-player')?.insertAdjacentHTML('afterend',courtButton(this.surface,true));
+    if(this.surfaceOpen)this.ui.insertAdjacentHTML('beforeend',`<div class="overlay surface-overlay" role="dialog" aria-modal="true" aria-label="选择球场"><section class="panel"><div class="panel-top"><span>CHOOSE YOUR COURT</span><button class="icon-button" data-action="close-surfaces" aria-label="关闭场地选择">×</button></div><h2>换一片球场，换一种节奏。</h2><p>场地改变反弹、旋转与跑动制动；开赛后锁定。</p><div class="surface-options">${surfaceChoices(this.room?.surface??this.surface)}</div><button class="secondary" data-action="close-surfaces">返回</button></section></div>`);
   }
   private updateHud(){
     if(this.screen!=='playing')return;
@@ -301,9 +348,9 @@ export class App {
     serveNotice.classList.toggle('your-serve',s.server===me);
     text('serve-title',s.server===me?(s.fault?'二发 · 轮到你发球':'轮到你发球'):'对手发球');
     text('serve-detail',s.server===me?'点按底线后调整站位，滑动发进对角区':'可点按调整接发位置，球发出后提前滑动');
-    text('name-me',`${s.server===me?'● ':''}${this.room?.seats[me]?.name??this.name} · 你`);
-    text('name-them',`${s.server===them?'● ':''}${this.room?.seats[them]?.name??'练习搭档'}`);
-    text('score-me',String(s.score[me]));text('score-them',String(s.score[them]));
+    text('name-me',`${teamOf(s.server)===teamOf(me)?'● ':''}${this.teamName(teamOf(me))}`);
+    text('name-them',`${teamOf(s.server)===them?'● ':''}${this.teamName(them)}`);
+    text('score-me',pointLabel(s.score,teamOf(me),s.scoring));text('score-them',pointLabel(s.score,them,s.scoring));
     document.getElementById('stamina-me')!.style.width=`${s.players[me].stamina*100}%`;
     document.getElementById('stamina-them')!.style.width=`${s.players[them].stamina*100}%`;
     for(const [label,seat] of [['me',me],['them',them]] as const){
@@ -331,11 +378,28 @@ export class App {
     }
     const phaseKey=`${s.phase}-${s.eventId}`;
     if(this.lastPhase!==phaseKey){
-      this.lastPhase=phaseKey;document.getElementById('point-slot')!.innerHTML=s.phase==='point'?`<div class="point-banner"><strong>${s.fault?'Second serve':s.lastPoint===me?'Your point':'Good try'}</strong><span>${escape(s.event)}</span></div>`:'';
+      this.lastPhase=phaseKey;document.getElementById('point-slot')!.innerHTML=s.phase==='point'?`<div class="point-banner"><strong>${s.event.includes('擦网')?'Let':s.fault?'Second serve':s.lastPoint===teamOf(me)?'Your point':'Good try'}</strong><span>${escape(s.event)}</span></div>`:'';
     }
     const reconnect=document.getElementById('reconnect-slot')!;
     const warning=this.paused?'朋友暂时断线 · 比赛已暂停，等待重连':!this.connected?'网络暂时断开 · 正在恢复连接':'';
     if(reconnect.textContent!==warning)reconnect.innerHTML=warning?`<div class="reconnect-banner">${warning}</div>`:'';
+    if(s.scoring?.format==='standard')text('rally-count',`局 ${s.scoring.games[teamOf(me)]} : ${s.scoring.games[them]} · ${s.scoring.tiebreak?'抢七':`${s.rally} 拍`}`);
+    if(s.mode==='doubles'){
+      const mate=partner(me),mateName=this.room?.seats[mate]?.name??'队友',serverName=this.room?.seats[s.server]?.name??'球员';
+      const theirMate=partner(them),theirMateName=this.room?.seats[theirMate]?.name??'对手';
+      text('team-status',`队友 ${mateName} ${Math.round(s.players[mate].stamina*100)}% · 对方 ${theirMateName} ${Math.round(s.players[theirMate].stamina*100)}%`);
+      if(s.phase==='serve'){
+        const receiver=s.receiver===me?'你':this.room?.seats[s.receiver??them]?.name??'对手';
+        text('serve-title',s.server===me?(s.fault?'二发 · 轮到你':'轮到你发球'):`${serverName} 发球`);
+        text('serve-detail',s.server===me?'发进对角区；队友守网前':`${receiver} 接发 · 队友协防，不能抢接发球`);
+      }else if(s.phase==='point'){
+        text('match-hint',`${s.event} · ${s.lastPoint===teamOf(me)?'我方得分':'准备下一分'}`);
+      }else if(s.rescueWindow){
+        text('match-hint',rescueHint(s,me)!);
+      }else if(teamOf(s.ball.hitter)===teamOf(me)&&s.ball.hitter!==me){
+        text('match-hint','队友已回球 · 移动补位，覆盖另一半场');
+      }
+    }
   }
   private frame=(now:number)=>{
     const frameMs=now-this.lastFrame,dt=Math.min(frameMs/1000,.08);this.lastFrame=now;
@@ -352,7 +416,7 @@ export class App {
         }
       }
       if(this.local.state.phase==='over'&&this.screen==='playing'){this.screen='result';this.renderScreen();}
-      else if(this.local.state.phase==='over'&&!active){this.local.dispose();this.local=new Match();}
+      else if(this.local.state.phase==='over'&&!active){this.local.dispose();this.local=new Match([this.characterId,this.opponentId],Math.random,{surface:this.room?.surface??this.surface});}
     }
     let state=this.remote??this.local.state;
     if(this.remote){

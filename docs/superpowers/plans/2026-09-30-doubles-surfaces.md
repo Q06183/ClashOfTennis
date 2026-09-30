@@ -79,4 +79,14 @@ Files: `tests/doubles-network.test.ts`, scoped browser scripts if required, `art
 ## Current execution
 
 - Baseline readback: clean code at `210a959`, 504/504 tests, production build passed.
-- User design approval received. Task 1 next.
+- User design approval received; implementation executed inline without subagents.
+- Tasks 1–5 implemented. Each feature's initial failing regression is retained in
+  `artifacts/doubles-surfaces-2026-09-30/`; final full suite 547/547, production build and diff check pass.
+- Task 6: six real-WS combinations completed full matches/rematches, including
+  four-client standard set; natural AI surface matrix completed. Four browser
+  clients joined/started, with third/fourth lobby crash caught, fixed, regression-tested
+  and rechecked visually. 320×568, 390×844, 844×390 layouts inspected.
+- Original unchecked task bullets above retain the planned procedure; the authoritative
+  requirement/evidence ledger is `docs/MASTER_CHECKLIST.md` plus
+  `docs/doubles-surfaces-research-2026-09-30.md`.
+- Preview on 7482; preserve worktree. No merge, push or replacement of 7470.

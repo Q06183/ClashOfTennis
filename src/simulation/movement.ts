@@ -6,7 +6,7 @@ import {clamp,side,type PlayerState,type Seat} from './types.js';
 export function movePlayer(p:PlayerState,seat:Seat,dt:number){
  const athletic=characterEffects(p.characterId).movement;
  const surface=surfaceProfile(p.surface);
- const dx=p.tx-p.x,dz=p.tz-p.z,distance=Math.hypot(dx,dz),sign=side(seat);
+ const dx=p.tx-p.x,dz=p.tz-p.z,distance=Math.hypot(dx,dz),sign=side(seat,p);
  const nx=distance>.001?dx/distance:0,nz=distance>.001?dz/distance:0;
  const limit=Math.hypot(nx*5.98,nz*(nz*sign>0?4.945:6.67))*(.75+.25*effectiveStamina(p))*athletic;
  const speed=Math.min(limit,Math.sqrt(2*16.1*surface.braking*Math.max(0,distance-.015)));

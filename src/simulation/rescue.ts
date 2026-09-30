@@ -53,7 +53,7 @@ function forecastRescueBall(b:BallState,seat:Seat,time:number,landing=b.bounces=
  const g=flightGravity(b);
  if(landing?.hitNet)return null;
  if(landing&&time>landing.duration){
-  if(!isInCourt(landing.landing.x,landing.landing.z,seat))return null;
+  if(!isInCourt(landing.landing.x,landing.landing.z,seat,b.mode,b.ends))return null;
   const dt=time-landing.duration;
   const v=bounceVelocity({x:b.vx,y:b.vy-g*landing.duration,z:b.vz},b);
   const spin=(b.topspin??0)*.55,y=.12+v.y*dt-flightGravity({topspin:spin})*dt*dt/2;
@@ -69,7 +69,7 @@ function forecastRescueBall(b:BallState,seat:Seat,time:number,landing=b.bounces=
  * necessary. Never forecast through a second bounce or award predicted contact;
  * actual authority physics and arm reach must still meet before a hold/hit. */
 export function rescueTarget(b:BallState,p:PlayerState,seat:Seat,serviceFlight=false){
- const sign=side(seat);
+ const sign=side(seat,p);
  const landing=b.bounces===0?predictFlight(b):null;
  if(landing?.hitNet)return null;
  for(let frame=0;frame<=37;frame++){
@@ -106,7 +106,7 @@ export function rescueTarget(b:BallState,p:PlayerState,seat:Seat,serviceFlight=f
 /** Rehearse at most 240ms of NORMAL ground movement, then a lateral-only
  * rescue. This is advisory: next frame must revalidate from actual state. */
 export function rescueApproach(b:BallState,p:PlayerState,seat:Seat,serviceFlight=false){
- const runner={...p},sign=side(seat);
+ const runner={...p},sign=side(seat,p);
  const ahead=forecastRescueBall(b,seat,.5);if(!ahead)return null;
  const x=clamp(ahead.x-sign*handedness(p.characterId)*.45,-6.4,6.4);
  const z=sign*clamp(ahead.z*sign+.35,.9,16.5);
@@ -138,7 +138,7 @@ export function canDelayRescue(b:BallState,p:PlayerState,seat:Seat,target:NonNul
  * as the live player, without mutating authoritative state or drawing RNG. */
 export function hasNormalReturnWindow(b:BallState,p:PlayerState,seat:Seat,options:{time:number;manualUntil:number;serviceFlight:boolean;slice:boolean;planner?:ReturnPlanner;flight?:number;airRequested?:boolean},minimumWindow=.10){
  if(canWaitForBounce(b,p,seat,minimumWindow))return true;
- const runner={...p},ball={...b},sign=side(seat),dt=1/120,G=flightGravity(b);
+ const runner={...p},ball={...b},sign=side(seat,p),dt=1/120,G=flightGravity(b);
  const planner=options.planner?.clone()??new ReturnPlanner();
  let contactTime=0;
  for(let step=0;step<=72;step++){
@@ -193,7 +193,7 @@ export function moveRescue(p:PlayerState,time:number,dt:number){
 export function canReachRescue(b:BallState,p:PlayerState,seat:Seat,time:number){
  // Allow the leap to become visible before contact; don't hit at take-off.
  if(p.rescue&&(p.rescue.missed||rescueAge(p,time)<(p.rescue.natural ? .198 : .10)||rescueAge(p,time)>=RESCUE.landAt))return false;
- const sign=side(seat),hand=handedness(p.characterId);
+ const sign=side(seat,p),hand=handedness(p.characterId);
  // The renderer solves in canonical right-hand space, rotates the complete
  // body about the hips, then mirrors it. Apply the same inverse here.
  const canonical=hand===1?p:{...p,x:-p.x,rescue:p.rescue?{...p.rescue,fromX:-p.rescue.fromX,toX:-p.rescue.toX}:undefined};

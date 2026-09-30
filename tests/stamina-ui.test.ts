@@ -23,7 +23,7 @@ test('both seats have distinct point and total bars and explicit recovery-budget
 });
 test('actual scoreboard renders four independent bar IDs for the two players',()=>{
  const cameraChoice=Object.assign(Object.create(CameraChoice.prototype),{distance:'near'});
- const html=(App.prototype as any).playing.call({audio:{muted:false},cameraChoice});
+ const html=(App.prototype as any).playing.call({audio:{muted:false},cameraChoice,local:{state:{surface:'hard'}}});
  for(const side of ['me','them'])for(const id of [`stamina-${side}`,`total-stamina-${side}`]){
   assert.equal((html.match(new RegExp(`id="${id}"`,'g'))??[]).length,1,id);
  }

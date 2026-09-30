@@ -3,7 +3,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Vector3} from 'three';
 import {Athlete} from '../src/render/player.js';
-import type {PlayerState,Seat} from '../src/simulation/types.js';
+import {side,type PlayerState,type Seat} from '../src/simulation/types.js';
 test('racket sweet spot meets the authoritative ball contact at impact for both players',()=>{
   for(const seat of [0,1] as Seat[])for(const stroke of ['forehand','backhand','serve'] as const){
     const sign=seat===0?1:-1;
@@ -19,12 +19,14 @@ test('natural AI rally contacts remain within racket reach, including wide low b
   const {initPhysics}=await import('../src/simulation/physics.js');
   const {Match}=await import('../src/simulation/match.js');
   const {driveAI}=await import('../src/simulation/ai.js');
-  await initPhysics();const match=new Match();const athletes=[new Athlete(0),new Athlete(1)];let contacts=0;
+  await initPhysics();const match=new Match(['lin','lin'],()=>1);const athletes=[new Athlete(0),new Athlete(1)];let contacts=0;
   for(let i=0;i<60*480&&match.state.phase!=='over';i++){
     const rally=match.state.rally;driveAI(match,0,'standard');driveAI(match,1,'standard');match.step(1/60);
     if(match.state.rally<=rally)continue;
     const seat=match.state.ball.hitter,p=match.state.players[seat];if(!p.contact)continue;
-    const a=athletes[seat];a.update({...p,swing:p.stroke==='serve'?SERVE_RECOVERY:.44},match.state.time);a.root.updateMatrixWorld(true);
+    // Athlete encodes the physical end, while the network seat is stable
+    // across changeovers. Use the same mapping as CourtView.
+    const a=athletes[side(seat,match.state)>0?0:1];a.update({...p,swing:p.stroke==='serve'?SERVE_RECOVERY:.44},match.state.time);a.root.updateMatrixWorld(true);
     const actual=a.root.getObjectByName('racket-sweet-spot')!.getWorldPosition(new Vector3());
     assert.ok(actual.distanceTo(new Vector3(p.contact.x,p.contact.y,p.contact.z))<.09,`natural contact: ${JSON.stringify(p)}`);contacts++;
   }

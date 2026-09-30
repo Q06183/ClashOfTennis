@@ -100,10 +100,10 @@ test('frozen view keeps both rigs, camera, and ball rotation fixed and labels th
   frameMatch(camera,390,844,0,0,10,undefined,'near');
   const projection=[...camera.projectionMatrix.elements],viewMatrix=[...camera.matrixWorld.elements];
   const view=Object.assign(Object.create(CourtView.prototype),{
-   mode:'match',seat:0,size:{w:390,h:844},camera,scene:{},setCharacter(){},quality:{level:'balanced'},
+   mode:'match',seat:0,surface:'hard',ends:0,doubles:false,size:{w:390,h:844},camera,scene:{},setCharacter(){},quality:{level:'balanced'},
    athletes:[0,1].map(i=>({root:new Object3D(),update(){updates[i]++;}})),
    contactShadows:[new Object3D(),new Object3D()],ball:new Object3D(),shadow:new Object3D(),target:new Object3D(),marker:new Object3D(),
-   trail:[Object.assign(new Object3D(),{material:{color:{setHex(){}}}})],flight:{update(){}},renderer:{render(){}},
+   trail:[Object.assign(new Object3D(),{material:{color:{setHex(){}}}})],flight:{update(){}},renderer:{render(){},domElement:{dataset:{}}},
   }) as any;
   for(let i=0;i<30;i++)view.render(state,1/60,state);
   assert.deepEqual(updates,[1,1]);assert.equal(view.ball.rotation.z,0);

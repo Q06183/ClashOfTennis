@@ -6,7 +6,7 @@ import {canReachContact} from './athlete.js';
 const R=.12;
 /** Predict the rising waist-height contact, rather than chasing the bounce. */
 export function reception(b:BallState,p:PlayerState,seat:Seat){
-  const sign=side(seat),G=flightGravity(b);
+  const sign=side(seat,p),G=flightGravity(b);
   let t=0,point:Vec;
   if(b.bounces===0){
     const drop=(b.vy+Math.sqrt(b.vy*b.vy+2*G*Math.max(0,b.y-R)))/G;

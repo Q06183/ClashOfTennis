@@ -13,7 +13,7 @@ test('resumed Wuming without an unlock marker never becomes a locked local pract
  NetworkClient.prototype.connect=function(){callbacks=(this as any).callbacks;};
  const app=Object.assign(Object.create(App.prototype),{
   characterId:'lin',opponentId:'lin',hiddenMaster:new HiddenCharacterUnlock({getItem:()=>null,setItem(){}}),
-  playback:{reset(){},push(){}},net:null,screen:'home',seat:0,renderScreen(){},toast(){},local:{dispose(){}},
+  playback:{reset(){},push(){}},net:null,screen:'home',seat:0,renderScreen(){},toast(){},local:{state:{},dispose(){}},
  }) as any;
  try{
   app.connect({type:'resume'});

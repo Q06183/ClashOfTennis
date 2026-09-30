@@ -1,5 +1,32 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import {SURFACES,surfaceProfile,type SurfaceId} from '../simulation/surfaces.js';
+/** Mutate only court materials; stands, models and lighting remain in place. */
+export function setCourtSurface(scene:T.Scene,id:SurfaceId){
+ const profile=surfaceProfile(id);
+ const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;
+ const ctx=canvas.getContext('2d')!;
+ ctx.fillStyle='#fff';ctx.fillRect(0,0,128,128);
+ if(id==='grass'){
+   ctx.fillStyle='#dbdfd4';ctx.fillRect(0,0,128,64);
+   ctx.fillStyle='#cbd3c4';
+   for(let i=0;i<450;i++)ctx.fillRect((i*37)%128,(i*53)%128,1,3);
+ }else if(id==='clay'){
+   for(let i=0;i<1400;i++){ctx.fillStyle=i%3===0?'#cebdac':'#e0d2c4';ctx.fillRect((i*37+i*i)%128,(i*53+Math.floor(i/7))%128,1,1);}
+ }
+ const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;
+ texture.wrapS=texture.wrapT=T.RepeatWrapping;texture.repeat.set(1/3,1/3);
+ const old=new Set<T.Texture>();
+ scene.traverse(object=>{
+   if(!(object instanceof T.Mesh)||typeof object.userData.courtLayer!=='number')return;
+   const material=object.material as T.MeshStandardMaterial;
+   if(material.map)old.add(material.map);
+   material.color.setHex(profile.colors[object.userData.courtLayer]);
+   material.map=id==='hard'?null:texture;material.needsUpdate=true;
+ });
+ for(const map of old)map.dispose();
+ if(id==='hard')texture.dispose();
+}
 export function makeCourt(scene:T.Scene){
   const ends=[new T.Group(),new T.Group()];ends.forEach((g,i)=>{g.name=`stadium-end-${i}`;scene.add(g);});
   let end=-1;
@@ -58,6 +85,13 @@ export function makeCourt(scene:T.Scene){
   for(const {color,end,parts} of batches.values()){
     const geometry=mergeGeometries(parts);for(const p of parts)p.dispose();
     const mesh=new T.Mesh(geometry,new T.MeshStandardMaterial({color,roughness:1}));mesh.receiveShadow=true;(end<0?scene:ends[end]).add(mesh);
+    const layer=SURFACES.hard.colors.indexOf(color);
+    if(end<0&&layer>=0){
+      mesh.userData.courtLayer=layer;mesh.name=`court-surface-${layer}`;
+      const position=geometry.attributes.position,uv=geometry.attributes.uv;
+      for(let i=0;i<position.count;i++)uv.setXY(i,position.getX(i),position.getZ(i));
+      uv.needsUpdate=true;
+    }
   }
   const treeMat=new T.MeshStandardMaterial({color:0x528565,roughness:1});
   for(let i=0;i<24;i++){
