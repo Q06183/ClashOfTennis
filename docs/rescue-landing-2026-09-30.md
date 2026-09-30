@@ -52,7 +52,7 @@
 基线 504/504 通过；没有修改测试预期或模型。新测试的蒙皮接地检查逐顶点转换到世界空间，
 避免旋转后的包围盒角点比真实皮肤更低造成假阳性。
 
-## 交付与隔离边界
+## 初始交付与隔离边界（下方追加发布记录已覆盖）
 
 - 独立 worktree：`/Users/bytedance/.codex/worktrees/rescue-landing/TennisClash`。
 - 分支 `codex/rescue-landing`，基于 `210a959a003b799789d9e4240590307abf536159`。
@@ -65,3 +65,37 @@
 复现回放：在 worktree 执行 `node --import tsx scripts/verify-rescue-landing.ts`，
 然后 `npx vite --host 127.0.0.1 --port 5196 --strictPort` 打开上述回放页面。
 候选游戏使用 `npm run build` 后 `PORT=7481 HOST=127.0.0.1 npm start`。
+
+## 2026-09-30 用户授权合并并更新 7470
+
+- 主目录原本仅有 `codex/friends-tennis`，没有本地 `main`。保留原主线的全部已有提交，
+  从它建立本地 `main`，快进合入 `ab88aaf`；原主开发分支同步同一修复。
+  未合入其他双打/场地 worktree，未推送远端。远端刷新因 SSH 主机密钥校验失败，
+  不能把本次本地合并描述为 GitHub main 已更新。
+- 修复分支重新运行 **516/516** 与生产构建；合并后的主目录再次运行
+  **516/516**、TypeScript 检查和 `git diff --check`，均通过。
+- 发布前主服务 `/health` 为零房间。2026-09-30 16:32:39（上海时间）旧 PID
+  `14488` 正常退出，新 PID `33645` 从 `/Users/bytedance/Desktop/TennisClash`
+  启动，监听 `0.0.0.0:7470`；不使用临时 worktree 作为正式服务源码。
+- 发布经过验证的 `index-CTWtKPT8.js` 与对应 gzip/Brotli，HTML 最后切换，
+  旧 bundle 保留。原哈希文件的压缩产物因压缩器版本不同而出现二进制差异时，
+  核对解压内容相同后保留原文件，不覆盖已有 immutable URL 的字节。
+  十个正式人物 GLB 原始字节与线上下载哈希均未改变。
+- 真实 7470 双客户端正常发球触发救球，验证新的 `tx=toX`、按距离选择恢复类型、
+  恢复时刻、落点保持、补滑成功与超时、双方同序号快照一致。
+  样例落点和解除后位置均为 x=-1.209332957m，成功回击后继续观察未跑回原位；
+  没有注入服务器状态或强制线上概率。
+- 浏览器通过局域网地址加载新入口，单人练习/正式模型/新帮助说明正常，
+  error 日志为空。真人双手机连续对局仍需用户复验。
+
+发布证据在主目录 `artifacts/rescue-landing-7470-2026-09-30/`：
+`publication.json`、`merged-tests.log`、`merged-typecheck.log`、
+`asset-readback.json`、`live/live-verification.json`、`browser.json`、
+`browser-7470.png`、`server.log`。
+
+回滚保留分支 `codex/backup-before-rescue-landing-20260930`（`210a959`），
+以及上述目录的 `source-before.tar` 和完整 `dist-before/`。
+回滚也必须先检查活跃房间，不能直接重启打断用户对局。
+独立修复 worktree 仍承载回放预览，未删除或归档。
+
+现在试玩：<http://100.81.1.29:7470/>。刷新旧页面以加载新 bundle。
