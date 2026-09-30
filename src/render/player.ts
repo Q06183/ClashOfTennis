@@ -290,7 +290,8 @@ export class Athlete {
         rescue:p.rescue?{...p.rescue,fromX:-p.rescue.fromX,toX:-p.rescue.toX,contact:point(p.rescue.contact)}:undefined};
     }
     const rescue=rescuePose(p,time);
-    const stepOut=p.rescue?.recovery==='step-out';
+    const stepOut=p.rescue?.short||p.rescue?.recovery==='step-out';
+    const shortSettle=p.rescue?.short?rescue.recovery:0;
     const yaw=this.seat===0?Math.PI:0;
     this.root.quaternion.setFromAxisAngle(new T.Vector3(0,1,0),yaw);
     if(p.rescue){
@@ -332,9 +333,9 @@ export class Athlete {
     const lower=action*(p.preparation?.stroke==='serve'?1:speedBlend);
     const contactWeight=p.rescue?T.MathUtils.smoothstep(rescueAge(p,time),0,.10):p.swing>0?Math.min(1,p.swing/.15):p.preparation?T.MathUtils.smoothstep(p.preparation.progress,.8,1):0;
     const contactCrouching=contactCrouch(contact.y)*contactWeight*(p.rescue?1-rescue.recovery:1);
-    const hipDrop=p.rescue?0:
+    const hipDrop=p.rescue ? .02*shortSettle :
       T.MathUtils.lerp(gait.hipDrop,body.hipDrop-body.lift,action)+contactCrouching;
-    const hipTurn=T.MathUtils.lerp(gait.turn,body.hipTurn,lower);
+    const hipTurn=T.MathUtils.lerp(gait.turn,body.hipTurn,lower)*(1-shortSettle);
     this.hips.position.y=this.hipHeight-hipDrop;this.hips.rotation.y=hipTurn;
     for(let i=0;i<2;i++){
       this.legs[i].position.set((i?-1:1)*.15,this.hipHeight-hipDrop,0).applyAxisAngle(new T.Vector3(0,1,0),hipTurn);
@@ -348,6 +349,7 @@ export class Athlete {
         const recoveryFoot=groundTarget(i?-.22:.22,.105+trailing,(stepOut?(i?-.14:.17):-.68)*(1-rescue.recovery));
         foot.lerp(recoveryFoot,settle);
       }
+      if(shortSettle)foot.lerp(groundTarget(i?-.19:.19,.105,0),shortSettle);
       this.legTo(i,foot,T.MathUtils.lerp(hipTurn*.6,body.footYaw[i],lower),p.rescue?0:gait.heelRoll[i]*(1-lower));
     }
     this.torso.position.y=-hipDrop;
@@ -389,7 +391,8 @@ export class Athlete {
       const blend=T.MathUtils.smoothstep(rescueAge(p,time),.23,.32)*(1-rescue.recovery);
       pose.shaft.lerp(reach,blend).normalize();
     }
-    this.racketTo(pose.tip,pose.shaft,pose.twoHands,0,body.faceRoll*action,p.rescue?new T.Vector3(-.3,0,-1):action?body.elbow:undefined);
+    const rescuePole=p.rescue?new T.Vector3(-.3,0,-1).lerp(new T.Vector3(-.7,-1,.35),shortSettle):undefined;
+    this.racketTo(pose.tip,pose.shaft,pose.twoHands,0,body.faceRoll*action,p.rescue?rescuePole:action?body.elbow:undefined);
     if((active||running>0)&&!pose.twoHands){
       const free=body.freeHand.clone();
       if(jump){

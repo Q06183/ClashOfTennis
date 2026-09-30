@@ -10,7 +10,7 @@ export function rescueStroke(p:PlayerState,time:number,contact:Vector3){
  const kind:RescueStroke=r.stroke??'forehand',bh=r.backhand??kind==='backhand';
  const load=1-MathUtils.smoothstep(age,0,.105);
  const follow=r.hit?MathUtils.smoothstep(age,.23,.53):0;
- const recover=MathUtils.smoothstep(age,RESCUE.riseAt,RESCUE.duration);
+ const recover=r.short?rescuePose(p,time).recovery:MathUtils.smoothstep(age,RESCUE.riseAt,RESCUE.duration);
  const landing=rescuePose(p,time).landing;
  const reachSide=bh?1:-1;
  const windup=kind==='smash'?new Vector3(-.35,-.55,-.45):
@@ -25,6 +25,7 @@ export function rescueStroke(p:PlayerState,time:number,contact:Vector3){
  const shaft=kind==='smash'?new Vector3(-.1,.97,.2):
   kind==='volley'?new Vector3(reachSide*.45,.3,.72):
   kind==='backhand'?new Vector3(.78,.30,.35):new Vector3(-.8,.15,.3);
+ if(r.short)shaft.normalize().lerp(new Vector3(-.15,.85,.35).normalize(),recover).normalize();
  const turn=(bh?.38:-.10)*(1-recover)+
   (kind==='smash'?-.55:kind==='backhand'?.5:-.45)*load+
   (kind==='forehand'?.38:kind==='backhand'?-.20:kind==='smash'?.22:0)*follow*(1-recover);
@@ -38,8 +39,8 @@ export function rescueStroke(p:PlayerState,time:number,contact:Vector3){
   kind==='volley'?[new Vector3(.23,.10+flight*.06,.12),new Vector3(-.23,.10+flight*.09,-.12)]:
   kind==='backhand'?[new Vector3(.25,.10+flight*.09,-.14),new Vector3(-.20,.10+flight*.18,.17)]:
   [new Vector3(.22,.10+flight*.17,.13),new Vector3(-.25,.10+flight*.08,-.17)];
- feet.forEach((foot,i)=>foot.lerp(new Vector3(i?-.22:.22,.105,0),recover));
- return {tip,shaft:shaft.normalize(),turn,knee:.38,twoHands:false,toss:0,
+ feet.forEach((foot,i)=>foot.lerp(new Vector3((i?-1:1)*(r.short?.19:.22),.105,0),recover));
+ return {tip,shaft:shaft.normalize(),turn,knee:.38,twoHands:false,support:r.short?recover:0,toss:0,
   free,feet,lean:kind==='smash'?-.08:kind==='volley'?.08:.04,
   bank:kind==='backhand'?-.12:kind==='volley'?.08:kind==='smash'?.02:.12,
   head:kind==='smash'?-.5:0};
