@@ -5,6 +5,7 @@ import {movePlayer} from './movement.js';
 import {spendStamina,recoverPointStamina,STAMINA} from './stamina.js';
 import {reception} from './reception.js';
 import {canSmash,canReturnNormally,returnHeightLegal} from './skills.js';
+import {overheadPlan} from './overhead-plan.js';
 import {clamp,side,type BallState,type PlayerState,type Seat} from './types.js';
 
 /** A tap remains useful for a small positioning adjustment. A distant return
@@ -58,12 +59,15 @@ export function canWaitForBounce(b:BallState,p:PlayerState,seat:Seat,minimumWind
  }
  return false;
 }
-export const prefersBounce=(b:BallState,p:PlayerState,seat:Seat)=>getCharacter(p.characterId).returnStyle!=='volley-first'&&!canSmash(b,p,seat)&&canWaitForBounce(b,p,seat);
+export const prefersBounce=(b:BallState,p:PlayerState,seat:Seat)=>getCharacter(p.characterId).returnStyle!=='volley-first'&&!canSmash(b,p,seat)&&!(b.mode==='doubles'&&overheadPlan(b,p,seat))&&canWaitForBounce(b,p,seat);
 /** Search the actual parabola, then run the same accelerated mover used by the
  * authority. Never choose a volley just because its landing target is nearby. */
 export function returnPlan(b:BallState,p:PlayerState,seat:Seat,serviceFlight:boolean,airRequested=false){
  const ground=()=>({...reception(b,p,seat),air:false,smash:false});
- if(serviceFlight||b.bounces>0||!airRequested&&prefersBounce(b,p,seat))return ground();
+ if(serviceFlight||b.bounces>0)return ground();
+ const overhead=b.mode==='doubles'?overheadPlan(b,p,seat):null;
+ if(overhead)return overhead;
+ if(!airRequested&&prefersBounce(b,p,seat))return ground();
  const sign=side(seat,p),hand=handedness(p.characterId),G=flightGravity(b);
  if(b.z*sign>.35&&returnHeightLegal(b)&&canReturnNormally(b,p,seat))return {point:{x:b.x,y:b.y,z:b.z},time:0,x:p.x,z:p.z,backhand:(b.x-p.x)*sign*hand<0,smash:canSmash(b,p,seat),air:true};
  const bounce=(b.vy+Math.sqrt(b.vy*b.vy+2*G*Math.max(0,b.y-.12)))/G,horizon=Math.min(2.5,bounce-.035);

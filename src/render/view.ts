@@ -14,6 +14,7 @@ import {frameMatch,type CameraDistance} from './camera.js';
 import {FrameQuality,QUALITY,type QualityLevel} from './quality.js';
 import {AimCameraLock} from './aim-camera.js';
 import {victoryPlayer,frameVictory} from './victory.js';
+import {SelfMarker} from './self-marker.js';
 export class CourtView {
   readonly renderer:T.WebGLRenderer;
   readonly camera=new T.PerspectiveCamera(43,1,.1,130);
@@ -51,6 +52,7 @@ export class CourtView {
   private sun=new T.DirectionalLight(0xffe3b0,3.5);
   private contactShadows:T.Mesh[]=[];
   private playerMarkers:T.Mesh[]=[];
+  private selfMarker=new SelfMarker();
   get fps(){return this.quality.fps;}
   get qualityLabel(){return QUALITY[this.quality.level].label;}
   constructor(private container:HTMLElement,onContext:(lost:boolean)=>void){
@@ -65,7 +67,7 @@ export class CourtView {
     this.scene.add(new T.HemisphereLight(0xfff8df,0x405e64,1.8));
     const sun=this.sun;sun.position.set(-10,24,8);sun.castShadow=true;
     sun.shadow.mapSize.setScalar(QUALITY[this.quality.level].shadowSize);sun.shadow.camera.left=-16;sun.shadow.camera.right=16;sun.shadow.camera.top=18;sun.shadow.camera.bottom=-18;sun.shadow.bias=-.001;
-    this.scene.add(sun,this.flight.root);this.stadiumEnds=makeCourt(this.scene);
+    this.scene.add(sun,this.flight.root,this.selfMarker.root);this.stadiumEnds=makeCourt(this.scene);
     for(const a of this.athletes)this.scene.add(a.root);
     for(let i=0;i<4;i++){
       const shadow=new T.Mesh(new T.CircleGeometry(.38,20),new T.MeshBasicMaterial({color:0x17352c,transparent:true,opacity:.2,depthWrite:false}));
@@ -196,7 +198,7 @@ export class CourtView {
       this.contactShadows[slot].position.set(p.x,.065,p.z);this.contactShadows[slot].visible=this.quality.level==='low';
       const marker=this.playerMarkers?.[seat];
       if(marker){
-        marker.position.set(p.x,.075,p.z);marker.visible=this.doubles&&(!winner||celebrating);
+        marker.position.set(p.x,.075,p.z);marker.visible=this.doubles&&seat!==this.seat&&(!winner||celebrating);
         marker.scale.setScalar(seat===this.seat?1.2:1);
         (marker.material as T.MeshBasicMaterial).color.setHex(seat===this.seat?0xffffcf:teamOf(seat)===0?0x7ae2ff:0xffb46a);
       }
@@ -212,6 +214,7 @@ export class CourtView {
     this.target.position.set(b.targetX,.075,b.targetZ);
     this.target.visible=false;
     const localPlayer=state.players[this.seat];
+    this.selfMarker?.update(state,this.seat,this.camera,this.size.h,this.mode==='match');
     if(localPlayer)this.marker.position.set(localPlayer.tx,.08,localPlayer.tz);
     this.marker.visible=!!localPlayer&&this.mode==='match'&&state.phase==='rally';
     const trailVisible=!winner&&state.phase==='rally';for(const t of this.trail){t.visible=trailVisible;(t.material as T.MeshBasicMaterial).color.setHex(SHOT_PROFILES[b.tier??(b.critical?'critical':'normal')].color);}
