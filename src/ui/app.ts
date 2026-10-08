@@ -40,6 +40,7 @@ export class App {
   private opponentId=this.hiddenMaster.selectable(readPreference('rally-opponent')??undefined);
   private characterReturn:Screen='home';
   private choosingOpponent=false;
+  private choosingBot:{seat:Seat;characterId:string}|null=null;
   private local=new Match();
   private net:NetworkClient|null=null;
   private remote:MatchState|null=null;
@@ -109,6 +110,10 @@ export class App {
   private saveCharacter(key:string,id:string){
     if(!writePreference(key,id))this.toast('已选择球员；浏览器无法保存，刷新后需重新选择');
   }
+  private canChooseBot(seat:number){
+    return !!this.room&&this.room.host===this.seat&&Number.isInteger(seat)&&
+      !!this.room.seats[seat]?.bot&&(!this.room.playing||this.remote?.phase==='over');
+  }
   private input(command:Input){
     if(this.screen!=='playing'||this.paused||!this.connected||this.help)return;
     if((this.remote??this.local.state).rescueWindow&&command.type==='move')return;
@@ -148,7 +153,14 @@ export class App {
     }
     if(action.startsWith('bot-')){
       if(!this.room||this.room.host!==this.seat)return;
-      const [,index,operation]=action.split('-');this.net?.send({type:'configure',bot:{seat:Number(index),enabled:operation==='add',characterId:this.opponentId}});return;
+      const [,index,operation]=action.split('-'),seat=Number(index);
+      if(operation==='character'){
+        if(this.screen!=='room'||!this.canChooseBot(seat))return;
+        this.choosingBot={seat:seat as Seat,characterId:this.hiddenMaster.selectable(this.room.seats[seat]!.characterId)};
+        this.choosingOpponent=false;this.characterReturn='room';this.screen='characters';this.renderScreen();return;
+      }
+      if(operation!=='add'&&operation!=='remove')return;
+      this.net?.send({type:'configure',bot:{seat,enabled:operation==='add',characterId:this.opponentId}});return;
     }
     if(action.startsWith('move-')){
       if(!this.room||this.room.host!==this.seat)return;
@@ -167,6 +179,7 @@ export class App {
     if(action==='lob'){this.controls.lobMode=!this.controls.lobMode;this.updateHud();return;}
     if(action==='characters'||action==='opponent-characters'){
       if(!['home','setup','room','join'].includes(this.screen))return;
+      this.choosingBot=null;
       this.characterReturn=this.screen;this.choosingOpponent=action==='opponent-characters';this.screen='characters';this.renderScreen();
     }
     else if(action==='hidden-master'){
@@ -180,12 +193,21 @@ export class App {
     else if(action.startsWith('pick-character-')){
       if(this.screen!=='characters')return;const id=action.slice('pick-character-'.length);if(!isCharacterId(id))return;
       if(this.hiddenMaster.selectable(id)!==id)return;
-      if(this.choosingOpponent){this.opponentId=id;this.saveCharacter('rally-opponent',id);}
+      if(this.choosingBot){this.choosingBot.characterId=id;}
+      else if(this.choosingOpponent){this.opponentId=id;this.saveCharacter('rally-opponent',id);}
       else{this.characterId=id;this.saveCharacter('rally-character',id);if(this.net&&this.room)this.net.send({type:'select-character',characterId:id});}
       this.renderScreen();
     }
     else if(action==='confirm-characters'||action==='close-characters'){
       if(this.screen!=='characters')return;
+      if(this.choosingBot){
+        const {seat,characterId}=this.choosingBot;
+        if(action==='confirm-characters'){
+          if(!this.canChooseBot(seat))this.toast('电脑席位已变化，或比赛已开始，请返回房间确认');
+          else if(this.room!.seats[seat]!.characterId!==characterId)this.net?.send({type:'configure',bot:{seat,enabled:true,characterId}});
+        }
+        this.choosingBot=null;this.screen=this.characterReturn;this.renderScreen();return;
+      }
       if(action==='confirm-characters'&&!this.choosingOpponent&&this.net&&this.room&&
          (!this.room.playing||this.remote?.phase==='over')&&this.room.seats[this.seat]?.characterId!==this.characterId){
         this.net.send({type:'select-character',characterId:this.characterId});
@@ -245,7 +267,10 @@ export class App {
       room:r=>{
         this.room=r;this.paused=r.paused;
         if(!r.playing){
-          this.remote=null;this.drawState=null;this.playback.reset();this.screen='room';
+          this.remote=null;this.drawState=null;this.playback.reset();
+          if(this.screen!=='characters'||!this.choosingBot||!this.canChooseBot(this.choosingBot.seat)){
+            this.choosingBot=null;this.screen='room';
+          }
           if(this.local.state.surface!==r.surface){this.local.dispose();this.local=new Match([this.characterId,this.opponentId],Math.random,{surface:r.surface});}
         }
         if(r.seats[this.seat]?.characterId)this.characterId=this.hiddenMaster.selectable(r.seats[this.seat]!.characterId);
@@ -326,7 +351,7 @@ export class App {
   private renderScreen(){
     this.view.setMode(this.screen==='result'?'result':this.screen==='playing'?'match':'home',this.seat);
     this.controls.enabled=this.screen==='playing'&&!this.help;
-    if(this.screen==='characters')this.ui.innerHTML=characterPicker(this.choosingOpponent?this.opponentId:this.characterId,this.choosingOpponent,this.hiddenMaster.unlocked);
+    if(this.screen==='characters')this.ui.innerHTML=characterPicker(this.choosingBot?.characterId??(this.choosingOpponent?this.opponentId:this.characterId),this.choosingOpponent,this.hiddenMaster.unlocked,this.choosingBot?.seat);
     else if(this.screen==='home')this.ui.innerHTML=this.home();
     else if(this.screen==='matching')this.ui.innerHTML=this.matchingPanel();
     else if(this.screen==='room')this.ui.innerHTML=this.roomPanel();

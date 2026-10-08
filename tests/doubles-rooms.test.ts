@@ -85,3 +85,28 @@ test('quick matchmaking only pairs equal selected surfaces',async()=>{
   assert.equal((await clients[1].wait('state')).state.surface,'grass');
  }finally{clients.forEach(c=>c.ws.terminate());await server.close();}
 });
+test('bot character edits stay seat-specific, synchronize guests and are used by the next match',async()=>{
+ const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{
+  a.send({type:'create',mode:'doubles',characterId:'lin'});const w=await a.wait('welcome');
+  b.send({type:'join',code:w.code,characterId:'sora'});await b.wait('welcome');
+  a.send({type:'configure',move:{from:1,to:2}});await b.wait('welcome',m=>m.seat===2);
+  for(const seat of [1,3])a.send({type:'configure',bot:{seat,enabled:true,characterId:'lin'}});
+  await b.wait('room',m=>m.room.seats[3]?.bot);
+  a.send({type:'ready'});await b.wait('room',m=>m.room.seats[0]?.ready);
+  b.send({type:'configure',bot:{seat:1,enabled:true,characterId:'rafa'}});
+  assert.match((await b.wait('error')).message,/房主/);
+  a.send({type:'configure',bot:{seat:1,enabled:true,characterId:'mei'}});
+  const changed=await b.wait('room',m=>m.room.seats[1]?.characterId==='mei');
+  assert.deepEqual(changed.room.seats.map((s:any)=>s.characterId),['lin','mei','sora','lin']);
+  assert.ok(changed.room.seats.every((s:any)=>!s.ready));
+  a.send({type:'configure',bot:{seat:3,enabled:true,characterId:'leo'}});
+  await b.wait('room',m=>m.room.seats[3]?.characterId==='leo');
+  a.send({type:'ready'});b.send({type:'ready'});
+  const state=await a.wait('state'),same=await b.wait('state',m=>m.seq===state.seq);
+  assert.deepEqual(state.state,same.state);
+  assert.deepEqual(state.state.players.map((p:any)=>p.characterId),['lin','mei','sora','leo']);
+  a.send({type:'configure',bot:{seat:1,enabled:true,characterId:'rafa'}});
+  assert.match((await a.wait('error')).message,/比赛/);
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
+});
