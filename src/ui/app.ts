@@ -1,5 +1,5 @@
 import {getCharacter,isCharacterId} from '../simulation/characters.js';
-import {characterPicker} from './characters.js';
+import {characterPicker,revealCharacterPicker} from './characters.js';
 import {HiddenCharacterUnlock} from './hidden-character.js';
 import {readPreference,writePreference} from './preferences.js';
 import {rescueHint,rescueChanceText} from './rescue-hint.js';
@@ -196,7 +196,10 @@ export class App {
       if(this.choosingBot){this.choosingBot.characterId=id;}
       else if(this.choosingOpponent){this.opponentId=id;this.saveCharacter('rally-opponent',id);}
       else{this.characterId=id;this.saveCharacter('rally-character',id);if(this.net&&this.room)this.net.send({type:'select-character',characterId:id});}
-      this.renderScreen();
+      this.renderScreen('detail');
+    }
+    else if(action==='character-list'){
+      if(this.screen==='characters')revealCharacterPicker(this.ui,'list');
     }
     else if(action==='confirm-characters'||action==='close-characters'){
       if(this.screen!=='characters')return;
@@ -268,7 +271,8 @@ export class App {
         this.room=r;this.paused=r.paused;
         if(!r.playing){
           this.remote=null;this.drawState=null;this.playback.reset();
-          if(this.screen!=='characters'||!this.choosingBot||!this.canChooseBot(this.choosingBot.seat)){
+          // A selection broadcasts the room back; keep its attributes open for reading.
+          if(this.screen!=='characters'||(this.choosingBot&&!this.canChooseBot(this.choosingBot.seat))){
             this.choosingBot=null;this.screen='room';
           }
           if(this.local.state.surface!==r.surface){this.local.dispose();this.local=new Match([this.characterId,this.opponentId],Math.random,{surface:r.surface});}
@@ -348,7 +352,8 @@ export class App {
     if(s.mode==='doubles')return (this.room?.seats??[]).flatMap((p,i)=>p&&i%2===team?[p.name]:[]).join(' / ')||`${team===0?'A':'B'} 队`;
     return this.room?.seats[team]?.name??(team===0?this.name:'练习搭档');
   }
-  private renderScreen(){
+  private renderScreen(characterTarget?:'detail'|'list'){
+    const characterScroll=characterTarget?this.ui.querySelector('.character-panel')?.scrollTop:undefined;
     this.view.setMode(this.screen==='result'?'result':this.screen==='playing'?'match':'home',this.seat);
     this.controls.enabled=this.screen==='playing'&&!this.help;
     if(this.screen==='characters')this.ui.innerHTML=characterPicker(this.choosingBot?.characterId??(this.choosingOpponent?this.opponentId:this.characterId),this.choosingOpponent,this.hiddenMaster.unlocked,this.choosingBot?.seat);
@@ -362,6 +367,11 @@ export class App {
     if(this.screen==='setup')this.ui.querySelector('[data-action="start-practice"]')?.insertAdjacentHTML('beforebegin',courtButton(this.surface));
     if(this.screen==='matching')this.ui.querySelector('.matchmaking-player')?.insertAdjacentHTML('afterend',courtButton(this.surface,true));
     if(this.surfaceOpen)this.ui.insertAdjacentHTML('beforeend',`<div class="overlay surface-overlay" role="dialog" aria-modal="true" aria-label="选择球场"><section class="panel"><div class="panel-top"><span>CHOOSE YOUR COURT</span><button class="icon-button" data-action="close-surfaces" aria-label="关闭场地选择">×</button></div><h2>换一片球场，换一种节奏。</h2><p>场地改变反弹、旋转与跑动制动；开赛后锁定。</p><div class="surface-options">${surfaceChoices(this.room?.surface??this.surface)}</div><button class="secondary" data-action="close-surfaces">返回</button></section></div>`);
+    if(this.screen==='characters'&&characterTarget){
+      const panel=this.ui.querySelector('.character-panel');
+      if(panel&&characterScroll!==undefined)panel.scrollTop=characterScroll;
+      revealCharacterPicker(this.ui,characterTarget);
+    }
   }
   private updateHud(){
     if(this.screen!=='playing')return;

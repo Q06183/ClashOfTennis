@@ -45,6 +45,10 @@
 .character-card small{display:block;font-size:10px;line-height:1.4;color:#52645d;white-space:nowrap;margin-top:3px}
 .character-secret-title{padding:0;background:none;color:inherit;font:inherit;letter-spacing:inherit;text-align:left}
 .character-secret-title:active:not(:disabled){transform:none}
+.character-detail,.character-card{scroll-margin-block:16px}
+.character-detail:focus-visible{outline:2px solid var(--character-color);outline-offset:5px}
+.character-detail-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px 8px}
+.character-list-back{min-height:40px;padding:8px 0;background:transparent;color:var(--ink);font-size:11px;text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
 .character-card.hidden-master-card{background:#1d2427;border-color:#b99449;color:#f4dfab}
 .character-card.hidden-master-card.selected{background:#293034;border-color:#d8b45c}
 .character-card.hidden-master-card span,.character-card.hidden-master-card small{color:#e0c98f}
