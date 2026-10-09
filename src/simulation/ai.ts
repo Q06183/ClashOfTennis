@@ -1,5 +1,5 @@
 import type { Match } from './match.js';
-import {assistedReceiver,supportPosition} from './team-play.js';
+import {assistedReceiver} from './team-play.js';
 import { side, teamOf, type MatchState, type Seat, type Input } from './types.js';
 export function aiInput(s: MatchState, seat: Seat, difficulty: 'relaxed'|'standard'='relaxed'): Input | null {
   if(s.phase==='serve') {
@@ -9,7 +9,9 @@ export function aiInput(s: MatchState, seat: Seat, difficulty: 'relaxed'|'standa
   if(s.phase!=='rally') return null;
   const b=s.ball,p=s.players[seat];
   if(s.mode==='doubles'&&assistedReceiver(s)!==seat) {
-    return {type:'move',...supportPosition(s,seat)};
+    // Match already moves every unassigned player into support. Issuing a
+    // synthetic tap here renews manualUntil and delays the next assignment.
+    return null;
   }
   if(teamOf(b.hitter)===teamOf(seat)) {
     return {type:'move',x:Math.sin(s.time*.4)*.4,z:side(seat,s)*9.8};

@@ -33,12 +33,12 @@ export class ReturnPlanner {
 /** Forecast ordinary retreat and post-bounce contact, including momentum and
  * fatigue. Slice bounce uses its expected kick; random deflection is only known
  * at the real bounce, when the authority replans. No RNG is consumed here. */
-export function canWaitForBounce(b:BallState,p:PlayerState,seat:Seat,minimumWindow=.05){
- if(b.bounces>0)return false;
+export function canReachBouncedReturn(b:BallState,p:PlayerState,seat:Seat,minimumWindow=.05){
+ if(b.bounces>=2||p.rescue)return false;
  const G=flightGravity(b),drop=(b.vy+Math.sqrt(b.vy*b.vy+2*G*Math.max(0,b.y-.12)))/G;
  const ball={...b},runner={...p},effects=characterEffects(p.characterId),dt=1/60;
  const ground=reception(b,p,seat);
- let elapsed=0,bounced=false,contactFrames=0;
+ let elapsed=0,bounced=b.bounces>0,contactFrames=0;
  for(let i=0;i<300;i++){
   const step=!bounced?Math.min(dt,Math.max(0,drop-elapsed)):dt;
   const gravity=flightGravity(ball);
@@ -60,6 +60,7 @@ export function canWaitForBounce(b:BallState,p:PlayerState,seat:Seat,minimumWind
  }
  return false;
 }
+export const canWaitForBounce=(b:BallState,p:PlayerState,seat:Seat,minimumWindow=.05)=>b.bounces===0&&canReachBouncedReturn(b,p,seat,minimumWindow);
 export const prefersBounce=(b:BallState,p:PlayerState,seat:Seat)=>getCharacter(p.characterId).returnStyle!=='volley-first'&&!canSmash(b,p,seat)&&!(b.mode==='doubles'&&overheadPlan(b,p,seat))&&canWaitForBounce(b,p,seat);
 /** Search the actual parabola, then run the same accelerated mover used by the
  * authority. Never choose a volley just because its landing target is nearby. */

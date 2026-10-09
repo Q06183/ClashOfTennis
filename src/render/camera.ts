@@ -34,3 +34,31 @@ export function frameMatch(camera:PerspectiveCamera,w:number,h:number,seat:Seat,
   camera.setViewOffset(w,h,player.x*w/(2*camera.zoom),-cy*h/2,w,h);
  }
 }
+
+/** Same perspective and 1.9x close-up as singles, fitted to ALL four athletes
+ * rather than following one player's horizontal crop. In near mode empty
+ * sideline/runoff can leave the frame; players cannot. Far keeps the full court. */
+export function frameDoublesMatch(camera:PerspectiveCamera,w:number,h:number,seat:Seat,x:number,depth:number,players:readonly {x:number;z:number}[],distance:CameraDistance='near'){
+ frameMatch(camera,w,h,seat,x,depth,undefined,'far');
+ const points:Vector3[]=[];
+ for(const p of players)for(const dx of [-.55,.55])for(const y of [0,2.6]){
+  points.push(new Vector3(p.x+dx,y,p.z));
+ }
+ // Retain court depth even when all four players approach the net.
+ for(const z of [-11.885,11.885]){
+  points.push(new Vector3(0,0,z));
+  if(distance==='far'||players.length===0)for(const px of [-5.8,5.8])points.push(new Vector3(px,0,z));
+ }
+ const projected=points.map(p=>p.clone().project(camera));
+ const left=Math.min(...projected.map(p=>p.x)),right=Math.max(...projected.map(p=>p.x));
+ const bottom=Math.min(...projected.map(p=>p.y)),top=Math.max(...projected.map(p=>p.y));
+ // Leave HUD space above/below and a body-width margin at either side.
+ // The scoreboard is ~80px tall even on a short landscape screen.
+ const safeTop=Math.min(.68,1-180/h),safeBottom=-.76;
+ const zoom=Math.min(distance==='near'?1.9:1,1.8/(right-left),(safeTop-safeBottom)/(top-bottom));
+ camera.clearViewOffset();camera.zoom=zoom;camera.updateProjectionMatrix();
+ const fitted=points.map(p=>p.clone().project(camera));
+ const cx=(Math.min(...fitted.map(p=>p.x))+Math.max(...fitted.map(p=>p.x)))/2;
+ const cy=(Math.min(...fitted.map(p=>p.y))+Math.max(...fitted.map(p=>p.y)))/2;
+ camera.setViewOffset(w,h,cx*w/2,-(cy-(safeTop+safeBottom)/2)*h/2,w,h);
+}

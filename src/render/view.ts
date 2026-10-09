@@ -10,7 +10,7 @@ import { shotDirection,serveDirection,captureSwipeAim } from '../input/aim.js';
 import { FlightGuide } from './trajectory.js';
 import {disposeTree} from './dispose.js';
 import {SHOT_PROFILES} from '../simulation/shot-profile.js';
-import {frameMatch,type CameraDistance} from './camera.js';
+import {frameMatch,frameDoublesMatch,type CameraDistance} from './camera.js';
 import {FrameQuality,QUALITY,type QualityLevel} from './quality.js';
 import {AimCameraLock} from './aim-camera.js';
 import {victoryPlayer,frameVictory} from './victory.js';
@@ -44,6 +44,7 @@ export class CourtView {
   private aimCamera=new AimCameraLock();
   private cameraDistance:CameraDistance='near';
   private appliedCameraDistance:CameraDistance='near';
+  private cameraPlayers:{x:number;z:number}[]=[];
   private focus={x:0,depth:11};
   private stadiumEnds:T.Group[];
   private size={w:0,h:0};
@@ -136,7 +137,9 @@ export class CourtView {
       this.camera.fov=w>h?39:49;this.camera.position.set(19,23,25);this.camera.lookAt(w>h?-4:0,0,0);
     } else {
       this.appliedCameraDistance=this.cameraDistance;
-      frameMatch(this.camera,w,h,(teamOf(this.seat)^this.ends) as Seat,this.focus.x,this.focus.depth,undefined,this.doubles?'far':this.appliedCameraDistance);
+      const seat=(teamOf(this.seat)^this.ends) as Seat;
+      if(this.doubles)frameDoublesMatch(this.camera,w,h,seat,this.focus.x,this.focus.depth,this.cameraPlayers??[],this.appliedCameraDistance);
+      else frameMatch(this.camera,w,h,seat,this.focus.x,this.focus.depth,undefined,this.appliedCameraDistance);
     }
     this.camera.updateProjectionMatrix();this.camera.updateMatrixWorld();
   }
@@ -155,7 +158,9 @@ export class CourtView {
     const p=state.players[this.seat],alpha=1-Math.exp(-Math.min(dt,.08)*7);
     this.focus.x+=(p.x-this.focus.x)*alpha;
     this.focus.depth+=(p.z*side(this.seat,state)-this.focus.depth)*alpha;
-    frameMatch(this.camera,this.size.w,this.size.h,(teamOf(this.seat)^this.ends) as Seat,this.focus.x,this.focus.depth,state.players[other(this.seat)],this.doubles?'far':this.appliedCameraDistance);
+    const seat=(teamOf(this.seat)^this.ends) as Seat;
+    if(this.doubles)frameDoublesMatch(this.camera,this.size.w,this.size.h,seat,this.focus.x,this.focus.depth,state.players,this.appliedCameraDistance);
+    else frameMatch(this.camera,this.size.w,this.size.h,seat,this.focus.x,this.focus.depth,state.players[other(this.seat)],this.appliedCameraDistance);
   }
   courtPoint(x:number,y:number){
     const rect=this.container.getBoundingClientRect();
@@ -164,6 +169,7 @@ export class CourtView {
   }
   render(state:MatchState,dt:number,authoritative:MatchState=state){
     this.setSurface(surfaceProfile(state.surface).id);
+    this.cameraPlayers=state.players.map(p=>({x:p.x,z:p.z}));
     if(this.ends!==(state.ends??0)||this.doubles!==(state.mode==='doubles')){
       this.ends=state.ends??0;this.doubles=state.mode==='doubles';this.aimCamera.reset();this.focus={x:0,depth:11};
       this.stadiumEnds.forEach((end,i)=>{end.visible=this.mode==='home'||i!==(teamOf(this.seat)^this.ends);});this.resize(true);
