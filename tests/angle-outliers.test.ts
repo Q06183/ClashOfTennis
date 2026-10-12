@@ -8,6 +8,7 @@ import {captureSwipeAim} from '../src/input/aim.js';
 import {projectedOutgoingAngle,expectedControlledAngle} from './helpers/projected-shot.js';
 import {side,type Shot} from '../src/simulation/types.js';
 import {rescueIncoming} from './helpers/rescue-incoming.js';
+import {ENCLOSURE} from '../src/simulation/enclosure.js';
 
 before(initPhysics);
 test('legal slice returns keep the swipe heading even at both extremes of random scatter',()=>{
@@ -66,9 +67,17 @@ test('steep swipe directions do not fall back to a different heading in slow and
    const expected=expectedControlledAngle(camera,p.contact!,m.state.ball,390,844,ratio,{shot,player:p});
    assert.ok(Math.abs(angle-expected)<.001,`${id}/${kind}/${stamina}/${depth}/${x}/${ratio}: ${angle}`);
    const c=p.contact!,from=new Vector3(c.x,c.y,c.z).project(camera);
-   for(let i=0;i<6;i++)m.physics.step(1/60);
+   let wall=false;
+   for(let i=0;i<6;i++){
+    const before=m.physics.read();m.physics.step(1/60);const after=m.physics.read();
+    if(before.vx*after.vx<0||before.vz*after.vz<0){
+     assert.ok(Math.abs(after.x)>ENCLOSURE.sideX-.5||Math.abs(after.z)>ENCLOSURE.backZ-.5,
+      'heading only changes on actual perimeter contact');
+     wall=true;break;
+    }
+   }
    const b=m.physics.read(),to=new Vector3(b.x,b.y,b.z).project(camera);
-   assert.ok(Math.abs(Math.atan2((to.x-from.x)*390,(to.y-from.y)*844)-expected)<.015,
+   if(!wall)assert.ok(Math.abs(Math.atan2((to.x-from.x)*390,(to.y-from.y)*844)-expected)<.015,
     'actual Rapier flight, not an inverse-corrected target');
   }finally{m.dispose();}
  }

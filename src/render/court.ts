@@ -2,6 +2,7 @@ import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {SURFACES,surfaceProfile,type SurfaceId} from '../simulation/surfaces.js';
 import {MOVEMENT_HALF_WIDTH} from '../simulation/rules.js';
+import {ENCLOSURE} from '../simulation/enclosure.js';
 /** Mutate only court materials; stands, models and lighting remain in place. */
 export function setCourtSurface(scene:T.Scene,id:SurfaceId){
  const profile=surfaceProfile(id);
@@ -56,9 +57,9 @@ export function makeCourt(scene:T.Scene){
     box(0x143e40,x,.57,0,.15,1.14,.15);box(0xf3edd7,x,1.16,0,.2,.08,.2);
   }
   // Low stadium walls, seating, and courtside furniture.
-  for(const z of [-18,18]){
+  for(const z of [-ENCLOSURE.backZ,ENCLOSURE.backZ]){
     end=z>0?0:1;
-    box(0x163e42,0,1,z,28,2,.35);
+    box(0x163e42,0,1,z,28,2,ENCLOSURE.backThickness);
     box(0xc4d6aa,0,2.04,z,28,.13,.5);
     for(let row=0;row<3;row++){
       box(0xd9c9a7,0,.35+row*.6,z+Math.sign(z)*(1+row*.95),26,.7,1.05);
@@ -69,8 +70,8 @@ export function makeCourt(scene:T.Scene){
     }
   }
   end=-1;
-  for(const x of [-12.8,12.8]){
-    box(0x194847,x,.65,0,.25,1.3,36);
+  for(const x of [-ENCLOSURE.sideX,ENCLOSURE.sideX]){
+    box(0x194847,x,.65,0,ENCLOSURE.sideThickness,1.3,36);
     for(let z=-17;z<18;z+=3)box(0x214f49,x,1.8,z,.08,2.4,.08);
     for(let y=1.3;y<3;y+=.3)box(0x53806a,x,y,0,.018,.02,36);
     for(let z=-17;z<18;z+=.45)box(0x53806a,x,2.1,z,.02,1.6,.018);

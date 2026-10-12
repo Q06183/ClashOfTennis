@@ -32,6 +32,7 @@ export type PlayerState = {
   rescue?: {startedAt:number;fromX:number;fromZ:number;toX:number;toZ:number;contact:Vec;hit:boolean;stroke?:RescueStroke;backhand?:boolean;travel?:number;natural?:boolean;launchVx?:number;short?:boolean;missed?:boolean;recovery?:'step-out'|'supported-fall'};
 };
 export type BallState = Vec & { surface?:SurfaceId; mode?:MatchMode; ends?:0|1; vx: number; vy: number; vz: number; bounces: number; hitter: Seat; targetX: number; targetZ: number; placementAssist?:number; aimOrigin?:Vec; tier?: ShotTier; critical?: boolean; rescue?: boolean; topspin?: number; slice?: boolean; drop?:number; skill?: 'smash'|'volley'|'slice' };
+export type DeadBallState=BallState & {id:number;age:number;wallHits:number;settled:boolean};
 export type MatchState = {
   surface?:SurfaceId;
   mode?:MatchMode; ends?:0|1; scoring?:ScoringState; receiver?:Seat;
@@ -41,6 +42,9 @@ export type MatchState = {
   score: [number, number]; players: PlayerState[]; ball: BallState;
   server: Seat; fault: number; pointTimer: number; rally: number; maxRally: number;
   winner: Team | null; event: string; eventId: number; lastPoint: Team | null;
+  /** Cosmetic post-point physics, never eligible for scoring or racket contact. */
+  deadBalls?:DeadBallState[];
+  endedAt?:number;
 };
 export type RoomView = {
   mode?:MatchMode;surface?:SurfaceId;format?:ScoringFormat;host?:Seat;

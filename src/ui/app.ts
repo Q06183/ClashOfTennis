@@ -422,9 +422,9 @@ export class App {
     <main class="home-copy"><div class="eyebrow">A LITTLE COURT. A GOOD TIME.</div><h1>Rally<br/><em>together.</em></h1>
     <p class="subtitle">约一场，刚刚好。</p><p class="description">一片球场，一位朋友。<br/>把好球留给彼此，把胜负留在场上。</p>
     <div class="menu"><label class="name-label" for="nickname">你的昵称<input id="nickname" maxlength="16" value="${escape(this.name)}" autocomplete="nickname"/></label>
-    <button class="primary lime match-button" data-action="match" ${this.busy?'disabled':''}>${this.busy?'连接中…':'快速匹配'} <span>⚡</span></button>
+    <button class="primary lime match-button" data-action="match" ${this.busy?'disabled':''}>${this.busy?'连接中…':'快速匹配'} <span aria-hidden="true">↗</span></button>
     <button class="primary" data-action="create" ${this.busy?'disabled':''}>单打开房 <span>↗</span></button>
-    <button class="secondary" data-action="join">加入房间 <span>＋</span></button>
+    <button class="secondary" data-action="join">加入房间 <span aria-hidden="true">↗</span></button>
     <button class="secondary doubles-button" data-action="create-doubles" ${this.busy?'disabled':''}>双打开房 · 2 对 2 <span>好友 / 电脑 ↗</span></button>
     <button class="character-choice" data-action="characters">球员：${getCharacter(this.characterId).name} · ${getCharacter(this.characterId).role} <span>更换 →</span></button>
     <button class="practice practice-entry" data-action="practice" aria-label="单人练习：新手引导、轻松对打、认真对打"><strong>单人练习 · 先热热身</strong><span aria-hidden="true">→</span></button>${this.networkError?`<div class="error-inline" role="alert" style="grid-column:1/-1">${escape(this.networkError)}</div>`:''}</div></main>
@@ -465,7 +465,7 @@ export class App {
     const guided=this.tutorial?.completed&&won;
     return `<div class="victory-overlay"><div class="victory-title"><span>${s.mode==='doubles'?'WINNING TEAM':'MATCH WINNER'}</span><h2>${escape(winnerName)}${s.mode==='doubles'?'':` · ${winner?getCharacter(winner.characterId).name:''}`}</h2><p>${won?'你赢了！':'获胜方庆祝中'} · 持拍庆祝</p></div><section class="panel victory-panel"><div class="result-body"><div class="panel-top"><span>${guided?'TUTORIAL COMPLETE · 新手引导完成':'THAT WAS A GOOD RALLY'}</span></div><h2>${guided?'你赢了，新手引导完成！':won?'好球，这场属于你。':'再来一场，找回手感。'}</h2>${guided?'<p>发球站位、发球、2 次普通接球、跑动回位和切削全部成功。现在可以自由对打。</p>':''}
       <div class="result-score">${(s.scoring?.format==='standard'?s.scoring.games:s.score)[teamOf(this.seat)]} <span style="color:#a4af98">:</span> ${(s.scoring?.format==='standard'?s.scoring.games:s.score)[other(this.seat)]}</div><div class="result-names">${escape(me)} &nbsp; / &nbsp; ${escape(them)}</div>
-      <div class="result-stats"><div><strong>${s.maxRally}</strong>最长回合</div><div><strong>${Math.floor(s.time/60)}:${String(Math.floor(s.time%60)).padStart(2,'0')}</strong>对局时间</div></div>
+      <div class="result-stats"><div><strong>${s.maxRally}</strong>最长回合</div><div><strong>${Math.floor((s.endedAt??s.time)/60)}:${String(Math.floor((s.endedAt??s.time)%60)).padStart(2,'0')}</strong>对局时间</div></div>
       ${!this.net&&this.practiceReview?`<details class="result-review"><summary>查看本场练习复盘${this.practiceReview.goal==='free'?'':` · ${this.practiceReview.complete?'✓ 目标达成':'继续挑战'}`}</summary>${practiceReviewPanel(this.practiceReview,this.practiceBest,this.practiceSaved)}</details>`:''}
       </div><div class="result-actions"><button class="primary" data-action="${guided?'finish-tutorial':'rematch'}" ${ready?'disabled':''}>${guided?'继续和机器人对打 →':ready?'已准备，等待朋友…':'再来一场 ↗'}</button>${this.net?'<button class="secondary" data-action="return-lobby">返回房间 · 调整队伍 / 场地</button>':''}<button class="secondary" data-action="back">回到首页</button></div></section></div>`;
   }

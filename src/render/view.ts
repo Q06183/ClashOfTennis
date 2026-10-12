@@ -17,6 +17,7 @@ import {victoryPlayer,frameVictory} from './victory.js';
 import {SelfMarker} from './self-marker.js';
 import {BallTrail} from './ball-trail.js';
 import {ServeTarget} from './serve-target.js';
+import {DeadBallView} from './dead-balls.js';
 export class CourtView {
   readonly renderer:T.WebGLRenderer;
   readonly camera=new T.PerspectiveCamera(43,1,.1,130);
@@ -35,6 +36,7 @@ export class CourtView {
   private trail:T.Mesh[]=[];
   private ballTrail=new BallTrail();
   private serveTarget=new ServeTarget();
+  private deadBallView=new DeadBallView();
   private flight=new FlightGuide();
   private ray=new T.Raycaster();
   private plane=new T.Plane(new T.Vector3(0,1,0),0);
@@ -73,7 +75,7 @@ export class CourtView {
     this.scene.add(new T.HemisphereLight(0xfff8df,0x405e64,1.8));
     const sun=this.sun;sun.position.set(-10,24,8);sun.castShadow=true;
     sun.shadow.mapSize.setScalar(QUALITY[this.quality.level].shadowSize);sun.shadow.camera.left=-16;sun.shadow.camera.right=16;sun.shadow.camera.top=18;sun.shadow.camera.bottom=-18;sun.shadow.bias=-.001;
-    this.scene.add(sun,this.flight.root,this.selfMarker.root,this.serveTarget.root);this.stadiumEnds=makeCourt(this.scene);
+    this.scene.add(sun,this.flight.root,this.selfMarker.root,this.serveTarget.root,this.deadBallView.root);this.stadiumEnds=makeCourt(this.scene);
     for(const a of this.athletes)this.scene.add(a.root);
     for(let i=0;i<4;i++){
       const shadow=new T.Mesh(new T.CircleGeometry(.38,20),new T.MeshBasicMaterial({color:0x17352c,transparent:true,opacity:.2,depthWrite:false}));
@@ -185,7 +187,9 @@ export class CourtView {
       this.ends=state.ends??0;this.doubles=state.mode==='doubles';this.aimCamera.reset();this.focus={x:0,depth:11};
       this.stadiumEnds.forEach((end,i)=>{end.visible=this.mode==='home'||i!==(teamOf(this.seat)^this.ends);});this.resize(true);
     }
-    const winner=this.mode==='result'?victoryPlayer(authoritative):null;
+    const finishingFlight=this.mode==='result'&&authoritative.deadBalls?.some(b=>!b.settled)&&
+      authoritative.endedAt!==undefined&&authoritative.time-authoritative.endedAt<1.8;
+    const winner=this.mode==='result'&&!finishingFlight?victoryPlayer(authoritative):null;
     if(winner){
       this.celebrationTime+=dt;
       frameVictory(this.camera,this.size.w,this.size.h,winner.player,side(winner.seat,state));
@@ -198,7 +202,7 @@ export class CourtView {
         this.camera.updateProjectionMatrix();
       }
     }
-    if(this.mode==='match'){
+    if(this.mode==='match'||finishingFlight){
       this.updateCamera(state,dt);
     }
     const repeatHold=!!state.rescueWindow&&this.frozenContactTime===state.time;
@@ -222,7 +226,8 @@ export class CourtView {
     }
     this.renderer.domElement.dataset.players=String(state.players.length);
     const b=state.ball;
-    this.ball.visible=!winner;this.shadow.visible=!winner;
+    this.ball.visible=!winner&&state.phase!=='point'&&state.phase!=='over';this.shadow.visible=this.ball.visible;
+    this.deadBallView?.update(state.deadBalls??[],this.mode!=='home',state.rescueWindow?0:dt);
     this.flight.update(state,this.seat,this.mode==='match',authoritative);
     this.serveTarget.update(authoritative,this.seat,this.mode==='match');
     const trailPoints=this.ballTrail.sample(state,this.trail.length);

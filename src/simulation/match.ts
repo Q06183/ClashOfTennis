@@ -6,6 +6,7 @@ import {flightGravity,flightTime,spinAmount} from './flight.js';
 import {canSmash,canReturnNormally,returnHeightLegal,volleyDifficulty} from './skills.js';
 import {getCharacter,characterEffects} from './characters.js';
 import { BallPhysics } from './physics.js';
+import {DeadBalls} from './dead-balls.js';
 import {shotDepth,shotTier,SHOT_PROFILES} from './shot-profile.js';
 import {dropStrength} from './drop-shot.js';
 import {adjustRebound,surfaceProfile,type SurfaceId} from './surfaces.js';
@@ -23,6 +24,7 @@ const player = (seat: Seat, characterId: string): PlayerState => ({characterId:g
 export class Match {
   readonly physics:BallPhysics;
   readonly state: MatchState;
+  private deadBalls=new DeadBalls();
   private pending: ({shot:Shot;flight:number;airRequested:boolean}|null)[] = [null,null,null,null];
   private recentContact:{at:number;flight:number;seat:Seat;ball:BallState}|null=null;
   private rescueAttempt=[-1,-1];
@@ -49,10 +51,10 @@ export class Match {
   constructor(characters:readonly string[]=['lin','lin'],private random:()=>number=Math.random,options:{surface?:SurfaceId;mode?:MatchMode;format?:ScoringFormat}={}) {
     const surface=surfaceProfile(options.surface).id;
     const mode=options.mode??'singles';
-    this.physics=new BallPhysics(surface);
+    this.physics=new BallPhysics(surface,{enclosure:true});
     this.state = {surface,mode,ends:0,scoring:createScoring(options.format),time:0,phase:'serve',score:[0,0],players:seatsFor(mode).map(i=>({...player(i,characters[i]??'lin'),surface,ends:0})),
       ball:{surface,mode,ends:0,x:0,y:2.5,z:11.8,vx:0,vy:0,vz:0,bounces:0,hitter:0,targetX:0,targetZ:-5},
-      server:0,fault:0,pointTimer:0,rally:0,maxRally:0,winner:null,event:'准备发球',eventId:0,lastPoint:null};
+      server:0,fault:0,pointTimer:0,rally:0,maxRally:0,winner:null,event:'准备发球',eventId:0,lastPoint:null,deadBalls:this.deadBalls.states};
     this.resetPoint();
   }
   private announce(event: string) { this.state.event=event; this.state.eventId++; }
@@ -238,7 +240,9 @@ export class Match {
       bouncePoint:structuredClone(this.bouncePoint),sinceHit:this.sinceHit,serviceFlight:this.serviceFlight,
       faultReset:this.faultReset,serviceLet:this.serviceLet,impact:structuredClone(this.impact),practiceGroundReceiver:this.practiceGroundReceiver};
     return ()=>{
+      this.deadBalls.clear();
       Object.assign(this.state,structuredClone(state));this.pending=structuredClone(pending);
+      this.state.deadBalls=this.deadBalls.states;
       this.recentContact=structuredClone(recentContact);this.rescuePlans=structuredClone(rescuePlans);
       this.manualUntil=[...manualUntil];this.rescueAttempt=[...rescueAttempt];this.nextRescueApproach=[...nextApproach];
       this.returnPlanners=planners.map(p=>p.clone());this.rescueCounted=new Map(counted);
@@ -251,6 +255,7 @@ export class Match {
   practiceFeed(){
     const s=this.state;
     if(s.mode!=='singles')throw Error('Practice feed is singles-only');
+    this.deadBalls.clear();
     this.clearPreparation();this.manualUntil=[0,0,0,0];this.rescueAttempt=[-1,-1,-1,-1];
     this.practiceGroundReceiver=0;
     this.sinceHit=0;this.serviceFlight=false;this.serviceLet=false;this.impact=null;this.bouncePoint=null;
@@ -340,25 +345,36 @@ export class Match {
   private faultOrPoint(reason: string) {
     const s=this.state;
     if(this.serviceFlight&&s.fault===0) {
+      this.captureDeadBall(reason);
       s.fault=1;s.phase='point';s.pointTimer=1.2;this.faultReset=true;
       this.clearPreparation();
       this.announce(`一发${reason} · 准备二发`);
-    } else this.award(other(s.ball.hitter),this.serviceFlight?'双误':reason);
+    } else this.award(other(s.ball.hitter),this.serviceFlight?'双误':reason,reason);
   }
-  private award(winner: Seat, reason: string) {
+  private award(winner: Seat, reason: string,deadReason=reason) {
     const s=this.state;
+    this.captureDeadBall(deadReason);
     for(const p of s.players)settlePointStamina(p);
     const team=teamOf(winner);
     if(s.scoring)s.winner=scorePoint(s.score,s.scoring,team);
     else {s.score[team]++;s.winner=winnerForScore(s.score);}
     s.lastPoint=team;s.fault=0;
     s.phase=s.winner===null?'point':'over';s.pointTimer=1.8;this.faultReset=false;
+    if(s.winner!==null)s.endedAt=s.time;
     this.announce(reason);this.clearPreparation(true);
   }
   finish(winner: Seat, reason: string) {
+    this.captureDeadBall(reason);
     for(const p of this.state.players)settlePointStamina(p);
     this.state.winner=teamOf(winner);this.state.phase='over';this.state.lastPoint=teamOf(winner);this.announce(reason);
+    this.state.endedAt=this.state.time;
     this.clearPreparation();for(const p of this.state.players){p.swing=0;p.moving=false;p.vx=0;p.vz=0;}
+  }
+  private captureDeadBall(reason:string){
+    const s=this.state;
+    if(s.phase!=='rally'||s.rally===0)return;
+    const ground=(reason==='出界'||reason==='二跳'||reason==='双误')&&s.ball.vy>0&&s.ball.y<.45;
+    this.deadBalls.add(s.ball,ground,reason==='下网');
   }
   step(dt: number) {
     if(!Number.isFinite(dt)||dt<=0)return;
@@ -372,13 +388,15 @@ export class Match {
       dt-=used;if(dt<1e-9)return;
     }
     if(this.state.phase==='over') {
-      if(this.state.players.some(p=>p.rescue)){
+      if(this.state.deadBalls?.some(b=>!b.settled)||this.state.players.some(p=>p.rescue)){
         this.state.time+=dt;
+        this.deadBalls.step(dt);
         for(const p of this.state.players)moveRescue(p,this.state.time,dt);
       }
       return;
     }
     const s=this.state;s.time+=dt;
+    this.deadBalls.step(dt);
     for(const p of s.players) p.swing=Math.max(0,p.swing-dt);
     if(s.phase==='point') {
       for(const p of s.players)moveRescue(p,s.time,dt);
@@ -423,6 +441,12 @@ export class Match {
     }
     this.physics.step(dt);Object.assign(s.ball,this.physics.read());
     const b=s.ball,receiver=assistedReceiver(s,this.serviceFlight);
+    // The physical enclosure ends a live tennis rally, not a wall-play return.
+    // Hand the already reflected velocity to cosmetic motion exactly once.
+    if((before.vx*b.vx<0&&Math.abs(before.vx)>1)||(before.vz*b.vz<0&&Math.abs(before.vz)>1)){
+      if(b.bounces)this.award(b.hitter,'未接到球');else this.faultOrPoint('出界');
+      return;
+    }
     if(s.mode==='doubles'){
       // The first physical event wins. Do not penalize a body beyond a net or
       // ground contact that has already made the ball dead.
@@ -517,5 +541,5 @@ export class Match {
       }
     }
   }
-  dispose() { this.physics.dispose(); }
+  dispose() { this.deadBalls.clear();this.physics.dispose(); }
 }

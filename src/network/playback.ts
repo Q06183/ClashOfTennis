@@ -37,7 +37,7 @@ export class SnapshotPlayback {
  private copy(state:MatchState){
   if(!this.draw||this.draw.players.length!==state.players.length)this.draw=structuredClone(state);
   const out=this.draw,players=out.players,ball=out.ball;
-  Object.assign(out,state,{players,ball,rescueWindow:state.rescueWindow?{...state.rescueWindow}:undefined});Object.assign(ball,state.ball);
+  Object.assign(out,state,{players,ball,rescueWindow:state.rescueWindow?{...state.rescueWindow}:undefined,deadBalls:state.deadBalls?.map(b=>({...b}))});Object.assign(ball,state.ball);
   for(const key of ['tier','skill','topspin','slice','drop','placementAssist','aimOrigin'] as const)if(!(key in state.ball))delete ball[key];
   for(let i=0;i<state.players.length;i++)Object.assign(players[i],state.players[i],{
    serveCourt:state.players[i].serveCourt,strokeSpin:state.players[i].strokeSpin,preparation:state.players[i].preparation,contact:state.players[i].contact,rescue:state.players[i].rescue,
@@ -48,7 +48,8 @@ export class SnapshotPlayback {
  }
  sample(now:number,frozen=false):MatchState|null{
   const latest=this.queue.at(-1);if(!latest)return null;
-  if(frozen||latest.state.phase==='over'||latest.state.rescueWindow){this.wasFrozen=true;return this.copy(latest.state);}
+  if(frozen||latest.state.rescueWindow){this.wasFrozen=true;return this.copy(latest.state);}
+  if(latest.state.phase==='over'&&!latest.state.deadBalls?.some(b=>!b.settled))return this.copy(latest.state);
   if(this.wasFrozen){this.queue=[latest];this.offset=latest.at-latest.state.time*1000;this.cursor=-Infinity;this.wasFrozen=false;}
   const time=clamp(Math.max(this.cursor,(now-this.offset-this.delayMs)/1000),this.queue[0].state.time,latest.state.time+.05);
   this.cursor=time;
@@ -81,6 +82,16 @@ export class SnapshotPlayback {
   if(a.phase==='serve'&&a.players[a.server].preparation?.stroke==='serve'&&(!b||continuous||serveBoundary)){
    const from=a.players[a.server],player=out.players[a.server];this.animate(player,from,Math.min(age,.05));
    out.ball.y=serveBallHeight(player.preparation!.progress);
+  }
+  // Cosmetic dead balls can cross a score/point reset boundary. Their stable
+  // IDs and collision counters, not the active-ball phase, define continuity.
+  if(b&&out.deadBalls){
+   const t=clamp(age/(b.time-a.time),0,1);
+   for(const dead of out.deadBalls){
+    const to=b.deadBalls?.find(v=>v.id===dead.id);
+    if(to&&to.bounces===dead.bounces&&to.wallHits===dead.wallHits)
+     for(const key of ['x','y','z','vx','vy','vz','age'] as const)dead[key]=mix(dead[key],to[key],t);
+   }
   }
   return out;
  }

@@ -2,15 +2,28 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import {flightGravity} from './flight.js';
 import {surfaceProfile,type SurfaceId} from './surfaces.js';
 import type { Vec } from './types.js';
+import {ENCLOSURE} from './enclosure.js';
 let initialized: Promise<void> | undefined;
 export function initPhysics() { return initialized ??= RAPIER.init(); }
 export class BallPhysics {
   readonly world = new RAPIER.World({x:0,y:-9.81,z:0});
   readonly body: RAPIER.RigidBody;
-  constructor(surface:SurfaceId='hard') {
+  constructor(surface:SurfaceId='hard',options:{enclosure?:boolean;net?:boolean}={}) {
     const restitution=surfaceProfile(surface).restitution;
     this.world.timestep = 1/60;
     this.world.createCollider(RAPIER.ColliderDesc.cuboid(40,.1,50).setTranslation(0,-.1,0).setFriction(0).setRestitution(restitution));
+    if(options.enclosure){
+      const {sideX,sideThickness,sideHeight,backZ,backThickness,backHeight}=ENCLOSURE;
+      for(const x of [-sideX,sideX])this.world.createCollider(RAPIER.ColliderDesc.cuboid(sideThickness/2,sideHeight/2,backZ)
+        .setTranslation(x,sideHeight/2,0).setFriction(.12).setRestitution(ENCLOSURE.restitution)
+        .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Min));
+      for(const z of [-backZ,backZ])this.world.createCollider(RAPIER.ColliderDesc.cuboid(14,backHeight/2,backThickness/2)
+        .setTranslation(0,backHeight/2,z).setFriction(.12).setRestitution(ENCLOSURE.restitution)
+        .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Min));
+    }
+    if(options.net)this.world.createCollider(RAPIER.ColliderDesc.cuboid(6,.475,.025)
+      .setTranslation(0,.475,0).setFriction(.3).setRestitution(.12)
+      .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Min));
     this.body = this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(0,1,10).setCcdEnabled(true).setCanSleep(false));
     this.world.createCollider(RAPIER.ColliderDesc.ball(.12).setMass(.058).setFriction(0).setRestitution(restitution), this.body);
   }

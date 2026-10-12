@@ -1,0 +1,53 @@
+/* One menu family: primary invitation to play, quiet supporting actions. */
+.home .menu{
+  --home-button-fill:#faf8ef;
+  --home-button-border:#52725e55;
+  gap:9px;
+}
+.home .menu>button{
+  min-height:44px;border-radius:10px;border:1px solid var(--home-button-border);
+  background:var(--home-button-fill);color:#244d40;padding:11px 14px;
+  font-size:13px;font-weight:650;line-height:1.4;letter-spacing:0;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  box-shadow:0 2px 5px #173e4008;text-align:left;
+  transition:background .16s,border-color .16s,transform .16s,box-shadow .16s;
+}
+.home .menu>button>span:last-child{
+  display:inline-flex;align-items:center;justify-content:center;
+  flex:none;font-size:16px;color:#486956;margin:0;line-height:1;
+}
+.home .menu>.match-button{
+  background:#244d40;color:#f5f1df;border-color:#244d40;
+  min-height:48px;font-size:14px;box-shadow:0 4px 12px #173e4020;
+}
+.home .menu>.match-button>span:last-child{color:#e1eeb9}
+.home .menu>.doubles-button>span:last-child{font-size:11px}
+.home .menu .practice-entry strong{font:inherit;margin:0}
+.home .menu .practice-entry{box-shadow:0 2px 5px #173e4008}
+.home .menu>.character-choice>span:last-child{font-size:11px}
+.home .menu>button:hover:not(:disabled){background:#eaf0df;border-color:#52725e99;box-shadow:0 3px 9px #173e4012}
+.home .menu>.match-button:hover:not(:disabled){background:#35604e;color:#fff8e5}
+.home .menu>button:active:not(:disabled){transform:translateY(1px) scale(.99);box-shadow:none}
+.home .menu>button:focus-visible{outline:3px solid #9bbc5b;outline-offset:3px}
+.home .menu>button:disabled{opacity:.5;box-shadow:none}
+.home .court-tag{background:#faf8efed;color:#244d40;border:1px solid var(--home-button-border,#52725e55);border-radius:10px;box-shadow:0 5px 18px #173e4014}
+.home .court-tag:hover{background:#eaf0df}
+.home .court-tag strong{color:#52725e}
+.home .court-tag span{letter-spacing:.6px}
+@media(max-width:700px){
+  .home .menu{gap:7px}
+  .home .menu>button{font-size:12px;padding:10px 13px;min-height:44px}
+  .home .menu>.match-button{font-size:14px;min-height:48px}
+}
+@media(max-width:700px) and (max-height:700px) and (orientation:portrait){
+  .home-copy{height:79%}
+  .home .menu{gap:5px}
+  .home .menu>button{min-height:40px;padding:8px 12px}
+  .home .menu>.match-button{min-height:44px}
+}
+@media(max-width:700px) and (max-height:620px) and (orientation:portrait){
+  .home-copy{height:auto;min-height:590px}
+}
+@media(max-height:500px) and (orientation:landscape){
+  .home .menu>button{min-height:44px}
+}
