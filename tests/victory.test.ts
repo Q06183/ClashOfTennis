@@ -9,6 +9,8 @@ import {CHARACTERS} from '../src/simulation/characters.js';
 import {model} from './helpers/athlete-model.js';
 import {App} from '../src/ui/app.js';
 import {CourtView} from '../src/render/view.js';
+import {BallTrail} from '../src/render/ball-trail.js';
+import {ServeTarget} from '../src/render/serve-target.js';
 
 test('both viewers select the authoritative winner for the result celebration without changing match state',()=>{
  const state={winner:1,phase:'over',players:[{characterId:'lin',x:0,z:12},{characterId:'mei',x:2,z:-10}]} as MatchState;
@@ -151,6 +153,7 @@ test('the actual result renderer animates only the server winner on either clien
    scene:{},setCharacter(){},quality:{level:'balanced'},
    athletes:[0,1].map(i=>({root:new Object3D(),update(_p:unknown,_t:number,_d:number,celebration?:number){seen[i]=celebration;}})),
    contactShadows:[new Object3D(),new Object3D()],ball:new Object3D(),shadow:new Object3D(),target:new Object3D(),marker:new Object3D(),
+   ballTrail:new BallTrail(),serveTarget:new ServeTarget(),
    trail:[Object.assign(new Object3D(),{material:{color:{setHex(){}}}})],flight:{update(){}},renderer:{render(){},domElement:{dataset:{}}},
   }) as any;
   view.render(s,.1,s);

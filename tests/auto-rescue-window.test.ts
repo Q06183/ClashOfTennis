@@ -7,6 +7,8 @@ import {Athlete} from '../src/render/player.js';
 import {disposeTree} from '../src/render/dispose.js';
 import {side,type Seat} from '../src/simulation/types.js';
 import {SnapshotPlayback} from '../src/network/playback.js';
+import {BallTrail} from '../src/render/ball-trail.js';
+import {ServeTarget} from '../src/render/serve-target.js';
 import {CourtView} from '../src/render/view.js';
 import {frameMatch} from '../src/render/camera.js';
 import {rescueHint} from '../src/ui/rescue-hint.js';
@@ -103,6 +105,7 @@ test('frozen view keeps both rigs, camera, and ball rotation fixed and labels th
    mode:'match',seat:0,surface:'hard',ends:0,doubles:false,size:{w:390,h:844},camera,scene:{},setCharacter(){},quality:{level:'balanced'},
    athletes:[0,1].map(i=>({root:new Object3D(),update(){updates[i]++;}})),
    contactShadows:[new Object3D(),new Object3D()],ball:new Object3D(),shadow:new Object3D(),target:new Object3D(),marker:new Object3D(),
+   ballTrail:new BallTrail(),serveTarget:new ServeTarget(),
    trail:[Object.assign(new Object3D(),{material:{color:{setHex(){}}}})],flight:{update(){}},renderer:{render(){},domElement:{dataset:{}}},
   }) as any;
   for(let i=0;i<30;i++)view.render(state,1/60,state);

@@ -6,6 +6,8 @@ import {initPhysics} from '../src/simulation/physics.js';
 import {SnapshotPlayback} from '../src/network/playback.js';
 import {FlightGuide} from '../src/render/trajectory.js';
 import {CourtView} from '../src/render/view.js';
+import {BallTrail} from '../src/render/ball-trail.js';
+import {ServeTarget} from '../src/render/serve-target.js';
 import {Object3D,PerspectiveCamera} from 'three';
 before(initPhysics);
 test('playback interpolates all four seats and does not blend across an end change',()=>{
@@ -46,6 +48,7 @@ test('third and fourth room members can render the two-player lobby preview befo
    setCharacter(){},quality:{level:'balanced'},
    athletes:[0,1,2,3].map(()=>({root:new Object3D(),update(){}})),
    contactShadows:[0,1,2,3].map(()=>new Object3D()),ball:new Object3D(),shadow:new Object3D(),target:new Object3D(),marker:new Object3D(),
+   ballTrail:new BallTrail(),serveTarget:new ServeTarget(),
    trail:[Object.assign(new Object3D(),{material:{color:{setHex(){}}}})],flight:{update(){}},renderer:{render(){},domElement:{dataset:{}}},
   });
   assert.doesNotThrow(()=>view.render(m.state,1/60,m.state));
@@ -61,6 +64,7 @@ test('both winning teammates remain visible and celebrate using their physical-e
   setCharacter(){},quality:{level:'balanced'},
   athletes:[0,1,2,3].map(i=>({root:new Object3D(),update(_p:unknown,_t:number,_d:number,c?:number){updates[i]=c;}})),
   contactShadows:[0,1,2,3].map(()=>new Object3D()),ball:new Object3D(),shadow:new Object3D(),target:new Object3D(),marker:new Object3D(),
+  ballTrail:new BallTrail(),serveTarget:new ServeTarget(),
   trail:[Object.assign(new Object3D(),{material:{color:{setHex(){}}}})],flight:{update(){}},renderer:{render(){},domElement:{dataset:{}}},
  });
  view.render(m.state,.1,m.state);

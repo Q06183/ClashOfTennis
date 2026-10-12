@@ -1,0 +1,104 @@
+/* Match-only layer: preserve the garden-club home and authored camera. */
+.match-top{z-index:3}
+.match-top .icon-button{width:44px;height:44px;background:#173e40ed;border-color:#f3f0e270;font-size:21px}
+.match-top-actions{gap:6px}
+.scoreboard{z-index:2;width:min(370px,calc(100% - 116px));gap:8px;padding:8px 10px;background:#f3f0e2f5}
+.score-name{font-size:11px;line-height:1.3}
+.score-value{font-size:29px}
+.stamina-row{grid-template-columns:58px minmax(0,1fr);font-size:10px;margin-top:2px}
+.match-meta{position:absolute;z-index:2;top:calc(var(--match-hud-top) + 84px);left:64px;right:64px;display:flex;flex-wrap:wrap;justify-content:center;gap:4px 10px;background:#173e40ed;color:#fff7df;padding:5px 9px;border-radius:10px;font-size:10px;line-height:1.4;pointer-events:none}
+.match-meta .match-label,.match-meta .rally-count,.match-meta .team-status{position:static;inset:auto;transform:none;display:block;font-size:10px;letter-spacing:0;text-shadow:none;color:#fff7df;padding:0;background:none}
+.match-meta .connection{font-size:10px;color:#e0efb5;margin-left:4px}
+.match-meta .team-status{flex-basis:100%;text-align:center}
+.match-meta .team-status:empty{display:none}
+.practice-progress{top:calc(var(--match-hud-top) + 118px);z-index:2;white-space:normal;text-align:center;line-height:1.4;font-size:11px}
+.court-actions{width:64px;gap:8px;margin-left:auto}
+.tutorial-coach{top:calc(var(--match-hud-top) + 126px)}
+.tutorial-progress{font-size:11px}
+.tutorial-instruction p{font-size:12px}
+.court-actions button{min-height:44px;min-width:64px;font-size:12px;border:1px solid #f3f0e290;box-shadow:0 2px 8px #173e4028}
+.court-actions .help-button{min-width:44px;font-size:22px}
+.lob-button[aria-pressed="true"]{border:2px solid #f4efff;background:#c7b9ff}
+.match-bottom .hint,.match-bottom .serve-notice{max-width:calc(100% - 74px)}
+.hint{padding:10px 12px;background:#173e40ed}
+.hint strong{font-size:13px;line-height:1.5}
+.hint small{font-size:11px;line-height:1.5;color:#e0e9ce}
+.serve-notice{padding:12px 15px}
+.serve-notice strong{font-size:18px}
+.serve-notice span{font-size:12px}
+.point-banner{z-index:4;top:34%;width:min(330px,calc(100% - 32px));min-width:0;border:1px solid #fff8;border-radius:16px;background:#f3f0e2f5;color:#173e40;text-shadow:none;padding:16px 18px;box-shadow:0 8px 26px #173e4038}
+.point-banner strong{font:700 23px/1.4 Inter,"PingFang SC",sans-serif}
+.point-banner span{margin-top:4px;font-size:12px;letter-spacing:0;color:#496456}
+.point-banner small{font-size:12px;line-height:1.65;color:#35594b}
+#shot-feedback{font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.panel .icon-button{width:44px;height:44px;flex:none}
+.panel p,.help-details>p{font-size:13px}
+.panel .small-note{font-size:11px!important}
+.practice-goals button,.slot-button,.format-choice button{min-height:44px;font-size:12px}
+.slot-actions summary,.help-details summary{min-height:44px}
+.practice-goals p{font-size:12px}
+.surface-current{min-height:44px}
+.surface-option small{font-size:11px}
+.character-card span,.character-card small{font-size:11px}
+.character-card small{white-space:normal}
+.character-list-back{min-height:44px;font-size:12px}
+.victory-panel,.victory-panel:has(.practice-review){display:flex;flex-direction:column;max-height:38vh;overflow:hidden;padding:0}
+.result-body{padding:16px 20px 8px;overflow-y:auto;min-height:0}
+.result-body .panel-top{min-height:32px;position:relative;padding-right:36px}
+.result-body .panel-top{display:none}
+.victory-panel:has([data-action="finish-tutorial"]) .panel-top{display:flex}
+.result-body .panel-top .icon-button{width:44px;height:44px}
+.result-body h2{margin:6px 0;font-size:16px}
+.result-body .result-score{margin:4px 0;font-size:32px;line-height:1}
+.result-body .result-stats{margin:6px 0;padding:5px;gap:28px}
+.result-body .result-stats strong{font-size:18px;margin-bottom:2px}
+.result-body .result-review summary{min-height:38px;padding:8px 0}
+.result-actions{flex:none;padding:10px 20px 14px;background:#f3f0e2;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.result-actions .primary{grid-column:1/-1}
+.victory-panel .result-actions button{margin:0;min-height:44px;font-size:12px}
+.result-actions>.secondary:only-of-type{grid-column:1/-1}
+.result-actions>.primary:first-child+.secondary:last-child{grid-column:1/-1}
+.result-review summary{font-size:12px;line-height:1.5;min-height:44px;padding:12px 0;cursor:pointer;font-weight:650}
+.practice-review{padding-top:10px}
+.review-grid span,.practice-review small{font-size:11px}
+@media(min-width:701px) and (min-height:501px){
+  .match-meta{left:50%;right:auto;transform:translateX(-50%);width:max-content;max-width:400px;padding:5px 12px}
+}
+@media(max-width:360px){
+  .scoreboard{gap:6px;padding:7px 8px}
+  .score-name{font-size:10px}
+  .stamina-row{grid-template-columns:52px minmax(0,1fr);font-size:9px;gap:3px}
+  .match-meta{left:60px;right:60px;font-size:9px;gap:4px}
+  .match-meta .match-label,.match-meta .rally-count{font-size:9px}
+  .court-actions{width:60px}.court-actions button{min-width:60px}
+  .hint strong{font-size:12px}
+}
+@media(max-height:650px) and (orientation:portrait){
+  .match-meta{top:calc(var(--match-hud-top) + 81px);padding:3px 8px}
+  .match-meta .match-label{display:none}
+  .serve-notice{padding:8px 10px;border-radius:12px}
+  .serve-notice strong{font-size:14px;line-height:1.5}
+  .serve-notice span,.hint small{display:none}
+  .hint{padding:8px 10px}.hint strong{font-size:12px}
+  .tutorial-coach{top:calc(var(--match-hud-top) + 114px)}
+  .tutorial-progress{font-size:9px;gap:3px;margin-bottom:6px}
+  .tutorial-instruction p{font-size:11px}
+}
+@media(max-height:500px) and (orientation:landscape){
+  .tutorial-coach{top:auto;bottom:70px;width:320px}
+  .match-meta{left:50%;right:auto;transform:translateX(-50%);width:max-content;max-width:calc(100% - 140px);top:calc(var(--match-hud-top) + 84px)}
+  .court-actions{width:202px;gap:6px;flex-direction:row}
+  .match-bottom .hint,.match-bottom .serve-notice{max-width:calc(100% - 212px)}
+  .hint small{display:block}
+  .point-banner{top:46%;padding:10px 14px;width:300px}
+  .victory-panel,.victory-panel:has(.practice-review){width:42%;max-height:calc(100dvh - 24px)}
+  .victory-title{max-width:52%}
+  .result-body{padding:10px 16px 8px}.result-actions{padding:8px 16px 10px}
+  .panel-heading{font-size:32px;margin:8px 0}
+}
+@media(max-height:400px) and (orientation:landscape){
+  .match-meta{top:calc(var(--match-hud-top) + 80px)}
+  .practice-progress{top:calc(var(--match-hud-top) + 111px);font-size:10px}
+  .hint strong{font-size:12px}.hint small{font-size:10px}
+  .point-banner strong{font-size:20px}.point-banner small{font-size:11px}
+}

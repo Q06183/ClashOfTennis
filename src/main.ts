@@ -1,4 +1,5 @@
 import './ui/style.css';
+import './ui/match-design.css';
 import { initPhysics } from './simulation/physics.js';
 import { App } from './ui/app.js';
 try {

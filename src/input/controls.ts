@@ -21,7 +21,7 @@ export class Controls {
     canvas.addEventListener('contextmenu',e=>e.preventDefault());
   }
   private down=(e:PointerEvent)=>{
-    if(!this.enabled||this.start)return;
+    if(!this.enabled||this.start||e.isPrimary===false||(e.button!==undefined&&e.button!==0))return;
     e.preventDefault();this.unlock();this.canvas.setPointerCapture(e.pointerId);
     this.start={id:e.pointerId,x:e.clientX,y:e.clientY,time:performance.now(),firstMove:0};
     this.aiming(true);
@@ -29,13 +29,17 @@ export class Controls {
   };
   private tickCharge=()=>{
     const s=this.start;if(!s)return;
-    if(!s.firstMove&&!this.lobMode){const hold=performance.now()-s.time;if(hold>=150)this.charge(topspinCharge(hold),s.x,s.y);}
+    if(!s.firstMove&&!this.lobMode){const hold=performance.now()-s.time;if(hold>=350)this.charge(topspinCharge(hold),s.x,s.y);}
     this.chargeFrame=requestAnimationFrame(this.tickCharge);
   };
   private gesture(e:PointerEvent){
     const s=this.start!;const shot=interpretGesture({dx:e.clientX-s.x,dy:e.clientY-s.y,duration:performance.now()-s.time,
       hold:s.firstMove?s.firstMove-s.time:performance.now()-s.time,width:this.canvas.clientWidth,height:this.canvas.clientHeight});
     return shot&&this.lobMode&&!shot.slice?{...shot,lob:true,topspin:0,critical:false}:shot;
+  }
+  private releaseCapture(){
+    const id=this.start?.id;
+    if(id!==undefined&&this.canvas.hasPointerCapture?.(id))this.canvas.releasePointerCapture(id);
   }
   private move=(e:PointerEvent)=>{
     const s=this.start;if(!s||e.pointerId!==s.id)return;
@@ -49,9 +53,15 @@ export class Controls {
     const s=this.start;if(!s||e.pointerId!==s.id)return;
     const shot=this.gesture(e);
     if(shot){this.send(this.aimShot(shot,e.clientX-s.x,e.clientY-s.y));this.lobMode=false;}
-    else if(Math.hypot(e.clientX-s.x,e.clientY-s.y)<18){const p=this.movePoint(e.clientX,e.clientY);if(p)this.send({type:'move',...p});}
-    this.feedback(shot,e.clientX,e.clientY,true);this.trail.end();this.start=null;cancelAnimationFrame(this.chargeFrame);this.aiming(false);
+    else if(!s.firstMove&&performance.now()-s.time>=350){
+      // Holding without a swipe is a cancelled charge, not a movement order.
+    }
+    else if(Math.hypot(e.clientX-s.x,e.clientY-s.y)<Math.min(this.canvas.clientWidth,this.canvas.clientHeight)*.045){const p=this.movePoint(e.clientX,e.clientY);if(p)this.send({type:'move',...p});}
+    this.feedback(shot,e.clientX,e.clientY,true);this.trail.end();this.releaseCapture();this.start=null;cancelAnimationFrame(this.chargeFrame);this.aiming(false);
   };
-  private cancel=()=>{cancelAnimationFrame(this.chargeFrame);this.start=null;this.trail.clear();this.feedback(null,0,0,true);this.aiming(false);};
+  private cancel=(event?:PointerEvent)=>{
+    if(event&&this.start&&event.pointerId!==this.start.id)return;
+    cancelAnimationFrame(this.chargeFrame);this.releaseCapture();this.start=null;this.trail.clear();this.feedback(null,0,0,true);this.aiming(false);
+  };
   dispose(){this.cancel();this.trail.dispose();this.canvas.removeEventListener('pointerdown',this.down);this.canvas.removeEventListener('pointermove',this.move);this.canvas.removeEventListener('pointerup',this.up);this.canvas.removeEventListener('pointercancel',this.cancel);}
 }

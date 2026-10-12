@@ -15,6 +15,8 @@ import {FrameQuality,QUALITY,type QualityLevel} from './quality.js';
 import {AimCameraLock} from './aim-camera.js';
 import {victoryPlayer,frameVictory} from './victory.js';
 import {SelfMarker} from './self-marker.js';
+import {BallTrail} from './ball-trail.js';
+import {ServeTarget} from './serve-target.js';
 export class CourtView {
   readonly renderer:T.WebGLRenderer;
   readonly camera=new T.PerspectiveCamera(43,1,.1,130);
@@ -29,7 +31,10 @@ export class CourtView {
   private shadow:T.Mesh;
   private target:T.Mesh;
   private marker:T.Mesh;
+  private moveFeedback:{x:number;z:number;remaining:number}|null=null;
   private trail:T.Mesh[]=[];
+  private ballTrail=new BallTrail();
+  private serveTarget=new ServeTarget();
   private flight=new FlightGuide();
   private ray=new T.Raycaster();
   private plane=new T.Plane(new T.Vector3(0,1,0),0);
@@ -68,7 +73,7 @@ export class CourtView {
     this.scene.add(new T.HemisphereLight(0xfff8df,0x405e64,1.8));
     const sun=this.sun;sun.position.set(-10,24,8);sun.castShadow=true;
     sun.shadow.mapSize.setScalar(QUALITY[this.quality.level].shadowSize);sun.shadow.camera.left=-16;sun.shadow.camera.right=16;sun.shadow.camera.top=18;sun.shadow.camera.bottom=-18;sun.shadow.bias=-.001;
-    this.scene.add(sun,this.flight.root,this.selfMarker.root);this.stadiumEnds=makeCourt(this.scene);
+    this.scene.add(sun,this.flight.root,this.selfMarker.root,this.serveTarget.root);this.stadiumEnds=makeCourt(this.scene);
     for(const a of this.athletes)this.scene.add(a.root);
     for(let i=0;i<4;i++){
       const shadow=new T.Mesh(new T.CircleGeometry(.38,20),new T.MeshBasicMaterial({color:0x17352c,transparent:true,opacity:.2,depthWrite:false}));
@@ -150,6 +155,8 @@ export class CourtView {
     return {...shot,swipeAim:captureSwipeAim(this.camera,shot,dx,dy,this.size.w,this.size.h),directionX:serve?serveDirection(this.camera,ball,state.players[this.seat],shot,dx,dy,this.size.w,this.size.h,side(this.seat,state)):shotDirection(this.camera,ball,shot,dx,dy,this.size.w,this.size.h,side(this.seat,state))};
   }
   setAiming(active:boolean){this.aimCamera.pointer(active);}
+  showMoveTarget(x:number,z:number){this.moveFeedback={x,z,remaining:.9};}
+  clearMoveTarget(){this.moveFeedback=null;}
   setCameraDistance(distance:CameraDistance){this.cameraDistance=distance;}
   private updateCamera(state:MatchState,dt:number){
     if(state.rescueWindow)return;
@@ -217,17 +224,29 @@ export class CourtView {
     const b=state.ball;
     this.ball.visible=!winner;this.shadow.visible=!winner;
     this.flight.update(state,this.seat,this.mode==='match',authoritative);
-    for(let i=this.trail.length-1;i>0;i--)this.trail[i].position.copy(this.trail[i-1].position);
-    this.trail[0].position.copy(this.ball.position);
+    this.serveTarget.update(authoritative,this.seat,this.mode==='match');
+    const trailPoints=this.ballTrail.sample(state,this.trail.length);
     this.ball.position.set(b.x,b.y,b.z);if(!state.rescueWindow)this.ball.rotation.z+=dt*12;
     this.shadow.position.set(b.x,.07,b.z);this.shadow.scale.setScalar(1+b.y*.09);
     this.target.position.set(b.targetX,.075,b.targetZ);
     this.target.visible=false;
     const localPlayer=state.players[this.seat];
     this.selfMarker?.update(state,this.seat,this.camera,this.size.h,this.mode==='match');
-    if(localPlayer)this.marker.position.set(localPlayer.tx,.08,localPlayer.tz);
-    this.marker.visible=!!localPlayer&&this.mode==='match'&&state.phase==='rally';
-    const trailVisible=!winner&&state.phase==='rally';for(const t of this.trail){t.visible=trailVisible;(t.material as T.MeshBasicMaterial).color.setHex(SHOT_PROFILES[b.tier??(b.critical?'critical':'normal')].color);}
+    const feedback=this.moveFeedback;
+    if(feedback){
+      feedback.remaining=Math.max(0,feedback.remaining-dt);
+      this.marker.position.set(feedback.x,.08,feedback.z);
+      this.marker.scale.setScalar(1+(1-feedback.remaining/.9)*.4);
+      (this.marker.material as T.MeshBasicMaterial).opacity=Math.min(.9,feedback.remaining*2);
+      if(feedback.remaining===0)this.moveFeedback=null;
+    }
+    // Explicit tap acknowledgment only; automatic chasing is not a user tap.
+    this.marker.visible=!!feedback&&feedback.remaining>0&&!!localPlayer&&this.mode==='match'&&(state.phase==='rally'||state.phase==='serve');
+    for(const [i,t] of this.trail.entries()){
+      const point=trailPoints[i];t.visible=!winner&&!!point;
+      if(point)t.position.set(point.x,point.y,point.z);
+      (t.material as T.MeshBasicMaterial).color.setHex(SHOT_PROFILES[b.tier??(b.critical?'critical':'normal')].color);
+    }
     this.renderer.render(this.scene,this.camera);
   }
   dispose(){
