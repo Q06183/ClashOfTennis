@@ -131,3 +131,43 @@
 @keyframes gesture-up{0%,100%{transform:translateY(4px);opacity:.7}50%{transform:translateY(-4px);opacity:1}}
 @media(max-width:700px){.intro-panel{padding:23px}.intro-panel h2{font-size:23px}.intro-gestures{gap:8px;margin:16px 0 12px}.intro-gesture{grid-template-columns:48px minmax(0,1fr);gap:10px;padding:10px}.gesture-visual{width:46px;height:46px}.intro-gesture span{font-size:10px}}
 @media(max-height:520px){.intro-overlay{padding:10px}.intro-panel{max-height:calc(100dvh - 20px);padding:18px 22px}.intro-panel h2{margin:9px 0 3px}.intro-panel>p{margin:4px 0}.intro-gestures{margin:10px 0 8px}.intro-gesture{padding:8px}.gesture-visual{width:42px;height:42px}.intro-note{padding:7px 9px!important}.intro-panel .primary{min-height:42px}}
+.tutorial-coach{position:absolute;left:50%;top:calc(var(--match-hud-top) + 100px);transform:translateX(-50%);width:min(480px,calc(100% - 28px));padding:15px 18px;border-radius:16px;background:#f3f0e2f2;border:1px solid #fff9;box-shadow:0 8px 30px #10353230;pointer-events:none}
+.tutorial-progress{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-start;margin-bottom:12px;font-size:10px;color:#728078}
+.tutorial-progress span{padding:5px 7px;border-radius:20px;background:#173e4008;white-space:nowrap}
+.tutorial-progress .current{background:#def28c;color:#173e40;font-weight:700}.tutorial-progress .done{color:#315c49;background:#dce8c1}
+.tutorial-instruction{display:flex;align-items:center;gap:14px}.tutorial-gesture{flex:none;display:grid;place-items:center;width:46px;height:46px;border-radius:12px;background:#e7edd8;font-size:29px;color:#315c49}
+.tutorial-instruction strong{display:block;font-size:15px;line-height:1.5}.tutorial-instruction p{margin:5px 0 0;font-size:11px;line-height:1.7;color:#53695f}
+.tutorial-success{z-index:105;pointer-events:auto}
+.practice-levels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.practice-levels button{min-width:0;min-height:62px;padding:10px 5px;font-size:12px;white-space:nowrap}
+.practice-levels small{display:block;font-size:9px;font-weight:400;opacity:.7;margin-top:5px}
+/* Emphasize the existing bottom row without changing its size or menu layout. */
+.menu .practice-entry{background:#e4ead8;color:#254e3f;border-radius:8px;box-shadow:inset 0 0 0 1px #87a66970}
+.menu .practice-entry:hover{background:#dce8c1}
+.practice-entry strong{font:inherit;font-weight:650;margin-left:10px}.practice-entry span{margin-right:10px}
+@media(max-width:700px){.tutorial-coach{padding:12px}.tutorial-progress{gap:3px;font-size:9px}.tutorial-progress span{padding:5px}.tutorial-instruction strong{font-size:13px}.tutorial-instruction{gap:10px}.tutorial-instruction p{font-size:10px}}
+@media(max-height:500px) and (orientation:landscape){.tutorial-coach{left:auto;right:14px;top:auto;bottom:68px;transform:none;width:320px;padding:10px 12px}.tutorial-progress{margin-bottom:6px;font-size:9px}.tutorial-progress span{padding:4px}.tutorial-instruction strong{font-size:12px}.tutorial-instruction p{font-size:10px}}
+.tutorial-hand{--hand-x:0px;--hand-y:-88px;position:absolute;left:50%;top:60%;width:58px;height:60px;transform:translate(-50%,-50%);pointer-events:none;z-index:12}
+.hand-finger{position:absolute;width:42px;height:50px;left:20px;top:2px;filter:drop-shadow(0 3px 3px #173e4055);animation:tutorial-swipe 1.8s ease-in-out infinite}
+.hand-trail{position:absolute;left:25px;bottom:44px;width:5px;height:88px;border-radius:10px;background:linear-gradient(#def28c,#fff9);transform-origin:bottom;animation:tutorial-trail 1.8s ease-in-out infinite}
+.tutorial-hand>span{position:absolute;left:-8px;top:50px;font-size:12px;font-weight:700;color:#173e40;background:#f3f0e2e8;border-radius:10px;padding:4px 8px;white-space:nowrap}
+.tutorial-outgoing{position:absolute;left:86px;top:-82px;color:#dbf77c;pointer-events:none}
+.outgoing-arrow{display:block;width:40px;height:100px;filter:drop-shadow(0 2px 2px #173e40);transform-origin:50% 90%;animation:tutorial-outgoing 1.8s ease-in-out infinite}
+.tutorial-hand.up-left .outgoing-arrow{rotate:-20deg}.tutorial-hand.up-right .outgoing-arrow{rotate:20deg}
+.tutorial-outgoing>span{display:block;margin:7px 0 0 -17px;padding:5px 8px;border-radius:9px;background:#173e40ed;color:#def28c;font-size:12px;font-weight:700;white-space:nowrap}
+.tutorial-outgoing small{display:block;font-size:10px;color:#f3f0e2;margin-top:3px;font-weight:500}
+.tutorial-hand.down .tutorial-outgoing>span{background:#244d60ed;color:#ddefff}
+.tutorial-hand.down .tutorial-outgoing{color:#ddefff}
+@keyframes tutorial-outgoing{0%,22%{opacity:.45;translate:0 8px}75%,100%{opacity:1;translate:0 -10px}}
+@media(prefers-reduced-motion:reduce){.outgoing-arrow{animation:none}}
+.tutorial-hand.down{--hand-y:88px}.tutorial-hand.down .hand-trail{bottom:auto;top:12px;transform-origin:top}
+.tutorial-hand.up-left{--hand-x:-32px}.tutorial-hand.up-left .hand-trail{rotate:-20deg}
+.tutorial-hand.up-right{--hand-x:32px}.tutorial-hand.up-right .hand-trail{rotate:20deg}
+.tutorial-hand.tap .hand-finger{animation:tutorial-tap 1.4s ease-in-out infinite}.tutorial-hand.tap .hand-trail{display:none}
+.hand-ripple{display:none;position:absolute;left:12px;top:-6px;width:30px;height:30px;border:3px solid #def28c;border-radius:50%;box-shadow:0 0 0 3px #173e4055}
+.tutorial-hand.tap .hand-ripple{display:block;animation:tutorial-ripple 1.4s ease-out infinite}
+@keyframes tutorial-swipe{0%,15%{translate:0 0;opacity:0}22%{opacity:1}75%{translate:var(--hand-x) var(--hand-y);opacity:1}90%,100%{translate:var(--hand-x) var(--hand-y);opacity:0}}
+@keyframes tutorial-trail{0%,18%{scale:1 0;opacity:0}25%{opacity:1}75%{scale:1 1;opacity:1}90%,100%{scale:1 1;opacity:0}}
+@keyframes tutorial-tap{0%,100%{translate:0 -12px;scale:1;opacity:.7}35%,55%{translate:0 0;scale:.9;opacity:1}}
+@keyframes tutorial-ripple{0%,30%{scale:.5;opacity:0}40%{opacity:1}90%,100%{scale:2.2;opacity:0}}
+@media(prefers-reduced-motion:reduce){.hand-finger,.hand-trail,.tutorial-hand.tap .hand-finger,.tutorial-hand.tap .hand-ripple{animation:none}.hand-finger{translate:calc(var(--hand-x)/2) calc(var(--hand-y)/2)}.tutorial-hand.tap .hand-finger{translate:0 0}.hand-trail{opacity:.75}.tutorial-hand.tap .hand-ripple{opacity:1}}

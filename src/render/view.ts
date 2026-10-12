@@ -167,6 +167,10 @@ export class CourtView {
     this.ray.setFromCamera(new T.Vector2((x-rect.left)/rect.width*2-1,-(y-rect.top)/rect.height*2+1),this.camera);
     const v=new T.Vector3();return this.ray.ray.intersectPlane(this.plane,v)?{x:v.x,z:v.z}:null;
   }
+  screenPoint(x:number,z:number){
+    const v=new T.Vector3(x,.08,z).project(this.camera);
+    return {x:(v.x+1)*this.size.w/2,y:(1-v.y)*this.size.h/2,visible:v.z>=-1&&v.z<=1};
+  }
   render(state:MatchState,dt:number,authoritative:MatchState=state){
     this.setSurface(surfaceProfile(state.surface).id);
     this.cameraPlayers=state.players.map(p=>({x:p.x,z:p.z}));

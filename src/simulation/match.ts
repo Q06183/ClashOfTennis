@@ -44,6 +44,7 @@ export class Match {
   private serviceFlight = false;
   private faultReset = false;
   private serviceLet = false;
+  private practiceGroundReceiver:Seat|null=null;
   private impact: {x:number;z:number}|null = null;
   constructor(characters:readonly string[]=['lin','lin'],private random:()=>number=Math.random,options:{surface?:SurfaceId;mode?:MatchMode;format?:ScoringFormat}={}) {
     const surface=surfaceProfile(options.surface).id;
@@ -56,6 +57,7 @@ export class Match {
   }
   private announce(event: string) { this.state.event=event; this.state.eventId++; }
   private clearPreparation(preserveRescue=false) {
+    this.practiceGroundReceiver=null;
     this.rescuePlans=[null,null,null,null];this.nextRescueApproach=[0,0,0,0];
     for(const planner of this.returnPlanners)planner.clear();
     this.pending=[null,null,null,null];this.serveMotion=null;this.recentContact=null;
@@ -221,7 +223,50 @@ export class Match {
     const p=this.state.players[seat];
     return p.rescue?canReachRescue(b,p,seat,this.state.time):canReturnNormally(b,p,seat,slice);
   }
+  /** Read-only contact gate for local coaching; uses the exact live-hit rules. */
+  canReturn(seat:Seat,slice=false){
+    return !!this.state.players[seat]&&this.returnLegal(seat)&&this.returnReachable(seat,this.state.ball,slice);
+  }
+  /** Local practice checkpoint: restores the entire flight, not just visible ball data. */
+  practiceCheckpoint(){
+    const state=structuredClone(this.state),pending=structuredClone(this.pending);
+    const recentContact=structuredClone(this.recentContact),rescuePlans=structuredClone(this.rescuePlans);
+    const manualUntil=[...this.manualUntil],rescueAttempt=[...this.rescueAttempt],nextApproach=[...this.nextRescueApproach];
+    const planners=this.returnPlanners.map(p=>p.clone()),counted=new Map(this.rescueCounted);
+    const diagnostics={...this.rescueDiagnostics};
+    const internal={serveElapsed:this.serveElapsed,serveMotion:structuredClone(this.serveMotion),
+      bouncePoint:structuredClone(this.bouncePoint),sinceHit:this.sinceHit,serviceFlight:this.serviceFlight,
+      faultReset:this.faultReset,serviceLet:this.serviceLet,impact:structuredClone(this.impact),practiceGroundReceiver:this.practiceGroundReceiver};
+    return ()=>{
+      Object.assign(this.state,structuredClone(state));this.pending=structuredClone(pending);
+      this.recentContact=structuredClone(recentContact);this.rescuePlans=structuredClone(rescuePlans);
+      this.manualUntil=[...manualUntil];this.rescueAttempt=[...rescueAttempt];this.nextRescueApproach=[...nextApproach];
+      this.returnPlanners=planners.map(p=>p.clone());this.rescueCounted=new Map(counted);
+      Object.assign(this.rescueDiagnostics,diagnostics);Object.assign(this,structuredClone(internal));
+      const b=this.state.ball;
+      this.physics.place(b,{x:b.vx,y:b.vy,z:b.vz},b.topspin);
+    };
+  }
+  /** A gentle bot feed for isolated local lessons; ordinary bounce/contact rules still apply. */
+  practiceFeed(){
+    const s=this.state;
+    if(s.mode!=='singles')throw Error('Practice feed is singles-only');
+    this.clearPreparation();this.manualUntil=[0,0,0,0];this.rescueAttempt=[-1,-1,-1,-1];
+    this.practiceGroundReceiver=0;
+    this.sinceHit=0;this.serviceFlight=false;this.serviceLet=false;this.impact=null;this.bouncePoint=null;
+    s.phase='rally';s.pointTimer=0;s.winner=null;s.lastPoint=null;s.fault=0;
+    s.rally=Math.max(2,s.rally+1);s.maxRally=Math.max(s.maxRally,s.rally);
+    const bot=s.players[1],sign=side(0,s),start={x:bot.x,y:1.35,z:bot.z};
+    const target={x:sign*2.2,z:sign*7.6},flight=1.45,gravity=flightGravity({});
+    this.physics.place(start,{x:(target.x-start.x)/flight,y:(.12-start.y+gravity*flight*flight/2)/flight,z:(target.z-start.z)/flight});
+    Object.assign(s.ball,this.physics.read(),{hitter:1,bounces:0,targetX:target.x,targetZ:target.z,
+      tier:'normal',critical:false,rescue:false,topspin:0,slice:false,drop:0,skill:undefined,placementAssist:0,aimOrigin:undefined});
+    bot.swing=.44;bot.stroke='forehand';bot.contact=start;
+    for(const p of s.players){p.rescue=undefined;p.preparation=undefined;p.shotQueued=false;}
+    this.announce('搭档送球');
+  }
   private hit(seat: Seat, shot: Shot, serve=false) {
+    this.practiceGroundReceiver=null;
     const s=this.state,p=s.players[seat],b=s.ball,sign=side(seat,this.state);
     const intendedPower=shot.power;
     const total=s.score[0]+s.score[1], serveSide=sign*(total%2===0?1:-1);
@@ -439,7 +484,7 @@ export class Match {
       if(seat===receiver&&!p.rescue){
         const assist=shouldAssist(b,p,s.time,this.manualUntil[seat]);
         if(!assist)this.returnPlanners[seat].clear();
-        const receiving=this.returnPlanners[seat].update(b,p,seat,this.serviceFlight,s.time,s.rally,!!this.pending[seat]?.airRequested),air=receiving.air;
+        const receiving=this.returnPlanners[seat].update(b,p,seat,this.serviceFlight||this.practiceGroundReceiver===seat,s.time,s.rally,!!this.pending[seat]?.airRequested),air=receiving.air;
         if(assist){
           const plan=this.rescuePlans[seat];
           const staged=plan&&plan.flight===s.rally&&s.time-plan.at<.09;
