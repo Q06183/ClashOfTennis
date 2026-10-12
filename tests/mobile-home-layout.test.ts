@@ -24,9 +24,12 @@ test('single-player stays in the original bottom row and only gains subtle empha
     assert.ok(html.indexOf(`data-action="${actions[i-1]}"`)<html.indexOf(`data-action="${actions[i]}"`));
   assert.equal((html.match(/data-action="practice"/g)??[]).length,1);
   assert.doesNotMatch(html,/practice-entry-icon|practice-entry-copy/);
+  assert.doesNotMatch(html,/点按跑位\s*\/\s*滑动击球\s*\/\s*好友对战/);
   const css=await readFile(new URL('../src/ui/style.css',import.meta.url),'utf8');
   const style=css.match(/\.menu \.practice-entry\{([^}]+)\}/)![1];
-  assert.match(style,/background:#e4ead8/);
+  assert.match(style,/background:transparent/);
+  assert.match(style,/box-shadow:inset 0 0 0 1px #49735b/);
+  assert.match(style,/align-items:center/,'different text and arrow sizes must be vertically centered');
   assert.doesNotMatch(style,/(?:^|;)(?:min-height|padding|margin|grid[^:]*|order|position):/,'emphasis must not resize or move the row');
   assert.doesNotMatch(css,/min-height:620px|home-copy\{top:13%/,'remove layout changes from the promoted entry');
 });

@@ -106,10 +106,10 @@ test('leaving replay restores both free-practice difficulty buttons without mark
       assert.match(setupHTML(),/认真对打/);
       await app.action('standard');await app.action('start-practice');
       assert.equal(app.tutorial,null);assert.equal(app.difficulty,'standard');
-      await app.action('quit');await app.action('practice');
+      await app.action('quit');await app.action('confirm-quit');await app.action('practice');
       await app.action('replay-intro');await app.action('close-intro');await app.action('start-practice');
       assert.ok(app.tutorial,'explicit replay starts the guide');
-      await app.action('quit');assert.equal(app.tutorial,null);
+      await app.action('quit');await app.action('confirm-quit');assert.equal(app.tutorial,null);
       await app.action('practice');assert.match(setupHTML(),/认真对打/);
       assert.equal(data.get('rally-tutorial'),marker,'exiting replay does not rewrite completion');
       // Returning directly while the text modal is open also cancels the replay.

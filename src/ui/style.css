@@ -142,9 +142,10 @@
 .practice-levels button{min-width:0;min-height:62px;padding:10px 5px;font-size:12px;white-space:nowrap}
 .practice-levels small{display:block;font-size:9px;font-weight:400;opacity:.7;margin-top:5px}
 /* Emphasize the existing bottom row without changing its size or menu layout. */
-.menu .practice-entry{background:#e4ead8;color:#254e3f;border-radius:8px;box-shadow:inset 0 0 0 1px #87a66970}
-.menu .practice-entry:hover{background:#dce8c1}
+.menu .practice-entry{background:transparent;color:#254e3f;border-radius:8px;box-shadow:inset 0 0 0 1px #49735b;align-items:center}
+.menu .practice-entry:hover{background:#ffffff40}
 .practice-entry strong{font:inherit;font-weight:650;margin-left:10px}.practice-entry span{margin-right:10px}
+.home-footer{justify-content:flex-end}
 @media(max-width:700px){.tutorial-coach{padding:12px}.tutorial-progress{gap:3px;font-size:9px}.tutorial-progress span{padding:5px}.tutorial-instruction strong{font-size:13px}.tutorial-instruction{gap:10px}.tutorial-instruction p{font-size:10px}}
 @media(max-height:500px) and (orientation:landscape){.tutorial-coach{left:auto;right:14px;top:auto;bottom:68px;transform:none;width:320px;padding:10px 12px}.tutorial-progress{margin-bottom:6px;font-size:9px}.tutorial-progress span{padding:4px}.tutorial-instruction strong{font-size:12px}.tutorial-instruction p{font-size:10px}}
 .tutorial-hand{--hand-x:0px;--hand-y:-88px;position:absolute;left:50%;top:60%;width:58px;height:60px;transform:translate(-50%,-50%);pointer-events:none;z-index:12}
@@ -171,3 +172,33 @@
 @keyframes tutorial-tap{0%,100%{translate:0 -12px;scale:1;opacity:.7}35%,55%{translate:0 0;scale:.9;opacity:1}}
 @keyframes tutorial-ripple{0%,30%{scale:.5;opacity:0}40%{opacity:1}90%,100%{scale:2.2;opacity:0}}
 @media(prefers-reduced-motion:reduce){.hand-finger,.hand-trail,.tutorial-hand.tap .hand-finger,.tutorial-hand.tap .hand-ripple{animation:none}.hand-finger{translate:calc(var(--hand-x)/2) calc(var(--hand-y)/2)}.tutorial-hand.tap .hand-finger{translate:0 0}.hand-trail{opacity:.75}.tutorial-hand.tap .hand-ripple{opacity:1}}
+.match-top-actions{display:flex;flex-direction:column;gap:8px;position:absolute;right:0;top:0;pointer-events:auto}
+.overlay{pointer-events:auto}
+.practice-pause,.quit-confirm{z-index:106;background:#102f3677;pointer-events:auto}
+.practice-pause .primary,.practice-pause .secondary,.quit-confirm .primary,.quit-confirm .secondary{width:100%;margin-top:10px}
+.practice-goals{margin:14px 0;padding:12px;border:1px solid var(--line);border-radius:10px;min-width:0}
+.practice-goals legend{font-size:11px;padding:0 5px;color:#53695f}
+.practice-goals>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.practice-goals button{min-height:38px;font-size:11px;border-radius:7px;background:#fff7;color:var(--ink)}
+.practice-goals button.selected{background:#def28c;box-shadow:inset 0 0 0 1px #537441}
+.practice-goals p{margin:9px 0 0;font-size:11px;line-height:1.6;color:#53695f}
+.practice-progress{position:absolute;top:calc(var(--match-hud-top) + 98px);left:50%;transform:translateX(-50%);max-width:calc(100% - 30px);white-space:nowrap;padding:5px 12px;border-radius:14px;font-size:11px;color:#173e40;background:#edf3cfed;pointer-events:none}
+.quick-help p{margin:10px 0;padding:10px 12px;border-radius:10px;background:#e7edd880}
+.quick-help strong,.quick-help span{display:block;font-size:13px;line-height:1.6}
+.quick-help span{font-size:12px;color:#53695f;margin-top:3px}
+.help-details{margin:12px 0;font-size:12px;border-top:1px solid var(--line)}
+.help-details summary{padding:12px 0;cursor:pointer;font-weight:650}
+.help-details>p{font-size:12px;line-height:1.7}
+.point-banner small{display:block;margin-top:5px;max-width:310px;font-size:11px;line-height:1.5;color:#53695f}
+.practice-review{padding:14px 0;border-top:1px solid var(--line);text-align:left}
+.practice-review h3{font-size:13px;margin:0 0 12px}
+.review-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.review-grid div{padding:9px;background:#e7edd880;border-radius:8px}
+.review-grid b,.review-grid span{display:block;font-size:16px}
+.review-grid span{font-size:10px;margin-top:4px;color:#53695f}
+.practice-review p{font-size:12px;line-height:1.7;margin:12px 0 6px}
+.practice-review small{display:block;font-size:10px;line-height:1.6;color:#53695f}
+.goal-result{margin-top:12px;border-radius:9px;background:#def28c88;padding:10px}
+.goal-result strong{display:block;font-size:12px;margin-bottom:5px}
+.victory-panel:has(.practice-review){max-height:52vh}
+@media(max-height:500px) and (orientation:landscape){.practice-progress{top:calc(var(--match-hud-top) + 86px);font-size:10px}.victory-panel:has(.practice-review){max-height:90vh;width:44%}}
