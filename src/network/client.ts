@@ -13,7 +13,8 @@ export class NetworkClient {
   connect(action:unknown){
     let awaitingResume=(action as {type?:string})?.type==='resume';
     this.stopped=false;this.callbacks.status('正在连接球场…');
-    const ws=new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/ws`);this.ws=ws;
+    const wsUrl=import.meta.env?.VITE_WS_URL?.trim()||`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/ws`;
+    const ws=new WebSocket(wsUrl);this.ws=ws;
     const timeout=setTimeout(()=>{if(ws.readyState===WebSocket.CONNECTING)ws.close();},8000);
     ws.onopen=()=>{clearTimeout(timeout);if(this.stopped||ws!==this.ws){ws.close();return;}this.callbacks.status('已连接');ws.send(JSON.stringify(action));
       this.ping=setInterval(()=>this.send({type:'ping',at:Date.now()}),2500);

@@ -5,7 +5,7 @@ import {SkinnedMesh,Vector3,Box3} from 'three';
 import {model} from './helpers/athlete-model.js';
 import {Athlete} from '../src/render/player.js';
 
-for(const name of ['bob','saba'])test(`${name}: direct binding preserves all original appearance bytes and bind pose`,async()=>{
+for(const name of ['bob','saba'])test(`${name}: direct binding preserves all original appearance bytes and bind pose`,{skip:'暂时忽略 Bob/Saba：角色下架，且原始模型素材不在当前工作目录'},async()=>{
   const source=await readFile(`artifacts/bob-saba-2026-09-30/original/${name}_glb.glb`);
   const target=await readFile(`public/models/characters/${name}.glb`);
   const parse=(b:Buffer)=>{const n=b.readUInt32LE(12);return {json:JSON.parse(b.toString('utf8',20,20+n)),bin:b.subarray(28+n)};};
@@ -32,7 +32,7 @@ for(const name of ['bob','saba'])test(`${name}: direct binding preserves all ori
   assert.equal(scene.userData.directOriginalRig.schema,'direct-original-v1');
 });
 
-for(const name of ['bob','saba'])test(`${name}: original rig follows actual match controls, stays grounded and finite`,async()=>{
+for(const name of ['bob','saba'])test(`${name}: original rig follows actual match controls, stays grounded and finite`,{skip:'暂时忽略 Bob/Saba：角色下架'},async()=>{
   const {scene}=await model(`characters/${name}`),athlete=new Athlete(1);
   athlete.attachModel(scene);
   const rest=new Map<string,Vector3>();

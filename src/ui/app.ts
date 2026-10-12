@@ -1,4 +1,4 @@
-import {getCharacter,isCharacterId} from '../simulation/characters.js';
+import {getCharacter,isCharacterAvailable} from '../simulation/characters.js';
 import {characterPicker,revealCharacterPicker} from './characters.js';
 import {HiddenCharacterUnlock} from './hidden-character.js';
 import {readPreference,writePreference} from './preferences.js';
@@ -57,6 +57,7 @@ export class App {
   private latency=0;
   private busy=false;
   private help=false;
+  private intro=readPreference('rally-tutorial')===null;
   private surface:SurfaceId=surfaceProfile(readPreference('rally-surface')).id;
   private surfaceOpen=false;
   private lobbyReturn=false;
@@ -191,7 +192,7 @@ export class App {
       }
     }
     else if(action.startsWith('pick-character-')){
-      if(this.screen!=='characters')return;const id=action.slice('pick-character-'.length);if(!isCharacterId(id))return;
+      if(this.screen!=='characters')return;const id=action.slice('pick-character-'.length);if(!isCharacterAvailable(id))return;
       if(this.hiddenMaster.selectable(id)!==id)return;
       if(this.choosingBot){this.choosingBot.characterId=id;}
       else if(this.choosingOpponent){this.opponentId=id;this.saveCharacter('rally-opponent',id);}
@@ -222,7 +223,7 @@ export class App {
       this.net?.close();this.net=null;this.remote=null;this.drawState=null;this.room=null;this.playback.reset();this.local.dispose();this.local=new Match([this.characterId,this.opponentId],Math.random,{surface:this.surface});
       this.networkError='';
       this.seat=0;this.paused=false;this.connected=true;this.screen='playing';this.lastEvent=-1;this.accumulator=0;
-      this.help=!readPreference('rally-tutorial');this.renderScreen();
+      this.renderScreen();
     }
     else if(action==='match'&&!this.busy)this.connect({type:'match',name:this.name,characterId:this.characterId,surface:this.surface});
     else if((action==='create'||action==='create-doubles')&&!this.busy)this.connect({type:'create',name:this.name,characterId:this.characterId,mode:action==='create-doubles'?'doubles':'singles',surface:this.surface});
@@ -249,6 +250,8 @@ export class App {
     }
     else if(action==='help'){this.help=true;this.renderScreen();}
     else if(action==='close-help'){this.help=false;writePreference('rally-tutorial','1');this.accumulator=0;this.renderScreen();}
+    else if(action==='replay-intro'){this.intro=true;this.renderScreen();}
+    else if(action==='close-intro'){this.intro=false;writePreference('rally-tutorial','1');this.renderScreen();}
     else if(action==='mute'){this.audio.toggle();this.renderScreen();}
     else if(action==='relaxed'||action==='standard'){this.difficulty=action;this.renderScreen();}
   }
@@ -355,13 +358,13 @@ export class App {
   private renderScreen(characterTarget?:'detail'|'list'){
     const characterScroll=characterTarget?this.ui.querySelector('.character-panel')?.scrollTop:undefined;
     this.view.setMode(this.screen==='result'?'result':this.screen==='playing'?'match':'home',this.seat);
-    this.controls.enabled=this.screen==='playing'&&!this.help;
+    this.controls.enabled=this.screen==='playing'&&!this.help&&!this.intro;
     if(this.screen==='characters')this.ui.innerHTML=characterPicker(this.choosingBot?.characterId??(this.choosingOpponent?this.opponentId:this.characterId),this.choosingOpponent,this.hiddenMaster.unlocked,this.choosingBot?.seat);
     else if(this.screen==='home')this.ui.innerHTML=this.home();
     else if(this.screen==='matching')this.ui.innerHTML=this.matchingPanel();
     else if(this.screen==='room')this.ui.innerHTML=this.roomPanel();
     else if(this.screen==='join')this.ui.innerHTML=this.panel(`<div class="panel-top"><span>YOUR FRIEND IS WAITING</span>${close}</div><h2>加入朋友的球场。</h2><p>输入 6 位房间号，下一场好球等你来。</p><label class="name-label" for="nickname">昵称<input id="nickname" value="${escape(this.name)}" maxlength="16"/></label><button class="secondary" data-action="characters">球员 · ${getCharacter(this.characterId).name} / 更换</button><input id="room-input" class="code-input" aria-label="六位房间号" placeholder="000000" maxlength="6" inputmode="numeric" pattern="[0-9]{6}" value="${escape(this.code)}"/><button class="primary" data-action="join-submit" ${this.busy?'disabled':''}>${this.busy?'正在加入…':'加入球场 →'}</button><div class="status-line">${escape(this.status)}</div>`);
-    else if(this.screen==='setup')this.ui.innerHTML=this.panel(`<div class="panel-top"><span>TAKE A FEW PRACTICE SWINGS</span>${close}</div><div class="panel-heading">Warm up.</div><h2>先和搭档热热身。</h2><p>同一片球场，同样的操作。找找击球节奏，再叫上朋友。</p><div class="character-matchup"><button class="secondary" data-action="characters">你 · ${getCharacter(this.characterId).name}</button><button class="secondary" data-action="opponent-characters">搭档 · ${getCharacter(this.opponentId).name}</button></div><div class="select-row"><button class="${this.difficulty==='relaxed'?'selected':''}" data-action="relaxed">轻松练习</button><button class="${this.difficulty==='standard'?'selected':''}" data-action="standard">认真对打</button></div><button class="primary" data-action="start-practice">开始练习 →</button><p class="small-note">点按移动 · 滑动击球 · 7 分制</p>`);
+    else if(this.screen==='setup')this.ui.innerHTML=this.panel(`<div class="panel-top"><span>TAKE A FEW PRACTICE SWINGS</span>${close}</div><div class="panel-heading">Warm up.</div><h2>先和搭档热热身。</h2><p>同一片球场，同样的操作。找找击球节奏，再叫上朋友。</p><div class="character-matchup"><button class="secondary" data-action="characters">你 · ${getCharacter(this.characterId).name}</button><button class="secondary" data-action="opponent-characters">搭档 · ${getCharacter(this.opponentId).name}</button></div><div class="select-row"><button class="${this.difficulty==='relaxed'?'selected':''}" data-action="relaxed">轻松练习</button><button class="${this.difficulty==='standard'?'selected':''}" data-action="standard">认真对打</button></div><button class="secondary tutorial-replay" data-action="replay-intro">重看新手引导</button><button class="primary" data-action="start-practice">开始练习 →</button><p class="small-note">点按移动 · 滑动击球 · 7 分制</p>`);
     else if(this.screen==='playing'){this.ui.innerHTML=this.playing()+(this.help?this.helpPanel():'');this.lastPhase='';this.updateHud();}
     else this.ui.innerHTML=this.result();
     if(this.screen==='setup')this.ui.querySelector('[data-action="start-practice"]')?.insertAdjacentHTML('beforebegin',courtButton(this.surface));
@@ -372,6 +375,7 @@ export class App {
       if(panel&&characterScroll!==undefined)panel.scrollTop=characterScroll;
       revealCharacterPicker(this.ui,characterTarget);
     }
+    if(this.intro)this.ui.insertAdjacentHTML('beforeend',this.introPanel());
   }
   private updateHud(){
     if(this.screen!=='playing')return;
@@ -442,7 +446,7 @@ export class App {
     const active=this.screen==='playing'||this.screen==='result';
     if(!this.net){
       const training=this.screen==='playing';
-      if(!(training&&this.help)){
+      if(!(training&&(this.help||this.intro))){
         this.accumulator+=dt;
         while(this.accumulator>=1/60){
           if(!training&&this.screen!=='result')driveAI(this.local,0,'standard');
@@ -474,4 +478,14 @@ export class App {
     if(now-this.lastHud>90){this.updateHud();this.lastHud=now;}
     requestAnimationFrame(this.frame);
   };
+  private introPanel(){return `<div class="overlay intro-overlay" role="dialog" aria-modal="true" aria-labelledby="intro-title"><section class="panel intro-panel">
+    <div class="panel-top"><span>FIRST TIME ON COURT · 操作入门</span><button class="icon-button" data-action="close-intro" aria-label="关闭新手引导">×</button></div>
+    <h2 id="intro-title">两种手势，马上开打。</h2><p>记住移动和回球，就能开始第一拍。</p>
+    <div class="intro-gestures">
+      <div class="intro-gesture"><div class="gesture-visual tap-visual" aria-hidden="true"><i></i><b>点</b></div><div><strong>轻点球场 · 移动</strong><span>点一下想去的位置，球员会自动跑过去。发球抛球后站位会锁定。</span></div></div>
+      <div class="intro-gesture"><div class="gesture-visual swipe-visual" aria-hidden="true"><b>↑</b></div><div><strong>向上滑动 · 回球</strong><span>来球时向上滑就能回击；左右斜滑控制方向。短而轻柔的滑动更轻，滑得更快、更长会打得更有力、更深。</span></div></div>
+    </div>
+    <p class="intro-note">轮到你发球时，斜向上滑，把球发进对角发球区。对局中点右下角 <b>?</b> 可随时重看操作说明。</p>
+    <button class="primary" data-action="close-intro">知道了，开始玩 →</button>
+  </section></div>`;}
 }

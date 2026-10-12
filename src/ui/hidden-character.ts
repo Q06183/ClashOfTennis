@@ -1,4 +1,4 @@
-import {getCharacter,type CharacterId} from '../simulation/characters.js';
+import {getCharacter,isCharacterAvailable,type CharacterId} from '../simulation/characters.js';
 
 type Store=Pick<Storage,'getItem'|'setItem'>;
 const KEY='rally-hidden-master';
@@ -20,6 +20,6 @@ export class HiddenCharacterUnlock {
   }
   selectable(id?:string):CharacterId {
     const character=getCharacter(id);
-    return character.hidden&&!this.unlocked?'lin':character.id;
+    return !isCharacterAvailable(character.id)||character.hidden&&!this.unlocked?'lin':character.id;
   }
 }

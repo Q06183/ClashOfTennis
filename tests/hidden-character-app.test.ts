@@ -76,3 +76,34 @@ test('real App action handler gates selections, resets interrupted clicks and sh
   app.local.dispose();
  }finally{if(descriptor)Object.defineProperty(globalThis,'localStorage',descriptor);else Reflect.deleteProperty(globalThis,'localStorage');}
 });
+
+test('dismissing the first-use gesture guide is remembered',async()=>{
+ const descriptor=Object.getOwnPropertyDescriptor(globalThis,'localStorage'),data=new Map<string,string>();
+ Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:(key:string)=>data.get(key)??null,setItem:(key:string,value:string)=>{data.set(key,value);}}});
+ let renders=0;
+ const app=Object.assign(Object.create(App.prototype),{intro:true,help:false,hiddenMaster:{reset(){}},renderScreen(){renders++;}}) as any;
+ try{
+  const guide=app.introPanel();
+  assert.match(guide,/轻点球场 · 移动/);
+  assert.match(guide,/向上滑动 · 回球/);
+  await app.action('close-intro');
+  assert.equal(app.intro,false);
+  assert.equal(data.get('rally-tutorial'),'1');
+  assert.equal(renders,1);
+ }finally{if(descriptor)Object.defineProperty(globalThis,'localStorage',descriptor);else Reflect.deleteProperty(globalThis,'localStorage');}
+});
+
+test('single-player practice can reopen the gesture guide repeatedly',async()=>{
+ const descriptor=Object.getOwnPropertyDescriptor(globalThis,'localStorage'),data=new Map<string,string>();
+ Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:(key:string)=>data.get(key)??null,setItem:(key:string,value:string)=>{data.set(key,value);}}});
+ let renders=0;
+ const app=Object.assign(Object.create(App.prototype),{intro:false,hiddenMaster:{reset(){}},renderScreen(){renders++;}}) as any;
+ try{
+  await app.action('replay-intro');assert.equal(app.intro,true);
+  await app.action('close-intro');assert.equal(app.intro,false);assert.equal(data.get('rally-tutorial'),'1');
+  await app.action('replay-intro');assert.equal(app.intro,true);
+  await app.action('close-intro');assert.equal(app.intro,false);
+  await app.action('replay-intro');assert.equal(app.intro,true);
+  assert.equal(renders,5);
+ }finally{if(descriptor)Object.defineProperty(globalThis,'localStorage',descriptor);else Reflect.deleteProperty(globalThis,'localStorage');}
+});

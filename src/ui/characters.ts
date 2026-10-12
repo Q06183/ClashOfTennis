@@ -1,4 +1,4 @@
-import {CHARACTERS,getCharacter,characterEffects} from '../simulation/characters.js';
+import {CHARACTERS,getCharacter,characterEffects,isCharacterAvailable} from '../simulation/characters.js';
 import {pointRecoveryRate} from '../simulation/stamina.js';
 
 /** Run after rendering so focus and scrolling target the newly selected player. */
@@ -11,8 +11,8 @@ export function revealCharacterPicker(root:HTMLElement,target:'detail'|'list'){
 }
 
 export function characterPicker(selected:string,opponent:boolean,unlocked=false,botSeat?:number){
- const requested=getCharacter(selected),c=requested.hidden&&!unlocked?getCharacter():requested,e=characterEffects(c.id),pct=(n:number)=>`${n>=1?'+':''}${Math.round((n-1)*1000)/10}%`;
- const available=CHARACTERS.filter(x=>!x.hidden||unlocked);
+ const available=CHARACTERS.filter(x=>isCharacterAvailable(x.id)&&(!x.hidden||unlocked));
+ const requested=getCharacter(selected),c=available.find(x=>x.id===requested.id)??available[0]??getCharacter(),e=characterEffects(c.id),pct=(n:number)=>`${n>=1?'+':''}${Math.round((n-1)*1000)/10}%`;
  const stats=[['移动','movement'],['正手','forehand'],['反手','backhand'],['截击','volley'],['发球','serve'],['体力','stamina']] as const;
  return `<div class="overlay"><section class="panel character-panel"><div class="panel-top"><span>${botSeat!==undefined?`电脑球员 · ${botSeat%2===0?'A':'B'}${botSeat<2?'1':'2'}`:opponent?'练习对手':'选择你的球员'}</span><button class="icon-button" data-action="close-characters" aria-label="返回角色选择前的页面">×</button></div><h2><button class="character-secret-title" data-action="hidden-master">找到你的打法。</button></h2><p>${unlocked?'九位普通球员 + 一位隐藏大佬，全部免费使用。':'九位球员免费使用，各有所长。'}利手决定正反手侧，单反与双反有各自的动作和站位。滑动方向保持一致。</p>
  <div class="character-grid">${available.map(x=>`<button class="character-card ${x.id===c.id?'selected':''} ${x.hidden?'hidden-master-card':''}" style="--character-color:${x.color}" data-action="pick-character-${x.id}" aria-pressed="${x.id===c.id}"><img src="${x.portrait??`/portraits/${x.id}.png`}" alt="${x.name}人物外观"/><strong>${x.name}</strong><span>${x.role}</span><small>${x.hidden?'全属性 99 · ':''}${x.handedness==='left'?'左手':'右手'} · ${x.backhandStyle==='one-handed'?'单反':'双反'}</small></button>`).join('')}</div>

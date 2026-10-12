@@ -1,4 +1,4 @@
-import {getCharacter,isCharacterId,type CharacterId} from '../src/simulation/characters.js';
+import {getCharacter,isCharacterAvailable,type CharacterId} from '../src/simulation/characters.js';
 import { randomInt, randomUUID } from 'node:crypto';
 import { WebSocket } from 'ws';
 import { Match } from '../src/simulation/match.js';
@@ -69,7 +69,7 @@ export class Rooms {
       if(!isScoringFormat(m.format)){this.error(p,'赛制不存在');return;}r.format=m.format;
     }else if(m.bot!==undefined){
       const b=m.bot;
-      if(!b||!seatValid(b.seat)||typeof b.enabled!=='boolean'||b.characterId!==undefined&&!isCharacterId(b.characterId)){this.error(p,'电脑席位配置无效');return;}
+      if(!b||!seatValid(b.seat)||typeof b.enabled!=='boolean'||b.characterId!==undefined&&!isCharacterAvailable(b.characterId)){this.error(p,'电脑席位配置无效');return;}
       if(r.seats[b.seat]&&!r.seats[b.seat]!.bot){this.error(p,'不能替换真人，请先调整席位');return;}
       r.seats[b.seat]=b.enabled?{name:`电脑 ${b.seat+1}`,characterId:getCharacter(b.characterId).id,token:randomUUID(),ws:null,ready:false,gone:null,bot:true}:null;
     }else{
@@ -110,7 +110,7 @@ export class Rooms {
     if(['create','join','resume','match'].includes(m.type)&&p.room){this.error(p,'你已经在房间中');return;}
     if(p.searching&&m.type!=='ping'&&m.type!=='leave'&&m.type!=='match'){this.error(p,'正在寻找对手，请先取消匹配');return;}
     const name=typeof m.name==='string'?m.name.trim().slice(0,16)||'球友':'球友';
-    if(['create','join','match'].includes(m.type)&&m.characterId!==undefined&&!isCharacterId(m.characterId)){this.error(p,'角色不存在，请重新选择');return;}
+    if(['create','join','match'].includes(m.type)&&m.characterId!==undefined&&!isCharacterAvailable(m.characterId)){this.error(p,'角色不存在，请重新选择');return;}
     const characterId=getCharacter(m.characterId).id;
     if(['create','match'].includes(m.type)){
       if(m.surface!==undefined&&!isSurfaceId(m.surface)){this.error(p,'场地不存在');return;}
@@ -148,7 +148,7 @@ export class Rooms {
     if(m.type==='configure'){this.configure(p,m);return;}
     if(m.type==='select-character'){
       if(r.match&&r.match.state.phase!=='over'){this.error(p,'比赛中不能更换角色');return;}
-      if(!isCharacterId(m.characterId)){this.error(p,'角色不存在，请重新选择');return;}
+      if(!isCharacterAvailable(m.characterId)){this.error(p,'角色不存在，请重新选择');return;}
       r.seats[seat]!.characterId=m.characterId;for(const member of r.seats)if(member)member.ready=false;
       this.roomUpdate(r);return;
     }

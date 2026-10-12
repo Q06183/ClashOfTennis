@@ -12,6 +12,19 @@ async function client(url:string){
   throw Error(`Waiting ${type}: ${JSON.stringify(messages.slice(-2))}`);
  }};
 }
+test('temporarily unavailable Bob and Saba are rejected by every server player entry point',async()=>{
+ const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
+ try{
+  for(const id of ['bob','saba']){
+   a.send({type:'create',characterId:id});assert.match((await a.wait('error')).message,/角色不存在/);
+   a.send({type:'match',characterId:id});assert.match((await a.wait('error')).message,/角色不存在/);
+  }
+  a.send({type:'create',characterId:'lin'});const room=await a.wait('welcome');
+  b.send({type:'join',code:room.code,characterId:'bob'});assert.match((await b.wait('error')).message,/角色不存在/);
+  a.send({type:'select-character',characterId:'saba'});assert.match((await a.wait('error')).message,/角色不存在/);
+  a.send({type:'configure',bot:{seat:1,enabled:true,characterId:'bob'}});assert.match((await a.wait('error')).message,/电脑席位配置无效/);
+ }finally{a.ws.terminate();b.ws.terminate();await server.close();}
+});
 test('host assigns same-team humans and bots, all clients share court and four-player state',async()=>{
  const server=await createGameServer({port:0,host:'127.0.0.1'}),a=await client(server.wsUrl),b=await client(server.wsUrl);
  try{

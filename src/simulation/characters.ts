@@ -15,6 +15,9 @@ export const CHARACTERS:readonly Character[]=[
 ];
 export const STANDARD_CHARACTERS=CHARACTERS.filter(c=>!c.hidden);
 export const isCharacterId=(id:unknown):id is CharacterId=>typeof id==='string'&&CHARACTERS.some(c=>c.id===id);
+// Temporary roster freeze: keep these identities out of every game entry point.
+const temporarilyUnavailableCharacterIds=new Set<string>(['bob','saba']);
+export const isCharacterAvailable=(id:unknown):id is CharacterId=>isCharacterId(id)&&!temporarilyUnavailableCharacterIds.has(id);
 export const getCharacter=(id?:string):Character=>CHARACTERS.find(c=>c.id===id)??CHARACTERS[0];
 const effects=new Map(CHARACTERS.map(c=>{
  const s=c.stats;
