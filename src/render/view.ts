@@ -18,6 +18,7 @@ import {SelfMarker} from './self-marker.js';
 import {BallTrail} from './ball-trail.js';
 import {ServeTarget} from './serve-target.js';
 import {DeadBallView} from './dead-balls.js';
+import {frameHomePractice} from './home-practice.js';
 export class CourtView {
   readonly renderer:T.WebGLRenderer;
   readonly camera=new T.PerspectiveCamera(43,1,.1,130);
@@ -139,9 +140,7 @@ export class CourtView {
     this.aimCamera.reset();
     this.size={w,h};this.camera.aspect=w/h;
     if(this.mode==='home'){
-      this.camera.clearViewOffset();
-      this.camera.zoom=1;
-      this.camera.fov=w>h?39:49;this.camera.position.set(19,23,25);this.camera.lookAt(w>h?-4:0,0,0);
+      frameHomePractice(this.camera,w,h);
     } else {
       this.appliedCameraDistance=this.cameraDistance;
       const seat=(teamOf(this.seat)^this.ends) as Seat;
@@ -210,7 +209,8 @@ export class CourtView {
     for(const a of this.athletes)a.root.visible=false;
     for(const shadow of this.contactShadows)shadow.visible=false;
     for(const marker of this.playerMarkers??[])marker.visible=false;
-    for(const seat of seatsFor(state.mode)){
+    const visibleSeats=this.mode==='home'?[0 as Seat]:seatsFor(state.mode);
+    for(const seat of visibleSeats){
       const slot=(seat^this.ends) as Seat;
       const source=state.players[seat],p=winner?{...source,preparation:undefined,rescue:undefined,swing:0,moving:false,tx:source.x,tz:source.z}:source;
       const celebrating=!!winner&&teamOf(seat)===winner.seat;
@@ -224,7 +224,7 @@ export class CourtView {
         (marker.material as T.MeshBasicMaterial).color.setHex(seat===this.seat?0xffffcf:teamOf(seat)===0?0x7ae2ff:0xffb46a);
       }
     }
-    this.renderer.domElement.dataset.players=String(state.players.length);
+    this.renderer.domElement.dataset.players=String(visibleSeats.length);
     const b=state.ball;
     this.ball.visible=!winner&&state.phase!=='point'&&state.phase!=='over';this.shadow.visible=this.ball.visible;
     this.deadBallView?.update(state.deadBalls??[],this.mode!=='home',state.rescueWindow?0:dt);

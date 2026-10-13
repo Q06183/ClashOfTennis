@@ -8,6 +8,7 @@ import {rescueHint} from './rescue-hint.js';
 import {shotFeedbackLabel,feedbackPosition,pointBanner,playSubhint,movementFeedbackTarget} from './match-feedback.js';
 import {containModalFocus} from './modal-focus.js';
 import {homeIcon} from './home-icons.js';
+import {HomePractice} from '../render/home-practice.js';
 import {staminaBars,staminaLabels} from './stamina.js';
 import {CameraChoice} from './camera-choice.js';
 import {shotTier,SHOT_PROFILES} from '../simulation/shot-profile.js';
@@ -38,6 +39,9 @@ export class App {
   private controls:Controls;
   private audio=new CourtAudio();
   private screen:Screen='home';
+  private homeTab:'play'|'players'='play';
+  private friendsOpen=false;
+  private homePractice=new HomePractice();
   private hiddenMaster=new HiddenCharacterUnlock({getItem:key=>localStorage.getItem(key),setItem:(key,value)=>localStorage.setItem(key,value)});
   private characterId=this.hiddenMaster.selectable(readPreference('rally-character')??undefined);
   private opponentId=this.hiddenMaster.selectable(readPreference('rally-opponent')??undefined);
@@ -67,7 +71,7 @@ export class App {
   private practiceReview:PracticeReview|null=null;
   private practiceBest=0;
   private practiceSaved=true;
-  private intro=readPreference('rally-tutorial')!==TUTORIAL_VERSION;
+  private intro=false;
   private tutorialRequired=readPreference('rally-tutorial')!==TUTORIAL_VERSION;
   private tutorial:PracticeTutorial|null=null;
   private tutorialHudKey='';
@@ -106,8 +110,16 @@ export class App {
     });
     document.addEventListener('keydown',e=>{
       containModalFocus(e,this.ui);
+      if((e.target as HTMLElement).getAttribute('role')==='tab'&&['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){
+        e.preventDefault();
+        const players=e.key==='End'||(e.key!=='Home'&&this.homeTab!=='players');
+        void this.action(players?'tab-players':'tab-play').then(()=>{
+          this.ui.querySelector<HTMLButtonElement>(players?'#home-tab-players':'#home-tab-play')?.focus();
+        });
+      }
       if(e.key==='Escape'){
-        if(this.quitConfirm)void this.action('cancel-quit');
+        if(this.friendsOpen)void this.action('close-friends');
+        else if(this.quitConfirm)void this.action('cancel-quit');
         else if(this.help)void this.action('close-help');
         else if(this.practicePaused)void this.action('resume-practice');
         else if(this.screen==='playing'&&!this.net)void this.action('pause-practice');
@@ -182,6 +194,21 @@ export class App {
   }
   private async action(action:string){
     if(action!=='hidden-master')this.hiddenMaster.reset();
+    if(action==='tab-play'||action==='tab-players'){
+      if(!['home','characters'].includes(this.screen)||this.net)return;
+      if(this.screen==='characters'&&(this.characterReturn!=='home'||this.choosingOpponent||this.choosingBot))return;
+      this.friendsOpen=false;this.surfaceOpen=false;
+      this.homeTab=action==='tab-play'?'play':'players';
+      if(this.homeTab==='players'){
+        this.choosingOpponent=false;this.choosingBot=null;this.characterReturn='home';this.screen='characters';
+      }else this.screen='home';
+      this.renderScreen();return;
+    }
+    if(action==='friends'){
+      if(this.screen!=='home'||this.busy)return;
+      this.friendsOpen=true;this.renderScreen();return;
+    }
+    if(action==='close-friends'){this.friendsOpen=false;this.renderScreen();return;}
     if(action.startsWith('goal-')){
       const goal=action.slice(5);
       if(this.screen==='setup'&&!this.tutorialRequired&&isPracticeGoal(goal)){this.practiceGoal=goal;this.renderScreen();}
@@ -257,6 +284,7 @@ export class App {
     if(action==='characters'||action==='opponent-characters'){
       if(!['home','setup','room','join'].includes(this.screen))return;
       this.choosingBot=null;
+      if(this.screen==='home'&&action==='characters')this.homeTab='players';
       this.characterReturn=this.screen;this.choosingOpponent=action==='opponent-characters';this.screen='characters';this.renderScreen();
     }
     else if(action==='hidden-master'){
@@ -292,9 +320,12 @@ export class App {
          (!this.room.playing||this.remote?.phase==='over')&&this.room.seats[this.seat]?.characterId!==this.characterId){
         this.net.send({type:'select-character',characterId:this.characterId});
       }
-      this.screen=this.characterReturn;this.renderScreen();
+      this.screen=this.characterReturn;
+      if(this.screen==='home')this.homeTab='play';
+      this.renderScreen();
     }
     else if(action==='practice'){
+      this.friendsOpen=false;
       // Explicit free practice must not inherit a first-use or replay session.
       this.tutorialRequired=false;
       this.intro=false;this.tutorial=null;this.tutorialHudKey='';
@@ -318,7 +349,7 @@ export class App {
     }
     else if(action==='match'&&!this.busy)this.connect({type:'match',name:this.name,characterId:this.characterId,surface:this.surface});
     else if((action==='create'||action==='create-doubles')&&!this.busy)this.connect({type:'create',name:this.name,characterId:this.characterId,mode:action==='create-doubles'?'doubles':'singles',surface:this.surface});
-    else if(action==='join'){this.screen='join';this.renderScreen();}
+    else if(action==='join'){this.friendsOpen=false;this.screen='join';this.renderScreen();}
     else if(action==='join-submit'&&!this.busy){
       if(!/^\d{6}$/.test(this.code)){this.toast('请输入朋友的 6 位房间号');return;}
       this.connect({type:'join',code:this.code,name:this.name,characterId:this.characterId});
@@ -331,6 +362,7 @@ export class App {
       else this.toast('当前是本机地址。请用电脑的 Wi-Fi 地址打开游戏后分享。');
     }
     else if(action==='back'||action==='quit'){
+      this.homeTab='play';this.friendsOpen=false;
       this.view?.clearMoveTarget?.();
       this.practicePaused=false;this.quitConfirm=false;this.practiceReview=null;
       this.net?.close();this.net=null;this.remote=null;this.room=null;this.drawState=null;this.screen='home';this.help=false;
@@ -375,6 +407,7 @@ export class App {
     }
   }
   private connect(action:unknown){
+    this.friendsOpen=false;this.homeTab='play';
     this.view?.clearMoveTarget?.();
     this.tutorial=null;this.tutorialHudKey='';
     this.practicePaused=false;this.quitConfirm=false;this.practiceReview=null;this.help=false;this.intro=false;
@@ -421,26 +454,22 @@ export class App {
   }
   private home(){
     const character=getCharacter(this.characterId),court=surfaceProfile(this.surface);
-    return `<div class="home"><header class="masthead">${brand}<div class="edition"><i></i> PLAY FOR THE RALLY</div></header>
-    <main class="home-copy"><div class="home-intro"><div class="eyebrow">YOUR NEXT GOOD RALLY</div><h1>上场，<br/><em>打个痛快。</em></h1>
-    <p class="subtitle">一片球场。几位球友。你的节奏。</p></div>
-    <section class="home-play" aria-labelledby="home-play-title"><div class="home-play-heading"><h2 id="home-play-title">选择玩法</h2><small>PLAY</small></div>
-    <div class="menu">
+    return `<div class="home home-simple"><header class="masthead">${brand}${this.homeTabs()}</header>
+    <main id="home-play-panel" role="tabpanel" aria-labelledby="home-tab-play" class="home-copy"><div class="home-intro"><div class="eyebrow">JUST PLAY.</div><h1>下一拍，<br/><em>就现在。</em></h1></div>
+    <div class="home-player-label"><span>${character.name}</span><small>${character.role} · 当前球员</small></div>
+    <section class="home-play" aria-label="开始比赛"><div class="menu">
     <button class="primary lime match-button" data-action="match" ${this.busy?'disabled':''}><span class="home-action-icon">${homeIcon('match')}</span><span class="home-action-copy"><strong>${this.busy?'连接中…':'快速匹配'}</strong><small>找位球友，立即开打</small></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>
-    <div class="home-mode-label">和朋友一起玩</div>
-    <button class="primary" data-action="create" ${this.busy?'disabled':''}><span class="home-action-icon">${homeIcon('create')}</span><span class="home-action-copy"><strong>单打开房</strong><small>邀请一位朋友</small></span></button>
-    <button class="secondary doubles-button" data-action="create-doubles" ${this.busy?'disabled':''}><span class="home-action-icon">${homeIcon('doubles')}</span><span class="home-action-copy"><strong>双打开房</strong><small>2 对 2 · 好友 / 电脑</small></span></button>
-    <button class="secondary join-button" data-action="join"><span class="home-action-icon">${homeIcon('join')}</span><span class="home-action-copy"><strong>加入好友房间</strong><small>已有房号？从这里加入</small></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>
-    <div class="home-mode-label">自己先练练</div>
-    <button class="practice practice-entry" data-action="practice" aria-label="单人练习：新手引导、轻松对打、认真对打"><span class="home-action-icon">${homeIcon('practice')}</span><span class="home-action-copy"><strong>单人练习 · 先热热身</strong><small>从入门到进阶，按你的节奏</small></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>${this.networkError?`<div class="error-inline" role="alert" style="grid-column:1/-1">${escape(this.networkError)}</div>`:''}</div></section></main>
-    <div class="home-court-caption" aria-hidden="true"><span>THE COURT IS YOURS</span><b>好球，留在场上。</b></div>
-    <section class="home-settings" aria-labelledby="home-settings-title"><div class="home-settings-heading"><h2 id="home-settings-title">上场设置</h2><small>不进入比赛</small></div>
-    <label class="name-label" for="nickname"><span class="nickname-icon">${homeIcon('player')}</span><span>昵称</span><input id="nickname" maxlength="16" value="${escape(this.name)}" autocomplete="nickname"/></label>
-    <div class="home-setting-grid">
-    <button class="character-choice home-setting-button" data-action="characters" aria-label="更换球员：${character.name} · ${character.role}"><span class="home-action-icon">${homeIcon('player')}</span><span class="home-action-copy"><small>当前球员 · ${character.role}</small><strong>${character.name}</strong></span><span class="home-setting-edit">更换</span></button>
-    <button class="court-tag home-setting-button" data-action="surfaces" aria-label="选择场地：${court.name}"><span class="home-action-icon">${homeIcon('court')}</span><span class="home-action-copy"><small>${court.title}</small><strong>${court.name}</strong></span><span class="home-setting-edit">切换</span></button>
-    </div></section>
+    <button class="secondary friends-button" data-action="friends" aria-haspopup="dialog" aria-expanded="${!!this.friendsOpen}" ${this.busy?'disabled':''}><span class="home-action-icon">${homeIcon('doubles')}</span><span class="home-action-copy"><strong>好友对战</strong></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>
+    <button class="practice practice-entry" data-action="practice" aria-label="单人练习：新手引导、轻松对打、认真对打"><span class="home-action-icon">${homeIcon('practice')}</span><span class="home-action-copy"><strong>单人练习</strong></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>${this.networkError?`<div class="error-inline" role="alert" style="grid-column:1/-1">${escape(this.networkError)}</div>`:''}</div></section></main>
+    <button class="court-tag home-court-compact" data-action="surfaces" aria-label="选择场地：${court.name}"><span class="home-action-icon">${homeIcon('court')}</span><span class="home-action-copy"><small>场地</small><strong>${court.name}</strong></span><span class="home-setting-edit">切换</span></button>
     <footer class="home-footer"><span>NO PRESSURE. JUST PLAY.</span></footer></div>`;
+  }
+  private homeTabs(){
+    const players=this.homeTab==='players';
+    return `<nav class="home-tabs" role="tablist" aria-label="首页导航"><button id="home-tab-play" role="tab" tabindex="${players?-1:0}" aria-selected="${!players}" aria-controls="home-play-panel" data-action="tab-play">${homeIcon('court')}玩球</button><button id="home-tab-players" role="tab" tabindex="${players?0:-1}" aria-selected="${players}" aria-controls="home-players-panel" data-action="tab-players">${homeIcon('player')}球员</button></nav>`;
+  }
+  private friendsPanel(){
+    return `<div class="overlay friends-overlay" role="dialog" aria-modal="true" aria-labelledby="friends-title"><section class="panel friends-panel"><div class="panel-top"><span>PLAY WITH FRIENDS</span><button class="icon-button" data-action="close-friends" aria-label="关闭好友对战面板">×</button></div><h2 id="friends-title">约朋友，打一场。</h2><label class="name-label" for="nickname">昵称<input id="nickname" value="${escape(this.name)}" maxlength="16"/></label><div class="friends-choices"><button class="secondary" data-action="create" ${this.busy?'disabled':''}>${homeIcon('create')}<span><strong>单打开房</strong><small>邀请一位朋友 · 1 对 1</small></span>${homeIcon('arrow')}</button><button class="secondary" data-action="create-doubles" ${this.busy?'disabled':''}>${homeIcon('doubles')}<span><strong>双打开房</strong><small>好友 / 电脑 · 2 对 2</small></span>${homeIcon('arrow')}</button><button class="secondary" data-action="join" ${this.busy?'disabled':''}>${homeIcon('join')}<span><strong>加入好友房间</strong><small>输入朋友的六位房号</small></span>${homeIcon('arrow')}</button></div></section></div>`;
   }
   private panel(content:string){return `<div class="overlay"><section class="panel">${content}</section></div>`;}
   private matchingPanel(){return this.panel(`<div class="panel-top"><span>QUICK MATCH</span>${close}</div><div class="matchmaking-mark"><i></i><i></i><i></i></div><h2>正在寻找对手…</h2><p>另一位正在匹配的球友出现后，会直接为你们开赛。</p><div class="matchmaking-player"><div class="avatar">${escape(this.name.slice(0,1))}</div><div><strong>${escape(this.name)}</strong><small>${getCharacter(this.characterId).name} · ${getCharacter(this.characterId).role}</small></div><span>匹配中</span></div><button class="secondary" data-action="back">取消匹配</button><div class="status-line">${escape(this.status)}</div>`);}
@@ -490,7 +519,11 @@ export class App {
     const characterScroll=characterTarget?this.ui.querySelector('.character-panel')?.scrollTop:undefined;
     this.view.setMode(this.screen==='result'?'result':this.screen==='playing'?'match':'home',this.seat);
     this.controls.enabled=this.screen==='playing'&&!this.help&&!this.intro&&!this.practicePaused&&!this.quitConfirm;
-    if(this.screen==='characters')this.ui.innerHTML=characterPicker(this.choosingBot?.characterId??(this.choosingOpponent?this.opponentId:this.characterId),this.choosingOpponent,this.hiddenMaster.unlocked,this.choosingBot?.seat);
+    if(this.screen==='characters'){
+      const picker=characterPicker(this.choosingBot?.characterId??(this.choosingOpponent?this.opponentId:this.characterId),this.choosingOpponent,this.hiddenMaster.unlocked,this.choosingBot?.seat);
+      const homePicker=this.characterReturn==='home'&&!this.choosingOpponent&&!this.choosingBot;
+      this.ui.innerHTML=homePicker?`<div class="home home-player-tab"><header class="masthead">${brand}${this.homeTabs()}</header><main id="home-players-panel" role="tabpanel" aria-labelledby="home-tab-players">${picker}</main></div>`:picker;
+    }
     else if(this.screen==='home')this.ui.innerHTML=this.home();
     else if(this.screen==='matching')this.ui.innerHTML=this.matchingPanel();
     else if(this.screen==='room')this.ui.innerHTML=this.roomPanel();
@@ -509,6 +542,11 @@ export class App {
       if(!this.tutorialRequired)this.ui.querySelector('.character-matchup')?.insertAdjacentHTML('beforebegin',practiceGoalChoices(this.practiceGoal??'free'));
     }
     if(this.screen==='matching')this.ui.querySelector('.matchmaking-player')?.insertAdjacentHTML('afterend',courtButton(this.surface,true));
+    if(this.screen==='home'&&this.friendsOpen){
+      this.ui.querySelector<HTMLElement>('.home')?.setAttribute('inert','');
+      this.ui.insertAdjacentHTML('beforeend',this.friendsPanel());
+      this.ui.querySelector<HTMLButtonElement>('.friends-panel [data-action="create"]')?.focus();
+    }
     if(this.surfaceOpen)this.ui.insertAdjacentHTML('beforeend',`<div class="overlay surface-overlay" role="dialog" aria-modal="true" aria-label="选择球场"><section class="panel"><div class="panel-top"><span>CHOOSE YOUR COURT</span><button class="icon-button" data-action="close-surfaces" aria-label="关闭场地选择">×</button></div><h2>换一片球场，换一种节奏。</h2><p>场地改变反弹、旋转与跑动制动；开赛后锁定。</p><div class="surface-options">${surfaceChoices(this.room?.surface??this.surface)}</div><button class="secondary" data-action="close-surfaces">返回</button></section></div>`);
     if(this.screen==='characters'&&characterTarget){
       const panel=this.ui.querySelector('.character-panel');
@@ -600,7 +638,8 @@ export class App {
     const frameMs=now-this.lastFrame,dt=Math.min(frameMs/1000,.08);this.lastFrame=now;
     this.view.recordFrame(frameMs,!document.hidden);
     const active=this.screen==='playing'||this.screen==='result';
-    if(!this.net){
+    const preview=!this.net&&!active;
+    if(!this.net&&!preview){
       const training=this.screen==='playing';
       if(!(training&&(this.help||this.intro||this.practicePaused||this.quitConfirm||document.hidden))){
         this.accumulator+=dt;
@@ -611,7 +650,6 @@ export class App {
             if(this.tutorial.completed){this.completeTutorial();break;}
             continue;
           }
-          if(!training&&this.screen!=='result')driveAI(this.local,0,'standard');
           if(this.screen!=='result')driveAI(this.local,1,training?this.difficulty:'standard');
           if(training)this.practiceReview?.observe(this.local.state);
           this.local.step(1/60);this.accumulator-=1/60;
@@ -633,6 +671,10 @@ export class App {
       else if(this.local.state.phase==='over'&&!active){this.local.dispose();this.local=new Match([this.characterId,this.opponentId],Math.random,{surface:this.room?.surface??this.surface});}
     }
     let state=this.remote??this.local.state;
+    if(preview){
+      this.homePractice??=new HomePractice();
+      state=this.homePractice.sample(document.hidden?0:dt,this.characterId,this.room?.surface??this.surface);
+    }
     if(this.remote){
       this.drawState=this.playback.sample(now,this.paused||!this.connected)??structuredClone(this.remote);
       const draw=this.drawState;
@@ -642,7 +684,7 @@ export class App {
       }
       state=draw;
     }
-    this.view.render(state,dt,this.remote??this.local.state);
+    this.view.render(state,dt,preview?state:this.remote??this.local.state);
     if(this.tutorial&&this.screen==='playing'){
       const hand=document.querySelector<HTMLElement>('#tutorial-hand-slot .tutorial-hand');
       const target=this.tutorial.movementTarget(this.local);

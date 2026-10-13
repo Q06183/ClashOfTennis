@@ -1,133 +1,111 @@
-/* A court-side dashboard: compact editorial headline + purposeful icon cards. */
-.home{--home-button-fill:#fbfcf6;--home-button-border:#244d401c;background:linear-gradient(90deg,#eef2e7 0%,#eef2e7f5 25%,#eef2e7b0 43%,#eef2e700 70%);overflow-x:hidden;overflow-y:auto;pointer-events:auto}
-.home .masthead{top:max(26px,env(safe-area-inset-top));left:5%;right:5%}
+/* Quiet lobby: one primary action, one friends entry, a small practice link. */
+.home{--home-button-fill:#fbfcf6;--home-button-border:#244d4026;background:linear-gradient(90deg,#eef2e7f5 0%,#eef2e7d0 33%,#eef2e730 60%,#eef2e700 85%);overflow-x:hidden;overflow-y:auto;pointer-events:auto}
+.home .masthead{top:max(24px,env(safe-area-inset-top));left:5%;right:5%;gap:16px}
 .home .brand{font-size:22px;letter-spacing:-.7px}
 .home .brand img{width:40px;height:40px}
 .home .brand small{font-size:9px;letter-spacing:2px}
-.home .edition{display:flex;align-items:center;gap:8px;background:#f5f8edba;border:1px solid #244d4018;font-size:9px;padding:10px 14px;letter-spacing:1.7px}
-.home .edition i{width:6px;height:6px;border-radius:50%;background:#4d7654}
-.home .home-copy{position:relative;top:auto;left:auto;right:auto;width:min(430px,46%);height:auto;min-height:0;max-width:none;padding:0;margin:110px 0 56px 6%;display:block}
-.home .eyebrow{font-size:9px;letter-spacing:2.8px;color:#4d6b57}
-.home h1{font-family:"Avenir Next","PingFang SC","Microsoft YaHei",sans-serif;font-size:52px;line-height:1.06;letter-spacing:-2px;font-weight:800;margin:16px 0 12px}
-.home h1 em{font-style:normal;color:#467252;font-weight:800}
-.home .subtitle{font-size:12px;line-height:1.7;letter-spacing:1px;margin:0;color:#637362}
-.home-play{margin-top:24px;border:1px solid #ffffffa0;border-radius:22px;padding:18px;background:#f5f8edf0;box-shadow:0 14px 36px #16372c12;backdrop-filter:blur(16px)}
-.home-play-heading{display:flex;align-items:center;justify-content:space-between;color:#284d3c;font-size:13px;font-weight:700;margin-bottom:12px}
-.home-play-heading small{font-size:9px;font-weight:500;letter-spacing:2px;color:#7d8d75}
-.home-play-heading h2,.home-settings-heading h2{font-size:13px;letter-spacing:0;margin:0;font-weight:700}
-.home-mode-label{grid-column:1/-1;font-size:10px;font-weight:600;color:#6c8067;margin:4px 0 0;line-height:1.5}
-.home .menu{margin:0;max-width:none;width:100%;gap:8px;grid-template-columns:repeat(2,minmax(0,1fr))}
-.home .name-label{margin-bottom:3px;gap:8px;font-size:11px;letter-spacing:0;color:#62735e;min-width:0}
-.home .name-label input{min-width:0;padding:8px 10px;font-size:12px;border:1px solid #294d3c17;background:#e7edde80;border-radius:8px}
-.nickname-icon{display:flex;width:18px;height:18px;flex:none}
-.nickname-icon .home-icon{width:18px;height:18px}
-.home .menu>button{min-height:56px;border-radius:10px;border:1px solid var(--home-button-border);background:var(--home-button-fill);color:#244d40;padding:10px 12px;display:flex;align-items:center;justify-content:flex-start;gap:10px;text-align:left;box-shadow:0 2px 4px #16372c05;font-size:12px;line-height:1.4;letter-spacing:0;transition:background .16s,border-color .16s,transform .16s,box-shadow .16s}
-.home-action-icon{display:flex;align-items:center;justify-content:center;width:36px;height:36px;flex:none;border-radius:11px;background:#e7efdf;color:#4a6d4d}
+.home-tabs{display:flex;padding:4px;border:1px solid #fff9;border-radius:13px;background:#f5f8eddd;gap:4px}
+.home-tabs button{display:flex;align-items:center;gap:6px;min-height:40px;padding:8px 13px;border-radius:9px;background:transparent;color:#6b7d61;font-size:12px;font-weight:650;white-space:nowrap}
+.home-tabs button[aria-selected="true"]{background:#284d3c;color:#f6f8e9;box-shadow:0 2px 8px #173e4018}
 .home-icon{display:block;width:22px;height:22px;flex:none}
-.home .home-action-copy{display:block;flex:1;min-width:0}
-.home .home-action-copy strong{display:block;font:inherit;font-size:12px;font-weight:700;line-height:1.4;margin:0}
-.home .home-action-copy small{display:block;font-size:10px;font-weight:400;color:#7c8975;line-height:1.5;margin-top:3px}
-.home .home-action-copy{letter-spacing:0;white-space:normal}
-.home-action-arrow{display:flex;align-items:center;justify-content:center;flex:none;color:#7a8d6f}
-.home-action-arrow .home-icon{width:17px;height:17px}
-.home .menu>.match-button{grid-column:1/-1;min-height:68px;background:#284d3c;border-color:#284d3c;color:#f6f8e9;box-shadow:0 5px 12px #173e401c}
-.home .match-button .home-action-icon{background:#e1ef9d;color:#294d3b;width:40px;height:40px;border-radius:12px}
-.home .match-button .home-action-copy strong{font-size:16px}
-.home .match-button .home-action-copy small{color:#c0d0b4;font-size:11px}
+.home-tabs .home-icon{width:17px;height:17px}
+.home .home-copy{position:relative;inset:auto;width:min(370px,43%);height:auto;min-height:0;max-width:none;padding:0;margin:150px 0 65px 7%;display:block}
+.home .eyebrow{font-size:9px;letter-spacing:3px;color:#4d6b57}
+.home h1{font-family:"Avenir Next","PingFang SC","Microsoft YaHei",sans-serif;font-size:48px;line-height:1.12;letter-spacing:-2px;font-weight:800;margin:16px 0 24px}
+.home h1 em{font-style:normal;color:#467252}
+.home-player-label{margin:8px 0 26px;color:#284d3c}
+.home-player-label>span{font-size:18px;font-weight:700;display:block}
+.home-player-label small{font-size:11px;display:block;color:#748169;margin-top:5px}
+.home-play{margin:0;padding:0;background:transparent;border:0;box-shadow:none}
+.home .menu{margin:0;max-width:none;width:100%;display:grid;grid-template-columns:1fr;gap:11px}
+.home .menu>button{min-height:52px;border-radius:10px;border:1px solid var(--home-button-border);background:var(--home-button-fill);color:#244d40;padding:12px 15px;display:flex;align-items:center;justify-content:flex-start;gap:12px;text-align:left;font-size:13px;line-height:1.4;letter-spacing:0;transition:background .16s,border-color .16s,transform .16s}
+.home-action-icon{display:flex;align-items:center;justify-content:center;flex:none}
+.home .home-action-copy{display:block;flex:1;min-width:0;letter-spacing:0;white-space:normal}
+.home .home-action-copy strong{display:block;font:inherit;font-weight:700;margin:0;line-height:1.4}
+.home .home-action-copy small{display:block;font-size:11px;color:#768570;line-height:1.5;margin-top:4px}
+.home-action-arrow{display:flex;flex:none;color:#788c6b}
+.home-action-arrow .home-icon{width:18px;height:18px}
+.home .menu>.match-button{grid-column:1/-1;min-height:74px;background:#284d3c;border-color:#284d3c;color:#f6f8e9;box-shadow:0 6px 18px #173e4024}
+.home .match-button .home-action-icon{background:#e1ef9d;color:#294d3b;border-radius:12px;width:42px;height:42px}
+.home .match-button .home-action-copy strong{font-size:19px}
+.home .match-button .home-action-copy small{color:#c0d0b4}
 .home .match-button .home-action-arrow{color:#e1ef9d}
-.home .menu>.doubles-button,.home .menu>.character-choice,.home .menu>.practice-entry{grid-column:1/-1}
-.home .menu>.character-choice,.home .menu>.practice-entry{min-height:54px}
-.home .menu .practice-entry{box-shadow:0 2px 4px #16372c05}
-.home .menu>button:hover:not(:disabled){background:#edf3e5;border-color:#5e7b4966;box-shadow:0 4px 9px #173e4012}
-.home .menu>.match-button:hover:not(:disabled){background:#365c47;color:#fff}
-.home .menu>button:active:not(:disabled){transform:translateY(1px) scale(.99);box-shadow:none}
-.home .menu>button:focus-visible,.home .court-tag:focus-visible{outline:3px solid #94b25a;outline-offset:3px}
-.home .menu>button:disabled{opacity:.5;box-shadow:none}
-.home .court-tag{display:flex;position:absolute;top:auto;bottom:8%;right:6%;max-width:38%;gap:12px;padding:14px 16px;border:1px solid #fff9;border-radius:15px;background:#f5f8edf2;color:#284d3c;box-shadow:0 8px 30px #16372c18;transform:none;backdrop-filter:blur(12px);text-align:left}
-.home .court-tag .home-action-copy small{font-size:9px;letter-spacing:.6px;margin:0 0 3px}
-.home .court-tag .home-action-copy strong{font-size:12px}
-.home .court-tag:hover{background:#edf3e5}
-.home-court-caption{position:absolute;top:20%;right:7%;text-align:right;color:#f6f8eb;text-shadow:0 2px 12px #173e4055;pointer-events:none}
-.home-court-caption span{display:block;font-size:9px;letter-spacing:3px;margin-bottom:9px}
-.home-court-caption b{font-size:21px;font-weight:500;letter-spacing:1px}
-.home .home-footer{left:auto;right:6%;bottom:3%;font-size:8px;letter-spacing:1.7px;color:#52715b;position:absolute;margin:0;padding:0}
-@media(min-width:1500px){.home .home-copy{margin-left:9%;width:460px}.home h1{font-size:60px}.home .menu>button{min-height:60px}}
-@media(min-width:701px) and (max-height:760px){.home .home-copy{margin-top:94px;margin-bottom:30px}.home h1{font-size:42px;margin:10px 0}.home-play{margin-top:16px;padding:14px}.home .menu{gap:6px}.home .menu>button{min-height:49px;padding:8px 10px}.home .menu>.match-button{min-height:58px}.home .menu>.character-choice,.home .menu>.practice-entry{min-height:48px}}
+.home .menu>.friends-button{background:#f4f7eac9;min-height:54px}
+.home .menu>.practice-entry{min-height:44px;max-width:230px;border:0;background:transparent;padding:5px 0;color:#5b7454;box-shadow:none;font-size:12px}
+.home .practice-entry .home-action-icon .home-icon{width:19px;height:19px}
+.home .practice-entry strong{font:inherit;margin:0}
+.home .menu>button:hover:not(:disabled){background:#eaf1e0;border-color:#6c895855}
+.home .menu>.match-button:hover:not(:disabled){background:#365c47}
+.home .menu>.practice-entry:hover{background:transparent;color:#284d3c}
+.home button:focus-visible{outline:3px solid #94b25a;outline-offset:3px}
+.home .menu>button:disabled{opacity:.5}
+.home .court-tag{display:flex;position:absolute;top:105px;bottom:auto;right:6%;max-width:42%;gap:9px;padding:10px 12px;border:1px solid #fff9;border-radius:12px;background:#f5f8eddf;color:#284d3c;box-shadow:0 4px 14px #16372c10;transform:none;text-align:left}
+.home .court-tag .home-action-copy small{font-size:9px;margin:0}
+.home .court-tag .home-action-copy strong{font-size:12px;margin-top:2px}
+.home-setting-edit{font-size:10px;color:#728969;margin-left:8px}
+.home .home-footer{position:absolute;left:auto;right:6%;bottom:4%;margin:0;padding:0;color:#5b765e;font-size:8px;letter-spacing:1.5px}
+.friends-overlay{z-index:106;background:#16372c66;pointer-events:auto}
+.friends-panel h2{font-size:24px}
+.friends-panel .name-label{margin:18px 0 12px}
+.friends-choices{display:grid;gap:8px;margin-top:18px}
+.friends-panel .friends-choices button{margin:0;justify-content:flex-start;padding:13px 14px;min-height:70px;background:#fbfcf6}
+.friends-choices button>span{flex:1;text-align:left}
+.friends-choices strong,.friends-choices small{display:block}
+.friends-choices strong{font-size:14px}
+.friends-choices small{font-size:11px;color:#748169;margin-top:4px}
+.friends-choices .home-icon:last-child{width:17px;height:17px}
+.home-player-tab{background:#edf2e7ed}
+.home-player-tab #home-players-panel{padding:110px 5% 28px}
+.home-player-tab .overlay{position:static;background:none;backdrop-filter:none;padding:0;display:block}
+.home-player-tab .character-panel{width:min(880px,100%);margin:0 auto;max-height:none;overflow:visible;box-shadow:none;background:#f5f8ed;border:1px solid #fff9;padding:24px}
+.home-player-tab .character-grid{grid-template-columns:repeat(5,minmax(0,1fr))}
+.home-player-tab .character-panel .panel-top>[data-action="close-characters"]{display:none}
+.home-player-tab .character-grid img{height:105px}
+.home-player-tab .character-panel .primary{max-width:340px}
+@media(min-width:1500px){.home .home-copy{margin-left:10%;margin-top:190px;width:410px}.home h1{font-size:58px}}
+@media(min-width:701px) and (max-height:760px){.home .home-copy{margin-top:126px;margin-bottom:32px}.home h1{font-size:40px;margin:12px 0 20px}.home-player-label{margin-bottom:22px}}
 @media(max-width:700px){
-  .home{background:linear-gradient(180deg,#edf2e5 0%,#edf2e5e8 18%,#edf2e520 42%,#edf2e5e0 58%,#edf2e5 88%)}
-  .home .masthead{left:22px;right:22px;top:max(20px,env(safe-area-inset-top))}
-  .home .brand{font-size:19px}.home .brand img{width:34px;height:34px}
-  .home .edition{font-size:8px;letter-spacing:1px;padding:8px 9px}
-  .home .home-copy{width:auto;margin:100px 18px 25px;min-height:0}
-  .home .home-intro{padding:0 6px}.home .eyebrow{font-size:8px;letter-spacing:2px}
-  .home h1{font-size:43px;margin:12px 0 9px;line-height:1.05}
-  .home .subtitle{font-size:11px;letter-spacing:.5px}
-  .home-play{margin-top:24px;padding:14px;border-radius:20px}
-  .home-play-heading{font-size:12px;margin-bottom:10px}
-  .home .menu{gap:7px}
-  .home .menu>button{min-height:54px;padding:9px 10px;gap:9px}
-  .home-action-icon{width:33px;height:33px;border-radius:10px}
-  .home .menu>.match-button{min-height:62px}
-  .home .menu>.character-choice,.home .menu>.practice-entry{min-height:51px}
-  .home .home-action-copy strong{font-size:12px}.home .home-action-copy small{font-size:9px}
-  .home .menu>[data-action="create"],.home .menu>[data-action="join"]{display:flex;flex-direction:row;align-items:center;gap:7px;min-height:59px}
-  .home .menu>[data-action="create"] .home-action-icon,.home .menu>[data-action="join"] .home-action-icon{width:28px;height:28px;border-radius:9px}
-  .home .court-tag{top:clamp(205px,28vh,255px);bottom:auto;right:24px;padding:10px;gap:8px;max-width:55%;border-radius:12px;transform:none}
-  .home .court-tag .home-action-icon{width:28px;height:28px;border-radius:8px}
-  .home .court-tag .home-icon{width:19px;height:19px}
-  .home .court-tag .home-action-copy strong{font-size:10px}.home .court-tag .home-action-copy small{font-size:8px}
-  .home-court-caption{display:none}
-  .home .home-footer{position:relative;right:auto;bottom:auto;justify-content:center;margin:0 0 20px;left:auto}
+  .home{background:linear-gradient(180deg,#edf2e5ea 0%,#edf2e540 24%,#edf2e500 42%,#edf2e5b8 58%,#edf2e5 79%)}
+  .home .masthead{left:18px;right:18px;top:max(18px,env(safe-area-inset-top));gap:8px}
+  .home .brand{font-size:18px}.home .brand img{width:31px;height:31px}.home .brand small{font-size:8px;letter-spacing:1px}
+  .home-tabs{padding:3px;gap:2px;border-radius:11px}
+  .home-tabs button{min-height:40px;padding:7px 9px;font-size:11px;gap:4px}
+  .home-tabs .home-icon{width:15px;height:15px}
+  .home .home-copy{position:relative;width:auto;inset:auto;margin:100px 24px 35px;min-height:0}
+  .home .home-intro{padding:0}.home .eyebrow{display:none}
+  .home h1{font-size:28px;line-height:1.15;margin:0;letter-spacing:-1px}
+  .home h1 br{display:none}.home h1 em{margin-left:3px}
+  .home-player-label{margin:clamp(230px,39vh,340px) 0 18px}
+  .home-player-label>span{font-size:17px}
+  .home .menu{gap:9px}
+  .home .menu>.match-button{min-height:68px;padding:12px 14px}
+  .home .match-button .home-action-copy strong{font-size:18px}
+  .home .menu>.friends-button{min-height:50px}
+  .home .menu>.practice-entry{min-height:44px}
+  .home .court-tag{top:140px;right:24px;max-width:60%;min-height:44px;padding:7px 9px;gap:7px}
+  .home .court-tag .home-action-icon .home-icon{width:18px;height:18px}
+  .home .court-tag .home-action-copy small{display:none}
+  .home .court-tag .home-action-copy strong{font-size:11px;margin:0}
+  .home .home-footer{position:relative;inset:auto;justify-content:center;margin:0 0 20px;font-size:8px}
+  .home-player-tab #home-players-panel{padding:90px 14px 24px}
+  .home-player-tab .character-panel{padding:18px}
+  .home-player-tab .character-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+  .home-player-tab .character-grid img{height:75px}
 }
 @media(max-width:700px) and (max-height:700px) and (orientation:portrait){
-  .home .home-copy{margin-top:83px;margin-bottom:14px}.home h1{font-size:35px;margin:9px 0 7px}
-  .home .home-intro .subtitle{font-size:10px}.home .eyebrow{display:none}
-  .home-play{margin-top:18px;padding:12px}
-  .home .menu>button{min-height:48px;padding:8px 9px}
-  .home .menu>.match-button{min-height:58px}
-  .home .menu>[data-action="create"],.home .menu>[data-action="join"]{min-height:56px}
-  .home .menu>.character-choice,.home .menu>.practice-entry{min-height:48px}
-  .home .court-tag{top:185px;max-width:58%}.home .menu{gap:6px}
+  .home .home-copy{margin-top:90px;margin-bottom:20px}
+  .home h1{font-size:25px}
+  .home-player-label{margin-top:192px}
+  .home .court-tag{top:120px}
+  .home .menu>.match-button{min-height:60px}
 }
 @media(max-height:500px) and (orientation:landscape){
-  .home .home-copy{width:370px;max-width:48%;margin:88px 0 25px 5%}
-  .home .home-intro .eyebrow,.home .home-intro .subtitle{display:none}
-  .home h1{font-size:32px;margin:0 0 14px}.home h1 br{display:none}.home h1 em{margin-left:4px}
-  .home-play{margin-top:0;padding:13px}.home .menu>button{min-height:48px}
-  .home .menu>.match-button{min-height:58px}
-  .home-court-caption{top:24%;right:6%}.home-court-caption b{font-size:16px}
-  .home .court-tag{position:fixed;bottom:9%;top:auto;right:5%;max-width:43%}
+  .home .home-copy{margin:88px 0 18px 6%;width:38%;max-width:none;padding:0}
+  .home .home-intro .eyebrow{display:none}.home h1{font-size:27px;margin:0 0 12px}
+  .home h1 br{display:none}.home h1 em{margin-left:3px}
+  .home-player-label{margin:0 0 12px}
+  .home .menu>.match-button{min-height:62px}
+  .home .menu>.friends-button{min-height:46px}
+  .home .court-tag{top:92px;right:5%}
   .home .home-footer{display:none}
-}
-
-/* Play = start a session. Settings = change identity/court without starting. */
-.home .menu>.doubles-button{grid-column:auto}
-.home .menu>.join-button{grid-column:1/-1}
-.home-settings{position:absolute;right:6%;bottom:9%;width:min(420px,38%);padding:16px;border:1px solid #ffffffa0;border-radius:18px;background:#f5f8edf2;box-shadow:0 8px 28px #16372c14;backdrop-filter:blur(12px)}
-.home-settings-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#46644b;margin-bottom:12px}
-.home-settings-heading small{font-size:10px;color:#74856e}
-.home-settings .name-label{margin:0 0 12px}
-.home-setting-grid{display:grid;grid-template-columns:1fr;gap:8px}
-.home .home-settings .home-setting-button{position:static;inset:auto;transform:none;max-width:none;width:100%;grid-column:auto;display:flex;align-items:center;gap:10px;margin:0;padding:11px 12px;border:1px solid #244d4024;border-radius:11px;background:#fff9;box-shadow:none;min-height:58px;text-align:left;color:#35583d}
-.home-settings .home-action-icon{background:transparent;border:1px solid #4869562e;color:#67805b;width:32px;height:32px}
-.home .home-settings .home-action-copy strong{font-size:13px;margin-top:2px}
-.home .home-settings .home-action-copy small{font-size:10px;letter-spacing:0;line-height:1.5;margin:0}
-.home-setting-edit{font-size:11px;font-weight:600;flex:none;border-radius:7px;background:#e7eddf;padding:5px 8px;color:#5a7252}
-.home .home-settings .home-setting-button:hover{background:#eaf0e2;border-color:#68845c66}
-.home .home-settings .home-setting-button:focus-visible{outline:3px solid #94b25a;outline-offset:3px}
-@media(max-width:700px){
-  .home .menu>[data-action="create"],.home .menu>[data-action="create-doubles"]{min-height:59px;gap:7px}
-  .home .menu>[data-action="create-doubles"] .home-action-icon{width:28px;height:28px;border-radius:9px}
-  .home .menu>[data-action="join"]{min-height:54px}
-  .home-settings{position:relative;inset:auto;width:auto;margin:0 18px 22px;padding:14px}
-  .home .home-copy{margin-bottom:14px}
-  .home-settings-heading h2{font-size:12px}
-  .home .home-settings .home-setting-button{min-height:56px;padding:10px}
-}
-@media(max-height:700px) and (orientation:portrait){
-  .home .menu>[data-action="create"],.home .menu>[data-action="create-doubles"]{min-height:56px}
-  .home-settings{padding:12px}
-}
-@media(max-height:500px) and (orientation:landscape){
-  .home-settings{position:fixed;right:5%;bottom:8%;width:40%;padding:13px}
 }

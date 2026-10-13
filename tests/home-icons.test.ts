@@ -17,19 +17,19 @@ test('every homepage action has a meaningful icon, text and an unchanged action 
   const app=Object.assign(Object.create(App.prototype),{
     name:'<球友>',characterId:'lin',surface:'clay',busy:false,networkError:''
   }) as any;
-  const html=app.home();
+  const html=app.home()+app.friendsPanel();
   for(const [action,icon] of Object.entries({
-    match:'match',create:'create',join:'join','create-doubles':'doubles',characters:'player',practice:'practice',surfaces:'court'
+    match:'match',create:'create',join:'join','create-doubles':'doubles',friends:'doubles',practice:'practice',surfaces:'court'
   })){
     const button=html.match(new RegExp(`<button[^>]*data-action="${action}"[\\s\\S]*?<\\/button>`))?.[0];
     assert.ok(button,action);assert.match(button,new RegExp(`data-icon="${icon}"`));
     assert.match(button,/<strong>/);
   }
   assert.match(html,/&lt;球友&gt;/);
-  assert.match(html,/红土球场/);assert.match(html,/<strong>红土<\/strong>/);
-  assert.match(html,/aria-label="更换球员/);
+  assert.match(html,/<strong>红土<\/strong>/);
+  assert.match(html,/data-action="tab-players"/);
   app.busy=true;
-  const busy=app.home();
+  const busy=app.home()+app.friendsPanel();
   for(const action of ['match','create','create-doubles'])
     assert.match(busy,new RegExp(`data-action="${action}" disabled`));
 });
