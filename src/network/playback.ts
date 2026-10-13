@@ -49,7 +49,7 @@ export class SnapshotPlayback {
  sample(now:number,frozen=false):MatchState|null{
   const latest=this.queue.at(-1);if(!latest)return null;
   if(frozen||latest.state.rescueWindow){this.wasFrozen=true;return this.copy(latest.state);}
-  if(latest.state.phase==='over'&&!latest.state.deadBalls?.some(b=>!b.settled))return this.copy(latest.state);
+  if(latest.state.phase==='over'&&!latest.state.deadBalls?.length)return this.copy(latest.state);
   if(this.wasFrozen){this.queue=[latest];this.offset=latest.at-latest.state.time*1000;this.cursor=-Infinity;this.wasFrozen=false;}
   const time=clamp(Math.max(this.cursor,(now-this.offset-this.delayMs)/1000),this.queue[0].state.time,latest.state.time+.05);
   this.cursor=time;

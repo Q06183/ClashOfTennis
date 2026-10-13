@@ -45,6 +45,7 @@ Vite 使用 5178 端口，并将 `/ws` 代理到 7470。生产服务同时提供
 - 发球前高亮本次合法对角发球区；不会自动纠正方向。有效点按显示短暂跑位回执，自动追球不再显示同样的目标环。
 - 场上按钮增大，短屏只保留关键提示；结算的重开/返回操作固定，练习复盘可展开。电脑可用 Escape 暂停/继续单人练习、关闭帮助或取消退出。
 - 出界判分立即生效，但旧球继续飞行、地面弹跳和保护墙反弹，下一分也不会突然拉回发球人。旧球不可击打、不再计分；暂停/断线时冻结。最终出界保留短暂球场镜头，再进入庆祝。
+- 旧球停稳后停留 0.6 秒，再淡出 0.6 秒并自动清除，不会长期残留；比赛结束后也会清理。
 
 断线被识别后整场暂停，座位保留 30 秒，原标签页会尝试恢复。服务进程重启会丢失内存中的房间。网络完全中断但 TCP 尚未关闭时，通过心跳检测失联。
 
@@ -59,6 +60,8 @@ node --import tsx tests/network-play.ts
 node --import tsx scripts/verify-practice-release.ts
 # 出界后一发不计分、持续弹跳、撞墙反弹和二发重置验证
 node --import tsx scripts/verify-dead-ball-live.ts
+# 额外验证停稳、淡出与两端自动清理
+REQUIRE_CLEANUP=1 node --import tsx scripts/verify-dead-ball-live.ts
 ```
 
 `docs/network-verification.json` 保存最近的完整网络对局验证结果。该测试只证明真实 WebSocket 协议及权威模拟，不能代替手机真机和异地网络验收。

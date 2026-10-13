@@ -388,7 +388,7 @@ export class Match {
       dt-=used;if(dt<1e-9)return;
     }
     if(this.state.phase==='over') {
-      if(this.state.deadBalls?.some(b=>!b.settled)||this.state.players.some(p=>p.rescue)){
+      if(this.state.deadBalls?.length||this.state.players.some(p=>p.rescue)){
         this.state.time+=dt;
         this.deadBalls.step(dt);
         for(const p of this.state.players)moveRescue(p,this.state.time,dt);

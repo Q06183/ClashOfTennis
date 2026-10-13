@@ -9,6 +9,9 @@ const clients=[new WebSocket(url),new WebSocket(url)],packets=[new Map<number,st
 let code='',done=false,sent=false,shared=0;
 let first:{id:number;x:number;y:number;age:number;bounces:number}|null=null;
 let rose=false,afterReset=false,reflected=false,reportState:MatchState|null=null;
+const requireCleanup=process.env.REQUIRE_CLEANUP==='1';
+let settled=false,fading=false;
+const removedSeats=new Set<number>();
 const timer=setTimeout(()=>finish(Error('Dead-ball live motion not verified in 30 seconds')),30000);
 const send=(seat:number,data:object)=>{if(clients[seat].readyState===WebSocket.OPEN)clients[seat].send(JSON.stringify(data));};
 async function finish(error?:Error){
@@ -16,6 +19,7 @@ async function finish(error?:Error){
   for(let i=0;i<2;i++){send(i,{type:'leave'});clients[i].close();}
   if(error){console.error(error);process.exitCode=1;return;}
   const result={verifiedAt:new Date().toISOString(),url,first,rose,afterReset,reflected,sharedSnapshots:shared,
+    ...(requireCleanup?{settled,fading,removedOnBothSeats:removedSeats.size===2}:{}),
     finalDeadBall:reportState!.deadBalls?.find(b=>b.id===first!.id),score:reportState!.score,
     scope:'Live authority, two independent local WebSocket seats, actual out first serve, ground bounce and wall reflection through second-serve reset.'};
   await writeFile(process.env.TEST_REPORT??'artifacts/dead-ball-live.json',JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result));
@@ -34,19 +38,29 @@ clients.forEach((ws,seat)=>{
       const state=m.state as MatchState,json=JSON.stringify(state),peer=packets[1-seat].get(m.seq);
       if(peer){assert.equal(peer,json);shared++;}
       packets[seat].set(m.seq,json);if(packets[seat].size>50)packets[seat].delete(packets[seat].keys().next().value!);
+      if(requireCleanup&&first&&!state.deadBalls?.some(b=>b.id===first!.id)){
+        removedSeats.add(seat);
+        if(removedSeats.size===2){
+          assert.ok(rose&&reflected&&afterReset&&settled&&fading);
+          assert.deepEqual(state.score,[0,0],'cleanup is not a new point');
+          reportState=state;void finish();
+        }
+      }
       if(seat!==0)return;
       if(!sent&&state.phase==='serve'){
         sent=true;send(0,{type:'input',command:{type:'shot',aim:0,depth:1,power:.7,lob:false,directionX:.4}});
       }
-      const b=state.deadBalls?.[0];
+      const b=first?state.deadBalls?.find(b=>b.id===first!.id):state.deadBalls?.[0];
       if(b&&!first){assert.equal(state.fault,1);assert.deepEqual(state.score,[0,0]);first={id:b.id,x:b.x,y:b.y,age:b.age,bounces:b.bounces};}
       if(b&&first){
         assert.equal(b.id,first.id);assert.deepEqual(state.score,[0,0],'dead ball does not score twice');
         rose ||= b.y>first.y+.25;
         reflected ||= b.wallHits>0&&b.vx<0;
         afterReset ||= state.phase==='serve'&&state.fault===1&&b.age>1.2;
+        settled ||= b.settled&&b.settledAt!==undefined;
+        fading ||= b.settledAt!==undefined&&b.age-b.settledAt>.6;
         reportState=state;
-        if(rose&&reflected&&afterReset&&shared>10)void finish();
+        if(!requireCleanup&&rose&&reflected&&afterReset&&shared>10)void finish();
       }
     }catch(error){void finish(error as Error);}
   });

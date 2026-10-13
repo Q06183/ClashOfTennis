@@ -2,6 +2,13 @@ import {BallPhysics} from './physics.js';
 import {adjustRebound} from './surfaces.js';
 import type {BallState,DeadBallState} from './types.js';
 
+/** Leave a stopped ball briefly, then fade it out on the authority clock. */
+export const DEAD_BALL_CLEANUP={hold:.6,fade:.6,maxAge:45} as const;
+export function deadBallOpacity(ball:Pick<DeadBallState,'age'|'settledAt'>){
+  if(ball.settledAt===undefined)return 1;
+  return Math.max(0,Math.min(1,1-(ball.age-ball.settledAt-DEAD_BALL_CLEANUP.hold)/DEAD_BALL_CLEANUP.fade));
+}
+
 /** Independent cosmetic worlds: dead balls cannot alter authority RNG or play. */
 export class DeadBalls {
   readonly states:DeadBallState[]=[];
@@ -22,9 +29,11 @@ export class DeadBalls {
     while(this.states.length>3){const old=this.states.shift()!;this.bodies.get(old.id)?.dispose();this.bodies.delete(old.id);}
   }
   step(dt:number){
+    if(!Number.isFinite(dt)||dt<=0)return;
     for(const b of this.states){
+      b.age+=dt;
       const physics=this.bodies.get(b.id);if(!physics)continue;
-      const before={...b};b.age+=dt;
+      const before={...b};
       physics.step(dt);Object.assign(b,physics.read());
       if((before.vx*b.vx<0&&Math.abs(before.vx)>1)||(before.vz*b.vz<0&&Math.abs(before.vz)>1))b.wallHits++;
       if(before.vy<0&&b.vy>0&&b.y<.45){
@@ -39,8 +48,15 @@ export class DeadBalls {
         const damping=Math.exp(-1.4*dt);
         b.vx*=damping;b.vz*=damping;physics.body.setLinvel({x:b.vx,y:b.vy,z:b.vz},true);
       }
-      if((b.y<.18&&Math.hypot(b.vx,b.vz)<.08&&Math.abs(b.vy)<.3)||b.y<-2||b.age>45){
-        b.settled=true;b.vx=0;b.vy=0;b.vz=0;physics.dispose();this.bodies.delete(b.id);
+      if((b.y<.18&&Math.hypot(b.vx,b.vz)<.08&&Math.abs(b.vy)<.3)||b.y<-2||b.age>DEAD_BALL_CLEANUP.maxAge){
+        b.settled=true;b.settledAt=b.age;b.vx=0;b.vy=0;b.vz=0;physics.dispose();this.bodies.delete(b.id);
+      }
+    }
+    // Mutate the array in place: Match.state.deadBalls references this array.
+    for(let i=this.states.length-1;i>=0;i--){
+      const b=this.states[i];
+      if(b.settledAt!==undefined&&b.age-b.settledAt>=DEAD_BALL_CLEANUP.hold+DEAD_BALL_CLEANUP.fade){
+        this.bodies.get(b.id)?.dispose();this.bodies.delete(b.id);this.states.splice(i,1);
       }
     }
   }
