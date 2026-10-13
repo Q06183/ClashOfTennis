@@ -7,6 +7,7 @@ import {tutorialGesture} from './tutorial-gesture.js';
 import {rescueHint} from './rescue-hint.js';
 import {shotFeedbackLabel,feedbackPosition,pointBanner,playSubhint,movementFeedbackTarget} from './match-feedback.js';
 import {containModalFocus} from './modal-focus.js';
+import {homeIcon} from './home-icons.js';
 import {staminaBars,staminaLabels} from './stamina.js';
 import {CameraChoice} from './camera-choice.js';
 import {shotTier,SHOT_PROFILES} from '../simulation/shot-profile.js';
@@ -418,18 +419,23 @@ export class App {
     });
     this.net.connect(action);
   }
-  private home(){return `<div class="home"><header class="masthead">${brand}<div class="edition">PLAY FOR THE RALLY</div></header>
-    <main class="home-copy"><div class="eyebrow">A LITTLE COURT. A GOOD TIME.</div><h1>Rally<br/><em>together.</em></h1>
-    <p class="subtitle">约一场，刚刚好。</p><p class="description">一片球场，一位朋友。<br/>把好球留给彼此，把胜负留在场上。</p>
-    <div class="menu"><label class="name-label" for="nickname">你的昵称<input id="nickname" maxlength="16" value="${escape(this.name)}" autocomplete="nickname"/></label>
-    <button class="primary lime match-button" data-action="match" ${this.busy?'disabled':''}>${this.busy?'连接中…':'快速匹配'} <span aria-hidden="true">↗</span></button>
-    <button class="primary" data-action="create" ${this.busy?'disabled':''}>单打开房 <span>↗</span></button>
-    <button class="secondary" data-action="join">加入房间 <span aria-hidden="true">↗</span></button>
-    <button class="secondary doubles-button" data-action="create-doubles" ${this.busy?'disabled':''}>双打开房 · 2 对 2 <span>好友 / 电脑 ↗</span></button>
-    <button class="character-choice" data-action="characters">球员：${getCharacter(this.characterId).name} · ${getCharacter(this.characterId).role} <span>更换 →</span></button>
-    <button class="practice practice-entry" data-action="practice" aria-label="单人练习：新手引导、轻松对打、认真对打"><strong>单人练习 · 先热热身</strong><span aria-hidden="true">→</span></button>${this.networkError?`<div class="error-inline" role="alert" style="grid-column:1/-1">${escape(this.networkError)}</div>`:''}</div></main>
-    <button class="court-tag" data-action="surfaces" aria-label="选择场地：${surfaceProfile(this.surface).name}"><strong>${this.surface==='hard'?'01':this.surface==='clay'?'02':'03'}</strong><span>CHOOSE YOUR COURT<br/>${surfaceProfile(this.surface).title} · ${surfaceProfile(this.surface).name} ›</span></button>
-    <footer class="home-footer"><span>NO PRESSURE. JUST PLAY.</span></footer></div>`;}
+  private home(){
+    const character=getCharacter(this.characterId),court=surfaceProfile(this.surface);
+    return `<div class="home"><header class="masthead">${brand}<div class="edition"><i></i> PLAY FOR THE RALLY</div></header>
+    <main class="home-copy"><div class="home-intro"><div class="eyebrow">YOUR NEXT GOOD RALLY</div><h1>上场，<br/><em>打个痛快。</em></h1>
+    <p class="subtitle">一片球场。几位球友。你的节奏。</p></div>
+    <section class="home-play"><div class="home-play-heading"><span>开始一场好球</span><small>PLAY</small></div>
+    <div class="menu"><label class="name-label" for="nickname"><span class="nickname-icon">${homeIcon('player')}</span><span>昵称</span><input id="nickname" maxlength="16" value="${escape(this.name)}" autocomplete="nickname"/></label>
+    <button class="primary lime match-button" data-action="match" ${this.busy?'disabled':''}><span class="home-action-icon">${homeIcon('match')}</span><span class="home-action-copy"><strong>${this.busy?'连接中…':'快速匹配'}</strong><small>找位球友，立即开打</small></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>
+    <button class="primary" data-action="create" ${this.busy?'disabled':''}><span class="home-action-icon">${homeIcon('create')}</span><span class="home-action-copy"><strong>单打开房</strong><small>邀请一位朋友</small></span></button>
+    <button class="secondary" data-action="join"><span class="home-action-icon">${homeIcon('join')}</span><span class="home-action-copy"><strong>加入房间</strong><small>输入好友房号</small></span></button>
+    <button class="secondary doubles-button" data-action="create-doubles" ${this.busy?'disabled':''}><span class="home-action-icon">${homeIcon('doubles')}</span><span class="home-action-copy"><strong>双打开房 · 2 对 2</strong><small>好友组队，也可添加电脑</small></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>
+    <button class="character-choice" data-action="characters" aria-label="更换球员：${character.name} · ${character.role}"><span class="home-action-icon">${homeIcon('player')}</span><span class="home-action-copy"><strong>球员 · ${character.name}</strong><small>${character.role}</small></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>
+    <button class="practice practice-entry" data-action="practice" aria-label="单人练习：新手引导、轻松对打、认真对打"><span class="home-action-icon">${homeIcon('practice')}</span><span class="home-action-copy"><strong>单人练习 · 先热热身</strong><small>从入门到进阶，按你的节奏</small></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>${this.networkError?`<div class="error-inline" role="alert" style="grid-column:1/-1">${escape(this.networkError)}</div>`:''}</div></section></main>
+    <div class="home-court-caption" aria-hidden="true"><span>THE COURT IS YOURS</span><b>好球，留在场上。</b></div>
+    <button class="court-tag" data-action="surfaces" aria-label="选择场地：${court.name}"><span class="home-action-icon">${homeIcon('court')}</span><span class="home-action-copy"><small>今日球场 · 可切换</small><strong>${court.title} · ${court.name}</strong></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>
+    <footer class="home-footer"><span>NO PRESSURE. JUST PLAY.</span></footer></div>`;
+  }
   private panel(content:string){return `<div class="overlay"><section class="panel">${content}</section></div>`;}
   private matchingPanel(){return this.panel(`<div class="panel-top"><span>QUICK MATCH</span>${close}</div><div class="matchmaking-mark"><i></i><i></i><i></i></div><h2>正在寻找对手…</h2><p>另一位正在匹配的球友出现后，会直接为你们开赛。</p><div class="matchmaking-player"><div class="avatar">${escape(this.name.slice(0,1))}</div><div><strong>${escape(this.name)}</strong><small>${getCharacter(this.characterId).name} · ${getCharacter(this.characterId).role}</small></div><span>匹配中</span></div><button class="secondary" data-action="back">取消匹配</button><div class="status-line">${escape(this.status)}</div>`);}
   private roomPanel(){

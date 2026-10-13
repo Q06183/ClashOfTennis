@@ -149,7 +149,7 @@ test('wall-ended live ball cannot be returned and cosmetic motion never consumes
 test('home buttons share a single family with explicit primary and responsive states',()=>{
   const css=readFileSync('src/ui/home-design.css','utf8');
   assert.match(css,/\.home \.menu>button\{/);
-  for(const property of ['border-radius:10px','align-items:center','min-height:44px','background:var(--home-button-fill)'])assert.ok(css.includes(property));
+  for(const property of ['border-radius:10px','align-items:center','min-height:48px','background:var(--home-button-fill)'])assert.ok(css.includes(property));
   assert.match(css,/match-button/);assert.match(css,/focus-visible/);assert.match(css,/:disabled/);
   assert.match(readFileSync('src/main.ts','utf8'),/home-design.css/);
 });

@@ -3,17 +3,16 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {App} from '../src/ui/app.js';
 
-test('phone home keeps the court badge in the artwork and clear of the action menu',async()=>{
-  const css=await readFile(new URL('../src/ui/style.css',import.meta.url),'utf8');
-  assert.ok(css.includes('@media(max-width:700px){.home .court-tag{display:flex;top:clamp(230px,42%,360px)'));
-  assert.doesNotMatch(css,/.home .court-tag{display:none}/);
-  assert.ok(css.includes('.menu .match-button{grid-column:1/-1'));
-  assert.ok(css.includes('@media(max-width:700px) and (max-height:620px) and (orientation:portrait)'));
-  assert.ok(css.includes('.home{overflow-x:hidden;overflow-y:auto}'));
-  assert.ok(css.includes('min-height:568px'));
+test('redesigned home retains the court selector and supports scrollable short viewports',async()=>{
+  const css=await readFile(new URL('../src/ui/home-design.css',import.meta.url),'utf8');
+  assert.match(css,/overflow-x:hidden;overflow-y:auto/);
+  assert.match(css,/\.home \.court-tag\{display:flex/);
+  assert.match(css,/orientation:portrait/);
+  assert.match(css,/orientation:landscape/);
+  assert.match(css,/\.home \.menu>.match-button\{grid-column:1\/-1/);
 });
 
-test('single-player stays in the original bottom row and only gains subtle emphasis',async()=>{
+test('home redesign preserves action order, icons and accessible labels without duplicating practice',async()=>{
   const app=Object.assign(Object.create(App.prototype),{name:'球友',characterId:'lin',surface:'hard',busy:false}) as any;
   const html=app.home();
   assert.match(html,/<button class="practice practice-entry" data-action="practice"/);
@@ -23,13 +22,13 @@ test('single-player stays in the original bottom row and only gains subtle empha
   for(let i=1;i<actions.length;i++)
     assert.ok(html.indexOf(`data-action="${actions[i-1]}"`)<html.indexOf(`data-action="${actions[i]}"`));
   assert.equal((html.match(/data-action="practice"/g)??[]).length,1);
-  assert.doesNotMatch(html,/practice-entry-icon|practice-entry-copy/);
+  for(const icon of ['match','create','join','doubles','player','practice','court'])
+    assert.match(html,new RegExp(`data-icon="${icon}"`));
   assert.doesNotMatch(html,/点按跑位\s*\/\s*滑动击球\s*\/\s*好友对战/);
-  const css=await readFile(new URL('../src/ui/style.css',import.meta.url),'utf8');
-  const style=css.match(/\.menu \.practice-entry\{([^}]+)\}/)![1];
-  assert.match(style,/background:transparent/);
-  assert.match(style,/box-shadow:inset 0 0 0 1px #49735b/);
-  assert.match(style,/align-items:center/,'different text and arrow sizes must be vertically centered');
-  assert.doesNotMatch(style,/(?:^|;)(?:min-height|padding|margin|grid[^:]*|order|position):/,'emphasis must not resize or move the row');
-  assert.doesNotMatch(css,/min-height:620px|home-copy\{top:13%/,'remove layout changes from the promoted entry');
+  assert.match(html,/home-play-heading/);
+  assert.match(html,/上场，/);
+  assert.match(html,/aria-label="更换球员/);
+  const css=await readFile(new URL('../src/ui/home-design.css',import.meta.url),'utf8');
+  assert.match(css,/align-items:center/);
+  assert.match(css,/min-height:48px/);
 });
