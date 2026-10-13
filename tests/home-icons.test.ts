@@ -26,7 +26,7 @@ test('every homepage action has a meaningful icon, text and an unchanged action 
     assert.match(button,/<strong>/);
   }
   assert.match(html,/&lt;球友&gt;/);
-  assert.match(html,/红土球场 · 红土/);
+  assert.match(html,/红土球场/);assert.match(html,/<strong>红土<\/strong>/);
   assert.match(html,/aria-label="更换球员/);
   app.busy=true;
   const busy=app.home();

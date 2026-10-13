@@ -14,6 +14,8 @@
 .home-play{margin-top:24px;border:1px solid #ffffffa0;border-radius:22px;padding:18px;background:#f5f8edf0;box-shadow:0 14px 36px #16372c12;backdrop-filter:blur(16px)}
 .home-play-heading{display:flex;align-items:center;justify-content:space-between;color:#284d3c;font-size:13px;font-weight:700;margin-bottom:12px}
 .home-play-heading small{font-size:9px;font-weight:500;letter-spacing:2px;color:#7d8d75}
+.home-play-heading h2,.home-settings-heading h2{font-size:13px;letter-spacing:0;margin:0;font-weight:700}
+.home-mode-label{grid-column:1/-1;font-size:10px;font-weight:600;color:#6c8067;margin:4px 0 0;line-height:1.5}
 .home .menu{margin:0;max-width:none;width:100%;gap:8px;grid-template-columns:repeat(2,minmax(0,1fr))}
 .home .name-label{margin-bottom:3px;gap:8px;font-size:11px;letter-spacing:0;color:#62735e;min-width:0}
 .home .name-label input{min-width:0;padding:8px 10px;font-size:12px;border:1px solid #294d3c17;background:#e7edde80;border-radius:8px}
@@ -60,7 +62,7 @@
   .home .home-intro{padding:0 6px}.home .eyebrow{font-size:8px;letter-spacing:2px}
   .home h1{font-size:43px;margin:12px 0 9px;line-height:1.05}
   .home .subtitle{font-size:11px;letter-spacing:.5px}
-  .home-play{margin-top:clamp(65px,12vh,120px);padding:14px;border-radius:20px}
+  .home-play{margin-top:24px;padding:14px;border-radius:20px}
   .home-play-heading{font-size:12px;margin-bottom:10px}
   .home .menu{gap:7px}
   .home .menu>button{min-height:54px;padding:9px 10px;gap:9px}
@@ -80,7 +82,7 @@
 @media(max-width:700px) and (max-height:700px) and (orientation:portrait){
   .home .home-copy{margin-top:83px;margin-bottom:14px}.home h1{font-size:35px;margin:9px 0 7px}
   .home .home-intro .subtitle{font-size:10px}.home .eyebrow{display:none}
-  .home-play{margin-top:70px;padding:12px}
+  .home-play{margin-top:18px;padding:12px}
   .home .menu>button{min-height:48px;padding:8px 9px}
   .home .menu>.match-button{min-height:58px}
   .home .menu>[data-action="create"],.home .menu>[data-action="join"]{min-height:56px}
@@ -96,4 +98,36 @@
   .home-court-caption{top:24%;right:6%}.home-court-caption b{font-size:16px}
   .home .court-tag{position:fixed;bottom:9%;top:auto;right:5%;max-width:43%}
   .home .home-footer{display:none}
+}
+
+/* Play = start a session. Settings = change identity/court without starting. */
+.home .menu>.doubles-button{grid-column:auto}
+.home .menu>.join-button{grid-column:1/-1}
+.home-settings{position:absolute;right:6%;bottom:9%;width:min(420px,38%);padding:16px;border:1px solid #ffffffa0;border-radius:18px;background:#f5f8edf2;box-shadow:0 8px 28px #16372c14;backdrop-filter:blur(12px)}
+.home-settings-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#46644b;margin-bottom:12px}
+.home-settings-heading small{font-size:10px;color:#74856e}
+.home-settings .name-label{margin:0 0 12px}
+.home-setting-grid{display:grid;grid-template-columns:1fr;gap:8px}
+.home .home-settings .home-setting-button{position:static;inset:auto;transform:none;max-width:none;width:100%;grid-column:auto;display:flex;align-items:center;gap:10px;margin:0;padding:11px 12px;border:1px solid #244d4024;border-radius:11px;background:#fff9;box-shadow:none;min-height:58px;text-align:left;color:#35583d}
+.home-settings .home-action-icon{background:transparent;border:1px solid #4869562e;color:#67805b;width:32px;height:32px}
+.home .home-settings .home-action-copy strong{font-size:13px;margin-top:2px}
+.home .home-settings .home-action-copy small{font-size:10px;letter-spacing:0;line-height:1.5;margin:0}
+.home-setting-edit{font-size:11px;font-weight:600;flex:none;border-radius:7px;background:#e7eddf;padding:5px 8px;color:#5a7252}
+.home .home-settings .home-setting-button:hover{background:#eaf0e2;border-color:#68845c66}
+.home .home-settings .home-setting-button:focus-visible{outline:3px solid #94b25a;outline-offset:3px}
+@media(max-width:700px){
+  .home .menu>[data-action="create"],.home .menu>[data-action="create-doubles"]{min-height:59px;gap:7px}
+  .home .menu>[data-action="create-doubles"] .home-action-icon{width:28px;height:28px;border-radius:9px}
+  .home .menu>[data-action="join"]{min-height:54px}
+  .home-settings{position:relative;inset:auto;width:auto;margin:0 18px 22px;padding:14px}
+  .home .home-copy{margin-bottom:14px}
+  .home-settings-heading h2{font-size:12px}
+  .home .home-settings .home-setting-button{min-height:56px;padding:10px}
+}
+@media(max-height:700px) and (orientation:portrait){
+  .home .menu>[data-action="create"],.home .menu>[data-action="create-doubles"]{min-height:56px}
+  .home-settings{padding:12px}
+}
+@media(max-height:500px) and (orientation:landscape){
+  .home-settings{position:fixed;right:5%;bottom:8%;width:40%;padding:13px}
 }

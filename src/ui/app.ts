@@ -424,16 +424,22 @@ export class App {
     return `<div class="home"><header class="masthead">${brand}<div class="edition"><i></i> PLAY FOR THE RALLY</div></header>
     <main class="home-copy"><div class="home-intro"><div class="eyebrow">YOUR NEXT GOOD RALLY</div><h1>上场，<br/><em>打个痛快。</em></h1>
     <p class="subtitle">一片球场。几位球友。你的节奏。</p></div>
-    <section class="home-play"><div class="home-play-heading"><span>开始一场好球</span><small>PLAY</small></div>
-    <div class="menu"><label class="name-label" for="nickname"><span class="nickname-icon">${homeIcon('player')}</span><span>昵称</span><input id="nickname" maxlength="16" value="${escape(this.name)}" autocomplete="nickname"/></label>
+    <section class="home-play" aria-labelledby="home-play-title"><div class="home-play-heading"><h2 id="home-play-title">选择玩法</h2><small>PLAY</small></div>
+    <div class="menu">
     <button class="primary lime match-button" data-action="match" ${this.busy?'disabled':''}><span class="home-action-icon">${homeIcon('match')}</span><span class="home-action-copy"><strong>${this.busy?'连接中…':'快速匹配'}</strong><small>找位球友，立即开打</small></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>
+    <div class="home-mode-label">和朋友一起玩</div>
     <button class="primary" data-action="create" ${this.busy?'disabled':''}><span class="home-action-icon">${homeIcon('create')}</span><span class="home-action-copy"><strong>单打开房</strong><small>邀请一位朋友</small></span></button>
-    <button class="secondary" data-action="join"><span class="home-action-icon">${homeIcon('join')}</span><span class="home-action-copy"><strong>加入房间</strong><small>输入好友房号</small></span></button>
-    <button class="secondary doubles-button" data-action="create-doubles" ${this.busy?'disabled':''}><span class="home-action-icon">${homeIcon('doubles')}</span><span class="home-action-copy"><strong>双打开房 · 2 对 2</strong><small>好友组队，也可添加电脑</small></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>
-    <button class="character-choice" data-action="characters" aria-label="更换球员：${character.name} · ${character.role}"><span class="home-action-icon">${homeIcon('player')}</span><span class="home-action-copy"><strong>球员 · ${character.name}</strong><small>${character.role}</small></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>
+    <button class="secondary doubles-button" data-action="create-doubles" ${this.busy?'disabled':''}><span class="home-action-icon">${homeIcon('doubles')}</span><span class="home-action-copy"><strong>双打开房</strong><small>2 对 2 · 好友 / 电脑</small></span></button>
+    <button class="secondary join-button" data-action="join"><span class="home-action-icon">${homeIcon('join')}</span><span class="home-action-copy"><strong>加入好友房间</strong><small>已有房号？从这里加入</small></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>
+    <div class="home-mode-label">自己先练练</div>
     <button class="practice practice-entry" data-action="practice" aria-label="单人练习：新手引导、轻松对打、认真对打"><span class="home-action-icon">${homeIcon('practice')}</span><span class="home-action-copy"><strong>单人练习 · 先热热身</strong><small>从入门到进阶，按你的节奏</small></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>${this.networkError?`<div class="error-inline" role="alert" style="grid-column:1/-1">${escape(this.networkError)}</div>`:''}</div></section></main>
     <div class="home-court-caption" aria-hidden="true"><span>THE COURT IS YOURS</span><b>好球，留在场上。</b></div>
-    <button class="court-tag" data-action="surfaces" aria-label="选择场地：${court.name}"><span class="home-action-icon">${homeIcon('court')}</span><span class="home-action-copy"><small>今日球场 · 可切换</small><strong>${court.title} · ${court.name}</strong></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>
+    <section class="home-settings" aria-labelledby="home-settings-title"><div class="home-settings-heading"><h2 id="home-settings-title">上场设置</h2><small>不进入比赛</small></div>
+    <label class="name-label" for="nickname"><span class="nickname-icon">${homeIcon('player')}</span><span>昵称</span><input id="nickname" maxlength="16" value="${escape(this.name)}" autocomplete="nickname"/></label>
+    <div class="home-setting-grid">
+    <button class="character-choice home-setting-button" data-action="characters" aria-label="更换球员：${character.name} · ${character.role}"><span class="home-action-icon">${homeIcon('player')}</span><span class="home-action-copy"><small>当前球员 · ${character.role}</small><strong>${character.name}</strong></span><span class="home-setting-edit">更换</span></button>
+    <button class="court-tag home-setting-button" data-action="surfaces" aria-label="选择场地：${court.name}"><span class="home-action-icon">${homeIcon('court')}</span><span class="home-action-copy"><small>${court.title}</small><strong>${court.name}</strong></span><span class="home-setting-edit">切换</span></button>
+    </div></section>
     <footer class="home-footer"><span>NO PRESSURE. JUST PLAY.</span></footer></div>`;
   }
   private panel(content:string){return `<div class="overlay"><section class="panel">${content}</section></div>`;}
