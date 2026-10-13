@@ -11,17 +11,19 @@ import {ServeTarget} from '../src/render/serve-target.js';
 import {CHARACTERS} from '../src/simulation/characters.js';
 
 before(initPhysics);
-test('home preview contains only the selected player and moves/swallows no match state',()=>{
+test('home preview uses the selected athlete and a simulated sparring partner, isolated from real play',()=>{
   const preview=new HomePractice();
+  try{
   for(const character of CHARACTERS)for(const surface of ['hard','clay','grass'] as const){
     const state=preview.sample(1/60,character.id,surface);
-    assert.equal(state.players.length,1);assert.equal(state.players[0].characterId,character.id);
+    assert.equal(state.players.length,2);assert.equal(state.players[0].characterId,character.id);
     assert.equal(state.surface,surface);assert.deepEqual(state.score,[0,0]);
     assert.ok([state.ball.x,state.ball.y,state.ball.z].every(Number.isFinite));
     assert.ok(state.ball.y>=.12-1e-6);
   }
   const time=preview.sample(0,'lin','hard').time;
   assert.equal(preview.sample(0,'lin','hard').time,time);
+  }finally{preview.dispose();}
 });
 test('preview camera keeps the selected model in the free UI region on desktop, phone and landscape',()=>{
   for(const [w,h] of [[906,779],[390,844],[320,568],[844,390]]){
@@ -66,4 +68,64 @@ test('tabs and friends panel navigate without starting a match or carrying oppon
   assert.equal(app.screen,'join');assert.equal(app.friendsOpen,false);
   app.screen='playing';await app.action('tab-players');assert.equal(app.screen,'playing');
   assert.ok(renders>0);
+});
+
+test('background genuinely rallies after bounced balls with running, forehand and backhand for the whole roster',()=>{
+  for(const c of CHARACTERS)for(const surface of ['hard','clay','grass'] as const){
+    const preview=new HomePractice(),strokes=new Set<string>();
+    let ourReturns=0,theirReturns=0,movingFrames=0,minX=Infinity,maxX=-Infinity;
+    try{
+      let previous=structuredClone(preview.sample(0,c.id,surface));
+      for(let i=0;i<3600;i++){
+        const state=preview.sample(1/60,c.id,surface),p=state.players[0];
+        if(p.moving)movingFrames++;
+        minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);
+        if(state.rally>previous.rally&&state.phase==='rally'){
+          const hitter=state.ball.hitter;
+          if(state.rally>1){
+            assert.notEqual(hitter,previous.ball.hitter,'both teams must alternate actual hits');
+            assert.ok(previous.ball.bounces>0||previous.rescueWindow,'no looping unbounced volleys');
+          }
+          if(hitter===0){
+            assert.ok(p.contact,'a displayed swing must have a simulated contact');
+            strokes.add(p.stroke);if(state.rally>1)ourReturns++;
+          }else theirReturns++;
+        }
+        assert.ok([state.ball.x,state.ball.y,state.ball.z,p.x,p.z].every(Number.isFinite));
+        previous=structuredClone(state);
+      }
+      assert.ok(ourReturns>=4&&theirReturns>=4,`${c.id}/${surface} requires genuine two-sided rallies`);
+      assert.ok(strokes.has('forehand')&&strokes.has('backhand'),`${c.id}/${surface}: ${[...strokes]}`);
+      assert.equal(strokes.has('volley'),false,'homepage baseline practice is not an endless volley animation');
+      assert.ok(movingFrames>100);assert.ok(maxX-minX>1);
+    }finally{preview.dispose();}
+  }
+});
+
+test('preview pauses on zero/invalid time and replaces its physics world when the selected athlete changes',()=>{
+  const preview=new HomePractice();
+  try{
+    const first=preview.sample(1/60,'lin','hard'),original=structuredClone(first);
+    for(const dt of [0,-1,NaN,Infinity])assert.deepEqual(preview.sample(dt,'lin','hard'),original);
+    const match=(preview as any).match;
+    let disposed=false;const dispose=match.dispose.bind(match);
+    match.dispose=()=>{disposed=true;dispose();};
+    const changed=preview.sample(0,'ines','clay');
+    assert.ok(disposed);assert.notEqual((preview as any).match,match);
+    assert.equal(changed.players[0].characterId,'ines');assert.equal(changed.surface,'clay');
+    assert.deepEqual(changed.score,[0,0]);assert.equal(changed.phase,'serve');
+  }finally{preview.dispose();}
+});
+
+test('homepage camera follows actual running positions and changed ends without hiding the selected body',()=>{
+  for(const [w,h] of [[906,779],[390,844],[320,568],[844,390]])
+  for(const sign of [-1,1])for(const x of [-4,0,4])for(const depth of [6,10,14]){
+    const camera=new PerspectiveCamera(),p={x,z:depth*sign};
+    frameHomePractice(camera,w,h,p,sign);
+    for(const dx of [-1.1,1.1])for(const y of [0,2.7])for(const dz of [-.7,.6]){
+      const v=new Vector3(p.x+dx,y,p.z+dz).project(camera),sx=(v.x+1)/2,sy=(1-v.y)/2;
+      if(w<=700&&h>w){assert.ok(sx>=.16-1e-8&&sx<=.84+1e-8);assert.ok(sy>=.30-1e-8&&sy<=.58+1e-8);}
+      else{assert.ok(sx>=.52-1e-8&&sx<=.94+1e-8);assert.ok(sy>=.18-1e-8&&sy<=.88+1e-8);}
+    }
+  }
 });

@@ -181,6 +181,8 @@ export class CourtView {
   }
   render(state:MatchState,dt:number,authoritative:MatchState=state){
     this.setSurface(surfaceProfile(state.surface).id);
+    if(this.mode==='home'&&state.players[0])
+      frameHomePractice(this.camera,this.size.w,this.size.h,state.players[0],side(0,state));
     this.cameraPlayers=state.players.map(p=>({x:p.x,z:p.z}));
     if(this.ends!==(state.ends??0)||this.doubles!==(state.mode==='doubles')){
       this.ends=state.ends??0;this.doubles=state.mode==='doubles';this.aimCamera.reset();this.focus={x:0,depth:11};
@@ -225,6 +227,12 @@ export class CourtView {
       }
     }
     this.renderer.domElement.dataset.players=String(visibleSeats.length);
+    if(this.mode==='home'&&state.players[0]){
+      const dataset=this.renderer.domElement.dataset,p=state.players[0];
+      dataset.previewStroke=p.stroke;dataset.previewRally=String(state.rally);
+      dataset.previewHitter=String(state.ball.hitter);dataset.previewBounces=String(state.ball.bounces);
+      dataset.previewMoving=String(p.moving);
+    }
     const b=state.ball;
     this.ball.visible=!winner&&state.phase!=='point'&&state.phase!=='over';this.shadow.visible=this.ball.visible;
     this.deadBallView?.update(state.deadBalls??[],this.mode!=='home',state.rescueWindow?0:dt);

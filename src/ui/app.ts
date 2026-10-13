@@ -337,6 +337,7 @@ export class App {
       this.tutorialHudKey='';this.renderScreen();
     }
     else if(action==='start-practice'){
+      this.homePractice?.dispose();
       this.view?.clearMoveTarget?.();
       this.net?.close();this.net=null;this.remote=null;this.drawState=null;this.room=null;this.playback.reset();this.local.dispose();this.local=new Match([this.characterId,this.opponentId],Math.random,{surface:this.surface});
       this.tutorial=this.tutorialRequired?new PracticeTutorial():null;this.tutorialHudKey='';
@@ -407,6 +408,7 @@ export class App {
     }
   }
   private connect(action:unknown){
+    this.homePractice?.dispose();
     this.friendsOpen=false;this.homeTab='play';
     this.view?.clearMoveTarget?.();
     this.tutorial=null;this.tutorialHudKey='';

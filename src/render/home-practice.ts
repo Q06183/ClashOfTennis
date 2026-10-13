@@ -1,40 +1,63 @@
 import {PerspectiveCamera,Vector3} from 'three';
-import type {MatchState,PlayerState} from '../simulation/types.js';
+import {Match} from '../simulation/match.js';
+import {reception} from '../simulation/reception.js';
+import {side,type MatchState,type Seat} from '../simulation/types.js';
 import type {SurfaceId} from '../simulation/surfaces.js';
 
-/** A solo hitting-wall preview. Never advances a scored match or an opponent. */
+/** A real, isolated two-seat rally. Only the selected athlete is rendered. */
 export class HomePractice {
-  private time=0;
+  private match:Match|null=null;
+  private accumulator=0;
+  private characterId='';
+  private surface:SurfaceId='hard';
   sample(dt:number,characterId:string,surface:SurfaceId):MatchState{
-    this.time+=Math.max(0,Math.min(dt,.08));
-    const cycle=2.8,u=this.time%cycle,x=.22*Math.sin(this.time*.7);
-    const contact={x:x+.55,y:1.25,z:8.65};
-    const player:PlayerState={characterId,surface,x,z:9,tx:x,tz:9,stamina:1,totalStamina:1,
-      moving:false,swing:u<.44?.44-u:0,stroke:'forehand',contact,
-      preparation:u>2.35?{stroke:'forehand',progress:(u-2.35)/.45,contact}:undefined};
-    // Two continuous ballistic arcs meet at the distant floor and the racket.
-    const t=u<1.4?u:u-1.4,flight=1.4,g=9.81;
-    const start=u<1.4?contact:{x:.55,y:.12,z:-5};
-    const end=u<1.4?{x:.55,y:.12,z:-5}:contact;
-    const vx=(end.x-start.x)/flight,vz=(end.z-start.z)/flight;
-    const vy=(end.y-start.y+g*flight*flight/2)/flight;
-    return {surface,mode:'singles',ends:0,time:this.time,phase:'rally',score:[0,0],players:[player],
-      ball:{surface,x:start.x+vx*t,y:start.y+vy*t-g*t*t/2,z:start.z+vz*t,vx,vy:vy-g*t,vz,
-        hitter:0,bounces:u<1.4?0:1,targetX:end.x,targetZ:end.z,tier:'normal'},
-      server:0,fault:0,pointTimer:0,rally:Math.floor(this.time/cycle)+1,maxRally:0,
-      winner:null,lastPoint:null,event:'单人热身',eventId:0};
+    if(!this.match||characterId!==this.characterId||surface!==this.surface){
+      this.dispose();this.characterId=characterId;this.surface=surface;
+      this.match=new Match([characterId,'lin'],()=>.5,{surface});
+    }
+    this.accumulator+=Number.isFinite(dt)?Math.max(0,Math.min(dt,.08)):0;
+    while(this.accumulator>=1/60){
+      if(this.match.state.phase==='over'){
+        this.match.dispose();this.match=new Match([characterId,'lin'],()=>.5,{surface});
+      }
+      this.drive(0);this.drive(1);
+      this.match.step(1/60);this.accumulator-=1/60;
+    }
+    return this.match.state;
   }
+  private drive(seat:Seat){
+    const match=this.match!,s=match.state,p=s.players[seat],sign=side(seat,s);
+    if(s.phase==='serve'){
+      if(s.server===seat&&!p.preparation&&Math.sin(s.time*2.5)>.5)
+        match.input(seat,{type:'shot',aim:0,depth:.45,power:.35,lob:false});
+      return;
+    }
+    if(s.phase!=='rally')return;
+    if(s.ball.hitter===seat){
+      match.input(seat,{type:'move',x:0,z:sign*10});
+      return;
+    }
+    // Deliberate baseline practice for all characters, including volley-first
+    // players: run to the real post-bounce contact, never manufacture a hit.
+    const target=reception(s.ball,p,seat);
+    match.input(seat,{type:'move',x:target.x,z:target.z});
+    if((s.ball.bounces>0&&match.canReturn(seat))||s.rescueWindow?.seat===seat){
+      match.input(seat,{type:'shot',aim:Math.sin(s.time*.83+seat*1.7)*.42,
+        depth:.55+.22*Math.abs(Math.sin(s.time*.5)),power:.35,lob:false});
+    }
+  }
+  dispose(){this.match?.dispose();this.match=null;this.accumulator=0;}
 }
 
 /** Fit the whole selected athlete into the UI-free area, not under the menu. */
-export function frameHomePractice(camera:PerspectiveCamera,w:number,h:number){
+export function frameHomePractice(camera:PerspectiveCamera,w:number,h:number,player={x:0,z:9},sign=1){
   camera.clearViewOffset();camera.aspect=w/h;camera.zoom=1;camera.fov=40;
-  camera.position.set(6,5.5,17);camera.lookAt(0,1,8.4);
+  camera.position.set(player.x+6*sign,5.5,player.z+8*sign);camera.lookAt(player.x,1,player.z-.6*sign);
   camera.updateProjectionMatrix();camera.updateMatrixWorld();
   const portrait=w<=700&&h>w;
   const [left,right,top,bottom]=portrait?[.16,.84,.30,.58]:[.52,.94,.18,.88];
   const points:Vector3[]=[];
-  for(const x of [-1.1,1.1])for(const y of [0,2.7])for(const z of [8.3,9.6])points.push(new Vector3(x,y,z));
+  for(const x of [-1.1,1.1])for(const y of [0,2.7])for(const z of [-.7,.6])points.push(new Vector3(player.x+x,y,player.z+z));
   const bounds=()=>{
     const p=points.map(v=>v.clone().project(camera));
     return {left:Math.min(...p.map(v=>v.x)),right:Math.max(...p.map(v=>v.x)),
