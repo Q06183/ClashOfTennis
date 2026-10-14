@@ -17,7 +17,7 @@ test('App saves completion only after two returns, recovery, slice and a winning
   }) as any;
   const shot={type:'shot' as const,aim:0,depth:.5,power:.35,lob:false};
   function wait(predicate:()=>boolean){
-    for(let i=0;i<3600&&!predicate();i++)app.tutorial.step(app.local,1/60);
+    for(let i=0;i<7200&&!predicate();i++)app.tutorial.step(app.local,1/60);
     assert.ok(predicate());
   }
   try{
@@ -40,12 +40,18 @@ test('App saves completion only after two returns, recovery, slice and a winning
     app.input({...shot,slice:true});
     wait(()=>app.tutorial.stage==='finish');
     assert.equal(data.get('rally-tutorial'),undefined,'slice alone is not completion');
-    wait(()=>app.tutorial.completed);app.completeTutorial();
+    let last=-1;
+    wait(()=>{
+      const st=app.local.state;
+      if(st.phase==='serve'&&st.server===0&&!st.players[0].preparation)app.input(shot);
+      if(st.phase==='rally'&&st.ball.hitter===1&&st.rally!==last){last=st.rally;app.input({...shot,aim:(st.rally%2?1:-1)*.7,depth:.6,power:.4});}
+      return app.tutorial.completed;
+    });app.completeTutorial();
     assert.equal(data.get('rally-tutorial'),TUTORIAL_VERSION);
     assert.equal(app.tutorialRequired,false);
     const sameMatch=app.local;
     assert.equal(sameMatch.state.winner,0);assert.equal(app.screen,'result');
-    assert.match(app.result(),/你赢了，新手引导完成/);
+    assert.match(app.result(),/你赢下了第一分，教学完成/);
     await app.action('finish-tutorial');
     assert.equal(app.tutorial,null);assert.notEqual(app.local,sameMatch);assert.equal(app.screen,'playing');
     await app.action('start-practice');assert.equal(app.tutorial,null,'passed players get ordinary practice');

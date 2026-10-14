@@ -8,29 +8,10 @@ import type {SurfaceId} from '../src/simulation/surfaces.js';
 import {tutorialGesture} from '../src/ui/tutorial-gesture.js';
 
 const shot={type:'shot' as const,aim:0,depth:.5,power:.35,lob:false};
-export function advance(coach:PracticeTutorial,match:Match,predicate:()=>boolean,limit=3600){
-  for(let i=0;i<limit&&!predicate();i++)coach.step(match,1/60);
-  assert.ok(predicate(),JSON.stringify({stage:coach.stage,state:match.state}));
-}
-export function opening(coach:PracticeTutorial,match:Match){
-  const p=match.state.players[0];
-  coach.input(match,{type:'move',x:p.x+1,z:p.z+.5});
-  advance(coach,match,()=>coach.stage==='serve');
-  coach.input(match,shot);
-  advance(coach,match,()=>coach.stage==='return');
-}
-export function returnBall(coach:PracticeTutorial,match:Match,next:string,slice=false){
-  advance(coach,match,()=>coach.held(match));
-  coach.input(match,{...shot,slice});
-  advance(coach,match,()=>coach.stage===next);
-}
-export function recover(coach:PracticeTutorial,match:Match){
-  const target=coach.movementTarget(match)!;
-  coach.input(match,{type:'move',...target});
-  advance(coach,match,()=>coach.stage==='return-again');
-}
+import {advance,opening,returnBall,recover,winFinal} from './helpers/tutorial.js';
+export {advance,opening,returnBall,recover,winFinal};
 
-test('seven-stage guide waits for both real moves, two legal returns, slice and victory',async()=>{
+test('seven-stage guide waits for both real moves, two legal returns, slice and a real won point',async()=>{
   await initPhysics();const match=new Match(['lin','lin'],()=>.5),coach=new PracticeTutorial();
   try{
     const initial=structuredClone(match.state);
@@ -54,10 +35,11 @@ test('seven-stage guide waits for both real moves, two legal returns, slice and 
     advance(coach,match,()=>coach.held(match));coach.input(match,shot);
     assert.equal(coach.stage,'slice','normal gesture cannot pass slice');
     returnBall(coach,match,'finish',true);
-    assert.equal(coach.completed,false,'slice must not skip the winning match');
-    advance(coach,match,()=>coach.completed);
+    assert.equal(coach.completed,false,'slice must not skip the winning point');
+    const idle=structuredClone(match.state.score);coach.step(match,1/60);assert.deepEqual(idle,[0,0]);
+    winFinal(coach,match);
     assert.equal(match.state.phase,'over');assert.equal(match.state.winner,0);
-    assert.deepEqual(match.state.score,[7,0]);
+    assert.ok(match.state.score[0]>=1&&match.state.score[0]<7,'real points, no forced 7:0');
     const finished=structuredClone(match.state);coach.step(match,120);
     assert.deepEqual(match.state,finished);
   }finally{match.dispose();}
@@ -69,19 +51,19 @@ test('failed ordinary returns restore the same feed without going back to serve 
     opening(coach,match);const feed=structuredClone(match.state);
     advance(coach,match,()=>coach.held(match));
     coach.input(match,{...shot,directionX:3});
-    advance(coach,match,()=>match.state.event==='搭档送球');
+    advance(coach,match,()=>match.state.event==='陪练送球');
     assert.equal(coach.stage,'return');assert.deepEqual(match.state,feed);
     assert.equal(match.state.phase,'rally');assert.equal(coach.normalReturns,0);
     returnBall(coach,match,'recover');recover(coach,match);
     const second=structuredClone(match.state);
     advance(coach,match,()=>coach.held(match));coach.input(match,{...shot,directionX:3});
-    advance(coach,match,()=>match.state.event==='搭档送球');
+    advance(coach,match,()=>match.state.event==='陪练送球');
     assert.equal(coach.stage,'return-again');assert.equal(coach.normalReturns,1);
     assert.deepEqual(match.state,second);
     returnBall(coach,match,'slice');
     const sliceFeed=structuredClone(match.state);
     advance(coach,match,()=>coach.held(match));coach.input(match,{...shot,slice:true,directionX:3});
-    advance(coach,match,()=>match.state.event==='搭档送球');
+    advance(coach,match,()=>match.state.event==='陪练送球');
     assert.equal(coach.stage,'slice');assert.equal(coach.normalReturns,2);
     assert.deepEqual(match.state,sliceFeed,'failed slice retries without losing two ordinary returns');
     returnBall(coach,match,'finish',true);
@@ -105,7 +87,7 @@ test('every player and bot on each surface can complete two ordinary returns and
     try{
       opening(coach,m);returnBall(coach,m,'recover');recover(coach,m);
       returnBall(coach,m,'slice');returnBall(coach,m,'finish',true);
-      advance(coach,m,()=>coach.completed);assert.equal(coach.normalReturns,2);
+      winFinal(coach,m);assert.equal(coach.normalReturns,2);
     }finally{m.dispose();}
   }
 });
@@ -138,16 +120,17 @@ test('animation labels show outgoing direction, reversed only for slice',()=>{
 test('serve, normal return and slice prompts teach speed, length and outgoing direction',async()=>{
   await initPhysics();const m=new Match(['lin','lin'],()=>.5),coach=new PracticeTutorial();
   try{
+    // Designer review U2: the pace physics moves into the foldable “为什么？” section.
     coach.stage='serve';assert.match(coach.prompt(m).detail,/球也向左上飞/);
-    assert.ok(coach.prompt(m).detail.includes(TUTORIAL_PACE_HINT));
+    assert.equal(coach.prompt(m).more,TUTORIAL_PACE_HINT);
     coach.stage='return';m.practiceFeed();
     advance(coach,m,()=>coach.held(m));
     assert.match(coach.prompt(m).detail,/滑动方向就是出球方向/);
-    assert.ok(coach.prompt(m).detail.includes(TUTORIAL_PACE_HINT));
+    assert.equal(coach.prompt(m).more,TUTORIAL_PACE_HINT);
     coach.stage='slice';
     assert.match(coach.prompt(m).detail,/出球方向与滑动方向相反/);
     assert.match(coach.prompt(m).detail,/向右下划，球向左上飞/);
-    assert.ok(coach.prompt(m).detail.includes(TUTORIAL_PACE_HINT));
+    assert.equal(coach.prompt(m).more,TUTORIAL_PACE_HINT);
     assert.match(TUTORIAL_PACE_HINT,/相同用时划得越长/);
     assert.match(TUTORIAL_PACE_HINT,/落点通常越深/);
   }finally{m.dispose();}

@@ -2,21 +2,25 @@ import {getCharacter,isCharacterAvailable,type CharacterId} from '../src/simulat
 import { randomInt, randomUUID } from 'node:crypto';
 import { WebSocket } from 'ws';
 import { Match } from '../src/simulation/match.js';
-import {other,type MatchMode,type RoomView,type Seat} from '../src/simulation/types.js';
+import {other,EMOTES,type MatchMode,type RoomView,type Seat} from '../src/simulation/types.js';
+import {CHARACTERS,STANDARD_CHARACTERS} from '../src/simulation/characters.js';
 import {driveAI} from '../src/simulation/ai.js';
 import {isSurfaceId,type SurfaceId} from '../src/simulation/surfaces.js';
 import {isScoringFormat,type ScoringFormat} from '../src/simulation/scoring.js';
 
 type Member={name:string;characterId:CharacterId;token:string;ws:WebSocket|null;ready:boolean;gone:number|null;bot?:boolean};
-type Room={code:string;mode:MatchMode;surface:SurfaceId;format:ScoringFormat;host:Seat;seats:(Member|null)[];match:Match|null;updated:number;seq:number};
+type Room={code:string;mode:MatchMode;surface:SurfaceId;format:ScoringFormat;host:Seat;seats:(Member|null)[];match:Match|null;updated:number;seq:number;
+  record:[number,number];matches:number;recorded:boolean;botLevel:'relaxed'|'standard';matchedBot?:boolean};
 type Search={name:string;characterId:CharacterId;surface:SurfaceId;joined:number};
-type Peer={ws:WebSocket;room:Room|null;seat:Seat|null;searching:Search|null;window:number;count:number;lastInput:number;lastPong:number;lastPing:number};
+type Peer={ws:WebSocket;room:Room|null;seat:Seat|null;searching:Search|null;window:number;count:number;lastInput:number;lastPong:number;lastPing:number;lastEmote?:number};
+/** A lone searcher gets an automatic computer opponent after this wait. */
+export const MATCH_BOT_AFTER_MS=20_000;
 const send=(ws:WebSocket|null,v:unknown)=>{if(ws?.readyState===WebSocket.OPEN&&ws.bufferedAmount<256_000)ws.send(JSON.stringify(v));};
 export class Rooms {
   readonly rooms=new Map<string,Room>();
   readonly peers=new Map<WebSocket,Peer>();
   private matchmaking:Peer[]=[];
-  constructor(private reconnectMs=30_000) {}
+  constructor(private reconnectMs=30_000,private botAfterMs=MATCH_BOT_AFTER_MS) {}
   add(ws:WebSocket) {
     const peer:Peer={ws,room:null,seat:null,searching:null,window:Date.now(),count:0,lastInput:0,lastPong:Date.now(),lastPing:Date.now()};this.peers.set(ws,peer);
     ws.on('pong',()=>peer.lastPong=Date.now());
@@ -32,7 +36,7 @@ export class Rooms {
     const disconnected=r.seats.filter(m=>m?.gone!=null).map(m=>m!.gone!);
     return {code:r.code,mode:r.mode,surface:r.surface,format:r.format,host:r.host,seats:r.seats.map(m=>m?{name:m.name,characterId:m.characterId,bot:!!m.bot,connected:!!m.ws||!!m.bot,ready:m.ready}:null),
       playing:!!r.match,paused:!!r.match&&r.match.state.phase!=='over'&&r.seats.some(m=>!m||!m.bot&&!m.ws),
-      expiresAt:disconnected.length?Math.min(...disconnected)+this.reconnectMs:null};
+      expiresAt:disconnected.length?Math.min(...disconnected)+this.reconnectMs:null,record:[...r.record] as [number,number],matches:r.matches,matchedBot:!!r.matchedBot};
   }
   private broadcast(r:Room,v:unknown){for(const member of r.seats)send(member?.ws??null,v);}
   private roomUpdate(r:Room){this.broadcast(r,{type:'room',room:this.view(r)});}
@@ -42,7 +46,7 @@ export class Rooms {
   }
   private code(){let code:string;do{code=String(randomInt(100000,1000000));}while(this.rooms.has(code));return code;}
   private create(mode:MatchMode='singles',surface:SurfaceId='hard',format:ScoringFormat='tiebreak'):Room {
-    const r:Room={code:this.code(),mode,surface,format,host:0,seats:Array(mode==='doubles'?4:2).fill(null),match:null,updated:Date.now(),seq:0};
+    const r:Room={code:this.code(),mode,surface,format,host:0,seats:Array(mode==='doubles'?4:2).fill(null),match:null,updated:Date.now(),seq:0,record:[0,0],matches:0,recorded:false,botLevel:'standard'};
     this.rooms.set(r.code,r);return r;
   }
   private clearReady(r:Room){for(const m of r.seats)if(m)m.ready=false;}
@@ -52,8 +56,11 @@ export class Rooms {
     }
   }
   private start(r:Room){
-    r.match?.dispose();r.match=new Match(r.seats.map(m=>m!.characterId),Math.random,{mode:r.mode,surface:r.surface,format:r.format});
-    this.clearReady(r);
+    r.match?.dispose();
+    // Alternate the opening server between consecutive matches in one room.
+    r.match=new Match(r.seats.map(m=>m!.characterId),Math.random,{mode:r.mode,surface:r.surface,format:r.format,firstServer:(r.matches%2) as Seat});
+    r.seats.forEach((m,i)=>r.match!.setTimingGrade(i as Seat,!!m&&!m.bot));
+    r.recorded=false;this.clearReady(r);
   }
   private configure(p:Peer,m:any){
     const r=p.room!;
@@ -92,7 +99,7 @@ export class Rooms {
     const opponent=index>=0?this.matchmaking.splice(index,1)[0]:undefined;
     if(!opponent){
       p.searching={name,characterId,surface,joined:Date.now()};this.matchmaking.push(p);
-      send(p.ws,{type:'matchmaking',searching:true});return;
+      this.searchStatus(p);return;
     }
     const first=opponent.searching!;opponent.searching=null;p.searching=null;
     const r=this.create('singles',surface);
@@ -103,11 +110,30 @@ export class Rooms {
     for(const peer of [opponent,p])send(peer.ws,{type:'welcome',code:r.code,seat:peer.seat,token:r.seats[peer.seat!]!.token,matched:true});
     this.roomUpdate(r);
   }
+  /** Searcher waited too long or asked for it: start the same quick match with a computer. */
+  private matchBot(p:Peer){
+    const search=p.searching;if(!search||p.room)return;
+    p.searching=null;this.matchmaking=this.matchmaking.filter(candidate=>candidate!==p);
+    if(this.rooms.size>=100){this.error(p,'球场暂时已满，请稍后再试');return;}
+    const r=this.create('singles',search.surface);r.botLevel='relaxed';r.matchedBot=true;
+    const pool=STANDARD_CHARACTERS.filter(c=>isCharacterAvailable(c.id)&&c.id!==search.characterId);
+    const rival=pool[randomInt(0,pool.length)]??CHARACTERS[0];
+    p.room=r;p.seat=0;
+    r.seats[0]={name:search.name,characterId:search.characterId,token:randomUUID(),ws:p.ws,ready:false,gone:null};
+    r.seats[1]={name:`电脑 · ${rival.name}`,characterId:rival.id,token:randomUUID(),ws:null,ready:false,gone:null,bot:true};
+    this.start(r);
+    send(p.ws,{type:'welcome',code:r.code,seat:0,token:r.seats[0]!.token,matched:true});
+    this.roomUpdate(r);
+  }
+  private searchStatus(p:Peer){
+    send(p.ws,{type:'matchmaking',searching:true,online:this.peers.size,waiting:this.matchmaking.length,botAfterMs:this.botAfterMs});
+  }
   private handle(p:Peer,m:any){
     if(!m||typeof m.type!=='string')return;
     if(m.type==='ping'){send(p.ws,{type:'pong',at:m.at});return;}
     if(m.type==='leave'){this.detach(p,true);return;}
     if(['create','join','resume','match'].includes(m.type)&&p.room){this.error(p,'你已经在房间中');return;}
+    if(p.searching&&m.type==='match-bot'){this.matchBot(p);return;}
     if(p.searching&&m.type!=='ping'&&m.type!=='leave'&&m.type!=='match'){this.error(p,'正在寻找对手，请先取消匹配');return;}
     const name=typeof m.name==='string'?m.name.trim().slice(0,16)||'球友':'球友';
     if(['create','join','match'].includes(m.type)&&m.characterId!==undefined&&!isCharacterAvailable(m.characterId)){this.error(p,'角色不存在，请重新选择');return;}
@@ -119,7 +145,7 @@ export class Rooms {
       if(m.type==='match'&&(m.mode==='doubles'||m.format==='standard')){this.error(p,'快速匹配为单打抢七；双打或标准赛请开房');return;}
     }
     if(m.type==='match'){
-      if(p.searching){send(p.ws,{type:'matchmaking',searching:true});return;}
+      if(p.searching){this.searchStatus(p);return;}
       if(this.rooms.size>=100){this.error(p,'球场暂时已满，请稍后再试');return;}
       this.match(p,name,characterId,m.surface??'hard');return;
     }
@@ -146,6 +172,12 @@ export class Rooms {
     const r=p.room,seat=p.seat;if(!r||seat===null){this.error(p,'请先创建或加入房间');return;}
     r.updated=Date.now();
     if(m.type==='configure'){this.configure(p,m);return;}
+    if(m.type==='emote'){
+      const id=Number(m.id),now=Date.now();
+      if(!Number.isInteger(id)||id<0||id>=EMOTES.length)return;
+      if(p.lastEmote&&now-p.lastEmote<1200)return;
+      p.lastEmote=now;this.broadcast(r,{type:'emote',seat,id});return;
+    }
     if(m.type==='select-character'){
       if(r.match&&r.match.state.phase!=='over'){this.error(p,'比赛中不能更换角色');return;}
       if(!isCharacterAvailable(m.characterId)){this.error(p,'角色不存在，请重新选择');return;}
@@ -186,6 +218,8 @@ export class Rooms {
       if(now-peer.lastPong>20_000){peer.ws.terminate();continue;}
       if(now-peer.lastPing>7_000&&peer.ws.readyState===WebSocket.OPEN){peer.lastPing=now;peer.ws.ping();}
     }
+    for(const peer of [...this.matchmaking])
+      if(peer.searching&&now-peer.searching.joined>=this.botAfterMs)this.matchBot(peer);
     for(const [code,r] of this.rooms){
       const active=!!r.match&&r.match.state.phase!=='over';
       if(r.seats.every(m=>!m?.ws)&&now-r.updated>this.reconnectMs || !active&&now-r.updated>900_000){
@@ -203,8 +237,11 @@ export class Rooms {
       if(changed)this.roomUpdate(r);
       const paused=this.view(r).paused;
       if(r.match&&!paused){
-        r.seats.forEach((member,i)=>{if(member?.bot)driveAI(r.match!,i as Seat,'standard');});
+        r.seats.forEach((member,i)=>{if(member?.bot)driveAI(r.match!,i as Seat,r.botLevel);});
         r.match.step(dt);
+      }
+      if(r.match&&r.match.state.phase==='over'&&!r.recorded&&r.match.state.winner!==null){
+        r.recorded=true;r.matches++;r.record[r.match.state.winner]++;this.roomUpdate(r);
       }
       if(r.match&&broadcast)this.broadcast(r,{type:'state',state:r.match.state,seq:++r.seq,paused});
     }

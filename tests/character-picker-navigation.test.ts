@@ -93,7 +93,7 @@ test('opening or refreshing the picker does not force scrolling; invalid and loc
 test('attribute region is focusable and contains a return action for all picker contexts',()=>{
  for(const args of [['lin',false,false],['mei',true,false],['leo',false,false,3],['wuming',false,true]] as const){
   const html=characterPicker(args[0],args[1],args[2],args.length===4?args[3]:undefined);
-  assert.match(html,/class="character-detail"[^>]*tabindex="-1"[^>]*role="region"[^>]*aria-label="[^"]+的属性介绍"/);
+  assert.match(html,/class="character-detail[^"]*"[^>]*tabindex="-1"[^>]*role="region"[^>]*aria-label="[^"]+的属性介绍"/);
   assert.match(html,/data-action="character-list">↑ 返回球员列表/);
  }
  const {ui,events}=fixture();

@@ -50,3 +50,46 @@ export function movementFeedbackTarget(s:MatchState,seat:Seat,command:Input){
   }
   return {x:clamp(command.x,-MOVEMENT_HALF_WIDTH,MOVEMENT_HALF_WIDTH),z:sign*clamp(command.z*sign,.9,16.3)};
 }
+
+/** Ordinary per-shot coaching is shown only in the opening points. */
+export const HINT_RULES={openingPoints:3,minHoldMs:1500} as const;
+const ROUTINE=new Set(['incoming','hit','idle']);
+/**
+ * Decides whether the rally hint is visible. Routine prompts appear only in the first
+ * points; afterwards only a situation seen for the first time this match is shown.
+ * Every shown hint stays at least `minHoldMs`, so text never flickers per shot.
+ */
+export class HintGate {
+  private seen=new Set<string>();
+  private shown:{key:string;text:string;sub:string;until:number}|null=null;
+  reset(){this.seen.clear();this.shown=null;}
+  decide(key:string,text:string,sub:string,points:number,now:number){
+    if(this.shown&&now<this.shown.until&&this.shown.key!==key)return {visible:true,text:this.shown.text,sub:this.shown.sub};
+    const opening=points<HINT_RULES.openingPoints;
+    const fresh=!this.seen.has(key);
+    const allowed=opening||(!ROUTINE.has(key)&&fresh)||(this.shown?.key===key&&now<this.shown.until);
+    if(!allowed){this.shown=null;return {visible:false,text:'',sub:''};}
+    if(this.shown?.key!==key){this.seen.add(key);this.shown={key,text,sub,until:now+HINT_RULES.minHoldMs};}
+    else{this.shown.text=text;this.shown.sub=sub;}
+    return {visible:true,text,sub};
+  }
+}
+/** Stable situation key for one rally prompt. */
+export function hintKey(s:MatchState,seat:Seat,lob:boolean){
+  const p=s.players[seat],b=s.ball;
+  if(lob)return 'lob';
+  if(p.rescue||s.rescueWindow)return 'rescue';
+  if((p.totalStamina??1)<.35)return 'tired';
+  if(p.shotQueued)return 'queued';
+  if(b.hitter!==seat&&(b.drop??0)>.5)return 'drop-in';
+  if(b.hitter!==seat&&b.skill)return `${b.skill}-in`;
+  if(b.hitter!==seat&&(b.topspin??0)>0)return 'topspin-in';
+  if(b.hitter!==seat&&b.critical)return 'critical-in';
+  return b.hitter===seat?'hit':'incoming';
+}
+/** One combined bar: solid = effective strength, light buffer = rest of match reserve. */
+export function staminaWidths(p:{stamina:number;totalStamina?:number}){
+  const total=clamp(p.totalStamina??1,0,1),effective=clamp(p.stamina,0,1)*total;
+  return {total:total*100,effective:effective*100};
+}
+export const TIMING_LABEL={perfect:'PERFECT',good:'好球',early:'早了一点',late:'晚了一点'} as const;

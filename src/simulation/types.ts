@@ -31,7 +31,9 @@ export type PlayerState = {
   serveCourt?: 'deuce'|'ad';
   rescue?: {startedAt:number;fromX:number;fromZ:number;toX:number;toZ:number;contact:Vec;hit:boolean;stroke?:RescueStroke;backhand?:boolean;travel?:number;natural?:boolean;launchVx?:number;short?:boolean;missed?:boolean;recovery?:'step-out'|'supported-fall'};
 };
-export type BallState = Vec & { surface?:SurfaceId; mode?:MatchMode; ends?:0|1; vx: number; vy: number; vz: number; bounces: number; hitter: Seat; targetX: number; targetZ: number; placementAssist?:number; aimOrigin?:Vec; tier?: ShotTier; critical?: boolean; rescue?: boolean; topspin?: number; slice?: boolean; drop?:number; skill?: 'smash'|'volley'|'slice' };
+export type BallState = Vec & { surface?:SurfaceId; mode?:MatchMode; ends?:0|1; vx: number; vy: number; vz: number; bounces: number; hitter: Seat; targetX: number; targetZ: number; placementAssist?:number; aimOrigin?:Vec; tier?: ShotTier; critical?: boolean; rescue?: boolean; topspin?: number; slice?: boolean; drop?:number; skill?: 'smash'|'volley'|'slice'; timing?: ShotTiming };
+/** Gesture timing relative to the contact window; only ordinary rally strokes are graded. */
+export type ShotTiming='perfect'|'good'|'early'|'late';
 export type DeadBallState=BallState & {id:number;age:number;wallHits:number;settled:boolean;settledAt?:number};
 export type MatchState = {
   surface?:SurfaceId;
@@ -50,7 +52,11 @@ export type RoomView = {
   mode?:MatchMode;surface?:SurfaceId;format?:ScoringFormat;host?:Seat;
   code: string; seats: ({name: string; characterId?: string; bot?:boolean; connected: boolean; ready: boolean} | null)[];
   playing: boolean; paused: boolean; expiresAt: number | null;
+  /** Finished matches in this room, by team; rematches alternate the opening server. */
+  record?: [number, number]; matches?: number; matchedBot?: boolean;
 };
+/** Fixed, non-free-text quick reactions between friends. */
+export const EMOTES=['好球！','再来！','漂亮！','差一点','加油','GG'] as const;
 export const teamOf = (seat: Seat):Team => (seat%2) as Team;
 export const partner = (seat: Seat):Seat => (seat^2) as Seat;
 export const side = (seat: Seat,context?:{ends?:0|1}) => (teamOf(seat)===0?1:-1)*(context?.ends?-1:1);

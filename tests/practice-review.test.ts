@@ -37,7 +37,7 @@ test('out/net, first fault, lets, double faults and timeout have distinct owners
       if(winner!==null)s.score[winner]++;
       r.observe(s);r.observe(s);
     }
-    assert.deepEqual({...r.players[0],styles:undefined},{returns:0,legal:0,out:1,net:0,missed:0,doubleFault:1,timeout:0,styles:undefined});
+    assert.deepEqual({...r.players[0],styles:undefined},{returns:0,legal:0,out:1,net:0,missed:0,doubleFault:1,timeout:0,styles:undefined,perfect:0,winners:0});
     assert.equal(r.players[1].timeout,1);assert.equal(r.players[1].net,1);
     assert.match(r.advice,/二发|场内/);
   }finally{m.dispose();}

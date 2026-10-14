@@ -1,9 +1,9 @@
 import {topspinCharge} from '../simulation/flight.js';
-import { interpretGesture } from './gesture.js';
+import { interpretGesture,isLobHook } from './gesture.js';
 import type { Input, Shot } from '../simulation/types.js';
 import { SwipeTrail } from './swipe-trail.js';
 export class Controls {
-  private start:{id:number;x:number;y:number;time:number;firstMove:number}|null=null;
+  private start:{id:number;x:number;y:number;time:number;firstMove:number;peakY:number}|null=null;
   private active=false;
   private chargeFrame=0;
   lobMode=false;
@@ -23,7 +23,7 @@ export class Controls {
   private down=(e:PointerEvent)=>{
     if(!this.enabled||this.start||e.isPrimary===false||(e.button!==undefined&&e.button!==0))return;
     e.preventDefault();this.unlock();this.canvas.setPointerCapture(e.pointerId);
-    this.start={id:e.pointerId,x:e.clientX,y:e.clientY,time:performance.now(),firstMove:0};
+    this.start={id:e.pointerId,x:e.clientX,y:e.clientY,time:performance.now(),firstMove:0,peakY:e.clientY};
     this.aiming(true);
     this.trail.begin(e.clientX,e.clientY);this.chargeFrame=requestAnimationFrame(this.tickCharge);
   };
@@ -35,7 +35,8 @@ export class Controls {
   private gesture(e:PointerEvent){
     const s=this.start!;const shot=interpretGesture({dx:e.clientX-s.x,dy:e.clientY-s.y,duration:performance.now()-s.time,
       hold:s.firstMove?s.firstMove-s.time:performance.now()-s.time,width:this.canvas.clientWidth,height:this.canvas.clientHeight});
-    return shot&&this.lobMode&&!shot.slice?{...shot,lob:true,topspin:0,critical:false}:shot;
+    const hook=!!shot&&!shot.slice&&isLobHook(s.y,Math.min(s.peakY,e.clientY),e.clientY,this.canvas.clientWidth,this.canvas.clientHeight);
+    return shot&&(this.lobMode||hook)&&!shot.slice?{...shot,lob:true,topspin:0,critical:false}:shot;
   }
   private releaseCapture(){
     const id=this.start?.id;
@@ -46,6 +47,7 @@ export class Controls {
     // Measure hold only while the finger is stationary. A 12px dead zone
     // counted much of a gentle 20–40px swipe as a charged topspin hold.
     if(!s.firstMove&&Math.hypot(e.clientX-s.x,e.clientY-s.y)>3)s.firstMove=performance.now();
+    s.peakY=Math.min(s.peakY,e.clientY);
     this.trail.move(e.clientX,e.clientY);
     this.feedback(this.gesture(e),e.clientX,e.clientY,false);
   };

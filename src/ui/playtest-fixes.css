@@ -1,0 +1,88 @@
+/* Designer play-test fixes (2026-10-13). Loaded last; overrides only what the review changed. */
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* U2 · one slim stamina bar per player: solid = usable now, pale = match reserve */
+.scoreboard .stamina-row.combined{display:block;margin-top:5px}
+.scoreboard .stamina-row.combined .stamina{position:relative;height:5px;margin:0;background:#173e4014}
+.stamina-row.combined .stamina-reserve{position:absolute;inset:0 auto 0 0;background:#9fbd7a66;border-radius:3px;transition:width .2s}
+.stamina-row.combined .stamina i{position:relative;background:#5f8f3f}
+.score-player:last-child .stamina-row.combined .stamina-reserve{background:#e8a77a66}
+.score-player:last-child .stamina-row.combined .stamina i{background:#d8824a}
+.stamina-row.combined.low .stamina i{background:#d4553f}
+
+/* U2 · tutorial card: one progress bar instead of seven chips; physics folded */
+.tutorial-progress[role=progressbar]{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;margin-bottom:8px}
+.tutorial-step-label{font-size:11px;font-weight:700;color:#315c49;white-space:nowrap;padding:0;background:none}
+.tutorial-progress .tutorial-step-label{padding:0;background:none}
+.tutorial-bar{flex:1;height:5px;border-radius:5px;background:#173e4014;overflow:hidden;display:block}
+.tutorial-bar b{display:block;height:100%;background:#9cc24b;border-radius:5px;transition:width .3s}
+.tutorial-why{margin-top:4px;font-size:11px;color:#53695f}
+.tutorial-why summary{cursor:pointer;font-weight:650;min-height:28px;display:flex;align-items:center;pointer-events:auto}
+.tutorial-why p{margin:2px 0 0;font-size:11px;line-height:1.6}
+.tutorial-coach{pointer-events:auto}
+
+/* U3 · the finger and its label are one target; the label sits above, never below the hit point */
+.tutorial-hand.tap>span{top:-30px;left:50%;transform:translateX(-50%)}
+
+/* G2 · timing grade bubble */
+.timing-bubble{position:absolute;left:50%;top:56%;transform:translate(-50%,-50%) scale(.8);font:italic 800 22px Georgia,serif;color:#fff7dc;text-shadow:0 2px 12px #123b3c;opacity:0;pointer-events:none;z-index:6;letter-spacing:1px}
+.timing-bubble.visible{animation:timing-pop .9s ease-out forwards}
+.timing-bubble[data-grade=perfect]{color:#e9ff6a;font-size:30px}
+.timing-bubble[data-grade=early],.timing-bubble[data-grade=late]{color:#ffd3b0;font-size:16px;font-style:normal;font-weight:650}
+@keyframes timing-pop{0%{opacity:0;transform:translate(-50%,-30%) scale(.7)}18%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-80%) scale(1)}}
+@media(prefers-reduced-motion:reduce){.timing-bubble.visible{animation:none;opacity:1}}
+
+/* G1 · matchmaking status */
+.matchmaking-meta{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:#53695f;margin:4px 0 0}
+.matchmaking-meta b{font-variant-numeric:tabular-nums;color:var(--ink)}
+.panel .match-bot{background:var(--lime);color:#173e40}
+
+/* U4 · characters: signature + grip badge, delta-from-average bars, sticky detail sheet */
+.character-signature{display:flex!important;align-items:center;justify-content:center;gap:4px}
+.grip-badge{font-style:normal;font-size:9px;line-height:1;padding:2px 4px;border-radius:6px;background:#173e4012;color:#52645d}
+.delta-stats>div{grid-template-columns:30px 1fr 30px!important}
+.delta-stats meter{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.delta-track{position:relative;height:9px;border-radius:5px;background:#173e400f;overflow:hidden}
+.delta-track:before{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:#173e4040}
+.delta-track i{position:absolute;top:0;bottom:0;border-radius:5px}
+.delta-stats .up .delta-track i{background:#6ea845}.delta-stats .down .delta-track i{background:#d06a4f}
+.delta-stats .up b{color:#3d7a2a}.delta-stats .down b{color:#b14b33}.delta-stats .even b{color:#6b7a6e}
+.delta-note{margin:6px 0 0}
+@media(max-width:700px){
+  .character-panel{padding-bottom:0}
+  .character-sheet{position:sticky;bottom:0;z-index:2;background:var(--cream);margin:0 -29px;padding:10px 29px 12px;box-shadow:0 -10px 24px #173e401c;max-height:56dvh;overflow:auto}
+}
+
+/* U5 · result: local player is the subject; review open by default with parallel tiles */
+.victory-title.quiet h2{font-size:18px;opacity:.9}
+.result-detail{text-align:center;font-size:13px!important;margin:0 0 4px}
+.new-best{display:block;font-style:normal;font-size:10px;color:#6c8f24;font-weight:700;margin-top:2px}
+.review-lead{background:#fff6dc;border-radius:10px;padding:10px 12px;margin:0 0 10px!important;font-size:12px!important}
+.review-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px!important}
+.review-grid div{padding:8px 4px!important;text-align:center}
+.review-grid b{font-size:18px!important}
+.review-grid b small{display:inline;font-size:10px;color:#6c8f24;margin-left:2px}
+.review-grid .good b{color:#3d7a2a}.review-grid .bad b{color:#b14b33}
+.review-grid span{font-size:10px!important}
+.level-up{background:#e9f5bf;color:#315c49;border-radius:10px;padding:8px 10px;text-align:center;font-size:12px!important}
+.room-record{text-align:center;font-size:11px!important;color:#53695f}
+@media(max-width:360px){.review-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+
+/* G7 · fixed quick emotes */
+.emote-bar{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:8px 0}
+.emote-button{min-height:36px;padding:6px 10px;border-radius:18px;border:1px solid var(--line);background:#fff8;color:var(--ink);font-size:12px}
+.match-emotes{position:absolute;left:12px;bottom:calc(max(22px,env(safe-area-inset-bottom)) + 74px);max-width:60%;pointer-events:none}
+.match-emotes .emote-bar{justify-content:flex-start;margin:0}
+.match-emotes .emote-button{pointer-events:auto;min-height:32px;padding:4px 9px;font-size:11px;background:#f3efdccc}
+.emote-bubble{position:absolute;left:50%;top:32%;transform:translateX(-50%);background:#183e3fe8;color:#f4f2d4;padding:8px 14px;border-radius:16px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:7;white-space:nowrap}
+.panel .emote-bubble{position:static;transform:none;display:inline-block;margin:0 auto;opacity:0}
+.emote-bubble.visible{opacity:1}
+@media(max-height:650px){.match-emotes{display:none}}
+
+/* G6 · lob assist toggle in help */
+.toggle-row{display:flex;align-items:center;gap:10px;font-size:12px;color:#53695f;margin:12px 0;min-height:44px}
+.toggle-row input{width:20px;height:20px}
+
+/* U3 · while a miss marker is shown, dock the coach card above the bottom controls */
+.tutorial-coach.docked-low{top:auto!important;bottom:calc(max(22px,env(safe-area-inset-bottom)) + 120px);transform:translateX(-50%)}
+@media(max-height:500px) and (orientation:landscape){.tutorial-coach.docked-low{bottom:70px;transform:none}}

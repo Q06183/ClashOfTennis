@@ -2,10 +2,13 @@ import {getCharacter,isCharacterAvailable} from '../simulation/characters.js';
 import {characterPicker,revealCharacterPicker} from './characters.js';
 import {HiddenCharacterUnlock} from './hidden-character.js';
 import {readPreference,writePreference} from './preferences.js';
-import {PracticeTutorial,TUTORIAL_STEPS,TUTORIAL_VERSION,TUTORIAL_PACE_HINT} from './practice-tutorial.js';
+import {PracticeTutorial,TUTORIAL_STEPS,TUTORIAL_VERSION,TUTORIAL_PACE_HINT,TUTORIAL_TAP_SLOP} from './practice-tutorial.js';
 import {tutorialGesture} from './tutorial-gesture.js';
 import {rescueHint} from './rescue-hint.js';
-import {shotFeedbackLabel,feedbackPosition,pointBanner,playSubhint,movementFeedbackTarget} from './match-feedback.js';
+import {shotFeedbackLabel,feedbackPosition,pointBanner,playSubhint,movementFeedbackTarget,HintGate,hintKey,staminaWidths,TIMING_LABEL} from './match-feedback.js';
+import {displayName,matchingCopy,resultHeadline,ruleLabel,emoteBar,EMOTE_LIST,roomRecord} from './copy.js';
+import {practiceOpenness} from '../simulation/ai.js';
+import {recordPracticeResult,recentPracticeResults,rallyBestKey,saveRallyBest} from './practice-history.js';
 import {containModalFocus} from './modal-focus.js';
 import {homeIcon} from './home-icons.js';
 import {HomePractice} from '../render/home-practice.js';
@@ -14,6 +17,7 @@ import {CameraChoice} from './camera-choice.js';
 import {shotTier,SHOT_PROFILES} from '../simulation/shot-profile.js';
 import { Match } from '../simulation/match.js';
 import { driveAI } from '../simulation/ai.js';
+import {targetZone} from './target-drill.js';
 import { other, side, type Input, type MatchState, type RoomView, type Seat, type Shot } from '../simulation/types.js';
 import { CourtView } from '../render/view.js';
 import { Controls } from '../input/controls.js';
@@ -55,7 +59,7 @@ export class App {
   private playback=new SnapshotPlayback();
   private room:RoomView|null=null;
   private seat:Seat=0;
-  private name=readPreference('rally-name')||'球友';
+  private name=displayName(readPreference('rally-name'));
   private difficulty:'relaxed'|'standard'='relaxed';
   private cameraChoice=new CameraChoice();
   private paused=false;
@@ -88,6 +92,16 @@ export class App {
   private code='';
   private networkError='';
   private predictedMove:{x:number;z:number;until:number}|null=null;
+  private hints=new HintGate();
+  private matchingSince=0;
+  private matchingInfo:{online?:number;waiting?:number;botAfterMs?:number}={};
+  private matchingTimer:ReturnType<typeof setInterval>|null=null;
+  private lastTiming=-1;
+  private emoteTimer:ReturnType<typeof setTimeout>|null=null;
+  private openness=0;
+  private rallyRecord=false;
+  /** G6: lobs use the hook gesture; the old one-shot button is an optional assist. */
+  private lobButton=readPreference('rally-lob-button')==='1';
   constructor(){
     this.local.dispose();this.local=new Match([this.characterId,this.opponentId],Math.random,{surface:this.surface});
     this.view=new CourtView(document.querySelector('#court')!,lost=>{
@@ -105,7 +119,8 @@ export class App {
     });
     this.ui.addEventListener('input',e=>{
       const input=e.target as HTMLInputElement;
-      if(input.id==='nickname'){this.name=input.value.trim().slice(0,16)||'球友';writePreference('rally-name',this.name);}
+      if(input.id==='nickname'){this.name=displayName(input.value);writePreference('rally-name',input.value.trim().slice(0,16));}
+      if(input.id==='lob-button-toggle'){void this.action('lob-button');return;}
       if(input.id==='room-input'){input.value=input.value.replace(/\D/g,'').slice(0,6);this.code=input.value;}
     });
     document.addEventListener('keydown',e=>{
@@ -157,6 +172,12 @@ export class App {
   private input(command:Input){
     if(this.screen!=='playing'||this.paused||!this.connected||this.help||this.intro||this.practicePaused||this.quitConfirm)return;
     if(this.tutorial&&!this.net){
+      // U3: a tap on the finger graphic or its label counts as the guided marker itself.
+      const target=command.type==='move'?this.tutorial.movementTarget(this.local):null;
+      if(target&&command.type==='move'&&this.view?.screenPoint){
+        const want=this.view.screenPoint(target.x,target.z),got=this.view.screenPoint(command.x,command.z);
+        if(Math.hypot(want.x-got.x,want.y-got.y)<=TUTORIAL_TAP_SLOP)command={type:'move',x:target.x,z:target.z};
+      }
       this.tutorial.input(this.local,command);
       if(command.type==='move')this.view?.showMoveTarget?.(this.local.state.players[0].tx,this.local.state.players[0].tz);
       this.updateHud();
@@ -276,7 +297,13 @@ export class App {
       this.toast(`${choice.distance==='near'?'近':'远'}视角已选择，当前击球结束后切换${choice.saved?'':'；本次无法保存设置'}`);
       return;
     }
-    if(action==='lob'){if(this.tutorial)return;this.controls.lobMode=!this.controls.lobMode;this.updateHud();return;}
+    if(action==='lob-button'){
+      this.lobButton=!this.lobButton;writePreference('rally-lob-button',this.lobButton?'1':'0');
+      const button=this.ui.querySelector<HTMLButtonElement>('#lob-mode');if(button)button.hidden=!this.lobButton||!!this.tutorial;
+      if(!this.lobButton)this.controls.lobMode=false;
+      return;
+    }
+    if(action==='lob'){if(this.tutorial||!this.lobButton)return;this.controls.lobMode=!this.controls.lobMode;this.updateHud();return;}
     if(action==='finish-tutorial'){
       if(!this.tutorial?.completed)return;
       this.tutorial=null;await this.action('start-practice');return;
@@ -343,12 +370,19 @@ export class App {
       this.tutorial=this.tutorialRequired?new PracticeTutorial():null;this.tutorialHudKey='';
       this.practicePaused=false;this.quitConfirm=false;this.help=false;this.intro=false;
       this.practiceReview=this.tutorial?null:new PracticeReview(this.practiceGoal??'free');
-      this.practiceReview?.observe(this.local.state);this.practiceBest=0;this.practiceSaved=true;
+      this.practiceReview?.observe(this.local.state);this.practiceBest=0;this.practiceSaved=true;this.rallyRecord=false;
+      this.openness=this.difficulty==='relaxed'?practiceOpenness(recentPracticeResults()):0;
+      this.local.setTimingGrade?.(0,!this.tutorial);this.hints?.reset();this.lastTiming=-1;
       this.networkError='';
       this.seat=0;this.paused=false;this.connected=true;this.screen='playing';this.lastEvent=-1;this.accumulator=0;
       this.renderScreen();
     }
     else if(action==='match'&&!this.busy)this.connect({type:'match',name:this.name,characterId:this.characterId,surface:this.surface});
+    else if(action==='match-bot'){if(this.screen==='matching'&&this.net){this.status='正在安排电脑对手…';this.net.send({type:'match-bot'});}}
+    else if(action.startsWith('emote-')){
+      const id=Number(action.slice(6));
+      if(this.net&&this.room&&Number.isInteger(id)&&id>=0&&id<EMOTE_LIST.length)this.net.send({type:'emote',id});
+    }
     else if((action==='create'||action==='create-doubles')&&!this.busy)this.connect({type:'create',name:this.name,characterId:this.characterId,mode:action==='create-doubles'?'doubles':'singles',surface:this.surface});
     else if(action==='join'){this.friendsOpen=false;this.screen='join';this.renderScreen();}
     else if(action==='join-submit'&&!this.busy){
@@ -363,6 +397,7 @@ export class App {
       else this.toast('当前是本机地址。请用电脑的 Wi-Fi 地址打开游戏后分享。');
     }
     else if(action==='back'||action==='quit'){
+      this.stopMatchingClock();
       this.homeTab='play';this.friendsOpen=false;
       this.view?.clearMoveTarget?.();
       this.practicePaused=false;this.quitConfirm=false;this.practiceReview=null;
@@ -398,6 +433,12 @@ export class App {
       this.tutorialHudKey='';this.renderScreen();
     }
   }
+  private relaxedNote(){
+    const recent=recentPracticeResults().slice(-3);
+    if(recent.length===3&&recent.every(Boolean))return '最近连赢 3 场，可以试试「认真对打」。';
+    if(recent.length&&recent.every(won=>!won))return '最近几场有点难，陪练会再多给一些机会。';
+    return '';
+  }
   private async copy(value:string,message:string){
     try{await navigator.clipboard.writeText(value);this.toast(message);}
     catch{
@@ -416,8 +457,13 @@ export class App {
     this.playback.reset();this.predictedMove=null;this.networkError='';this.lobbyReturn=false;
     this.net?.close();this.remote=null;this.drawState=null;this.busy=true;this.status='正在连接球场…';this.renderScreen();
     this.net=new NetworkClient({
-      welcome:c=>{this.seat=c.seat;this.busy=false;this.connected=true;this.screen=c.matched?'matching':'room';this.lastEvent=-1;this.renderScreen();},
-      matching:()=>{this.busy=false;this.connected=true;this.status='正在寻找同样在匹配的球友…';this.screen='matching';this.renderScreen();},
+      welcome:c=>{this.stopMatchingClock();this.seat=c.seat;this.busy=false;this.connected=true;this.screen=c.matched?'matching':'room';this.lastEvent=-1;this.renderScreen();},
+      matching:info=>{
+        this.busy=false;this.connected=true;this.matchingInfo=info??{};
+        if(this.screen!=='matching'){this.matchingSince=performance.now();this.screen='matching';this.renderScreen();this.startMatchingClock();}
+        else this.refreshMatching();
+      },
+      emote:(seat,id)=>this.showEmote(seat,id),
       room:r=>{
         this.room=r;this.paused=r.paused;
         if(!r.playing){
@@ -460,7 +506,7 @@ export class App {
     <main id="home-play-panel" role="tabpanel" aria-labelledby="home-tab-play" class="home-copy"><div class="home-intro"><div class="eyebrow">JUST PLAY.</div><h1>下一拍，<br/><em>就现在。</em></h1></div>
     <div class="home-player-label"><span>${character.name}</span><small>${character.role} · 当前球员</small></div>
     <section class="home-play" aria-label="开始比赛"><div class="menu">
-    <button class="primary lime match-button" data-action="match" ${this.busy?'disabled':''}><span class="home-action-icon">${homeIcon('match')}</span><span class="home-action-copy"><strong>${this.busy?'连接中…':'快速匹配'}</strong><small>找位球友，立即开打</small></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>
+    <button class="primary lime match-button" data-action="match" ${this.busy?'disabled':''}><span class="home-action-icon">${homeIcon('match')}</span><span class="home-action-copy"><strong>${this.busy?'连接中…':'快速匹配'}</strong><small>找真人球友 · 20 秒没人就和电脑打</small></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>
     <button class="secondary friends-button" data-action="friends" aria-haspopup="dialog" aria-expanded="${!!this.friendsOpen}" ${this.busy?'disabled':''}><span class="home-action-icon">${homeIcon('doubles')}</span><span class="home-action-copy"><strong>好友对战</strong></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>
     <button class="practice practice-entry" data-action="practice" aria-label="单人练习：新手引导、轻松对打、认真对打"><span class="home-action-icon">${homeIcon('practice')}</span><span class="home-action-copy"><strong>单人练习</strong></span><span class="home-action-arrow">${homeIcon('arrow')}</span></button>${this.networkError?`<div class="error-inline" role="alert" style="grid-column:1/-1">${escape(this.networkError)}</div>`:''}</div></section></main>
     <button class="court-tag home-court-compact" data-action="surfaces" aria-label="选择场地：${court.name}"><span class="home-action-icon">${homeIcon('court')}</span><span class="home-action-copy"><small>场地</small><strong>${court.name}</strong></span><span class="home-setting-edit">切换</span></button>
@@ -474,7 +520,32 @@ export class App {
     return `<div class="overlay friends-overlay" role="dialog" aria-modal="true" aria-labelledby="friends-title"><section class="panel friends-panel"><div class="panel-top"><span>PLAY WITH FRIENDS</span><button class="icon-button" data-action="close-friends" aria-label="关闭好友对战面板">×</button></div><h2 id="friends-title">约朋友，打一场。</h2><label class="name-label" for="nickname">昵称<input id="nickname" value="${escape(this.name)}" maxlength="16"/></label><div class="friends-choices"><button class="secondary" data-action="create" ${this.busy?'disabled':''}>${homeIcon('create')}<span><strong>单打开房</strong><small>邀请一位朋友 · 1 对 1</small></span>${homeIcon('arrow')}</button><button class="secondary" data-action="create-doubles" ${this.busy?'disabled':''}>${homeIcon('doubles')}<span><strong>双打开房</strong><small>好友 / 电脑 · 2 对 2</small></span>${homeIcon('arrow')}</button><button class="secondary" data-action="join" ${this.busy?'disabled':''}>${homeIcon('join')}<span><strong>加入好友房间</strong><small>输入朋友的六位房号</small></span>${homeIcon('arrow')}</button></div></section></div>`;
   }
   private panel(content:string){return `<div class="overlay"><section class="panel">${content}</section></div>`;}
-  private matchingPanel(){return this.panel(`<div class="panel-top"><span>QUICK MATCH</span>${close}</div><div class="matchmaking-mark"><i></i><i></i><i></i></div><h2>正在寻找对手…</h2><p>另一位正在匹配的球友出现后，会直接为你们开赛。</p><div class="matchmaking-player"><div class="avatar">${escape(this.name.slice(0,1))}</div><div><strong>${escape(this.name)}</strong><small>${getCharacter(this.characterId).name} · ${getCharacter(this.characterId).role}</small></div><span>匹配中</span></div><button class="secondary" data-action="back">取消匹配</button><div class="status-line">${escape(this.status)}</div>`);}
+  private matchingPanel(){
+    const copy=matchingCopy(this.matchingSince?performance.now()-this.matchingSince:0,this.matchingInfo);
+    return this.panel(`<div class="panel-top"><span>QUICK MATCH</span>${close}</div><div class="matchmaking-mark"><i></i><i></i><i></i></div><h2>正在寻找对手…</h2><div class="matchmaking-meta" role="status"><span>已等待 <b id="matching-clock">${copy.clock}</b></span><span id="matching-online">${copy.online}</span></div><p id="matching-detail">${copy.detail}</p><div class="matchmaking-player"><div class="avatar">${escape(this.name.slice(0,1))}</div><div><strong>${escape(this.name)}</strong><small>${getCharacter(this.characterId).name} · ${getCharacter(this.characterId).role}</small></div><span>匹配中</span></div><button class="primary match-bot" data-action="match-bot" ${copy.offer?'':'hidden'}>先和电脑打一场 →</button><button class="secondary" data-action="back">取消匹配</button><div class="status-line">${escape(this.status==='已连接'?'':this.status)}</div>`);
+  }
+  private startMatchingClock(){
+    this.stopMatchingClock();
+    this.matchingTimer=setInterval(()=>this.refreshMatching(),500);
+  }
+  private stopMatchingClock(){if(this.matchingTimer)clearInterval(this.matchingTimer);this.matchingTimer=null;}
+  /** Updates the waiting panel in place; never rebuilds it under the user's finger. */
+  private refreshMatching(){
+    if(this.screen!=='matching'||this.room){this.stopMatchingClock();return;}
+    const copy=matchingCopy(performance.now()-this.matchingSince,this.matchingInfo);
+    const set=(id:string,v:string)=>{const el=document.getElementById(id);if(el&&el.textContent!==v)el.textContent=v;};
+    set('matching-clock',copy.clock);set('matching-online',copy.online);set('matching-detail',copy.detail);
+    const offer=this.ui.querySelector<HTMLButtonElement>('[data-action="match-bot"]');if(offer)offer.hidden=!copy.offer;
+  }
+  private showEmote(seat:Seat,id:number){
+    const text=EMOTE_LIST[id];if(!text)return;
+    const el=document.getElementById('emote-bubble');
+    const who=seat===this.seat?'你':this.room?.seats[seat]?.name??'对手';
+    if(el){el.textContent=`${who}：${text}`;el.dataset.mine=String(seat===this.seat);el.classList.add('visible');}
+    else this.toast(`${who}：${text}`);
+    if(this.emoteTimer)clearTimeout(this.emoteTimer);
+    this.emoteTimer=setTimeout(()=>document.getElementById('emote-bubble')?.classList.remove('visible'),2200);
+  }
   private roomPanel(){
     const r=this.room;if(!r)return this.panel(`<h2>正在打开球场</h2><p>${escape(this.status)}</p>${close}`);
     const me=r.seats[this.seat],both=r.seats.every(p=>p?.connected),shareable=!!invitationLink(location.origin,r.code);
@@ -482,40 +553,52 @@ export class App {
       <div class="room-code" aria-label="房间号">${r.code}</div><div class="room-caption">私人球场 · 6 位房间号</div>
       <div class="copy-row"><button class="secondary" data-action="copy-code">复制房间号</button><button class="secondary" data-action="copy-link" ${shareable?'':'disabled'}>复制邀请链接 ↗</button></div>
       ${courtButton(r.surface??'hard',r.host!==this.seat)}${formatChoice(r,this.seat)}${roomSeats(r,this.seat)}
+      ${roomRecord(r,teamOf(this.seat))?`<p class="room-record">${roomRecord(r,teamOf(this.seat))}</p>`:''}${r.seats.filter(m=>m&&!m.bot).length>1?emoteBar():''}<div id="emote-bubble" class="emote-bubble" role="status"></div>
       <button class="secondary" data-action="characters">更换球员 · ${getCharacter(this.characterId).name}</button><button class="primary" data-action="ready" ${!both||me?.ready?'disabled':''}>${!both?'等朋友一起上场':me?.ready?'已准备，等待朋友…':'准备开赛 →'}</button>
-      <p class="small-note">${r.format==='standard'?'标准一盘 · 六局领先两局，六平抢七':'抢七短赛 · 先到 7 分且领先 2 分'}${r.mode==='doubles'?'<br/>右区 / 左区接发固定 · 调整席位可选择队伍与顺序':''}</p><div class="status-line">${escape(this.status)}</div>`);
+      <p class="small-note">${r.format==='standard'?'标准一盘 · 6 局领先 2 局，6 平进入决胜局':'7 分制短赛 · 需领先 2 分'}${r.mode==='doubles'?'<br/>右区 / 左区接发固定 · 调整席位可选择队伍与顺序':''}</p><div class="status-line">${escape(this.status)}</div>`);
   }
   private playing(){const s=this.remote??this.local.state;return `<div class="match-top"><button class="icon-button" data-action="quit" aria-label="退出比赛">‹</button><div class="match-top-actions">${this.net?'':'<button class="icon-button" data-action="pause-practice" aria-label="暂停练习">Ⅱ</button>'}<button class="icon-button" data-action="mute" aria-label="${this.audio.muted?'开启声音':'关闭声音'}">${this.audio.muted?'♪̸':'♪'}</button></div></div>
     <div class="scoreboard"><div class="score-player"><div class="score-name" id="name-me"></div><div class="score-value" id="score-me">0</div>${staminaBars('me')}</div><div class="score-divider">vs</div><div class="score-player"><div class="score-name" id="name-them"></div><div class="score-value" id="score-them">0</div>${staminaBars('them')}</div></div>
-    <div class="match-meta"><div class="match-label">${surfaceProfile(s.surface).name} <span class="connection" id="connection"></span></div><div class="rally-count" id="rally-count">抢七 · 领先两分</div><div class="team-status" id="team-status"></div></div>${this.practiceReview?.goal&&this.practiceReview.goal!=='free'?'<div class="practice-progress" id="practice-progress" role="status"></div>':''}<div id="point-slot"></div><div id="reconnect-slot"></div>
-    <div class="match-bottom"><div class="serve-notice" id="serve-notice" role="status" aria-live="polite" hidden><strong id="serve-title"></strong><span id="serve-detail"></span></div><div class="hint" id="rally-hint"><strong id="match-hint">斜向滑动，发进对角发球区</strong><small id="match-subhint">绿普通 · 蓝快速 · 橙强力 · 玫红暴击</small></div><div class="court-actions">${this.cameraChoice.button()}<button class="lob-button" id="lob-mode" data-action="lob" aria-label="选择下一拍高吊球" aria-pressed="false">高吊</button><button class="help-button" data-action="help" aria-label="查看操作帮助">?</button></div></div>`;}
+    <div class="match-meta"><div class="match-label">${surfaceProfile(s.surface).name} <span class="connection" id="connection"></span></div><div class="rally-count" id="rally-count">${ruleLabel(false)}</div><div class="team-status" id="team-status"></div></div>${this.practiceReview?.goal&&this.practiceReview.goal!=='free'?'<div class="practice-progress" id="practice-progress" role="status"></div>':''}<div id="point-slot"></div><div id="reconnect-slot"></div>
+    <div class="match-bottom"><div class="serve-notice" id="serve-notice" role="status" aria-live="polite" hidden><strong id="serve-title"></strong><span id="serve-detail"></span></div><div class="hint" id="rally-hint"><strong id="match-hint">斜向滑动，发进对角发球区</strong><small id="match-subhint">绿普通 · 蓝快速 · 橙强力 · 玫红暴击</small></div><div class="court-actions">${this.cameraChoice.button()}<button class="lob-button" id="lob-mode" data-action="lob" aria-label="选择下一拍高吊球" aria-pressed="false" ${this.lobButton?'':'hidden'}>高吊</button><button class="help-button" data-action="help" aria-label="查看操作帮助">?</button></div></div>
+    <div id="timing-bubble" class="timing-bubble" aria-live="polite"></div><div id="emote-bubble" class="emote-bubble" role="status"></div>${this.net&&this.room&&!this.room.matchedBot?`<div class="match-emotes">${emoteBar()}</div>`:''}`;}
   private pausePanel(){return `<div class="overlay practice-pause" role="dialog" aria-modal="true" aria-labelledby="pause-title"><section class="panel"><div class="panel-top"><span>TAKE A BREATH</span></div><h2 id="pause-title">练习已暂停</h2><p>比分、球、体力和发球计时已冻结。回来后继续，不会因为查看消息而丢分。</p><button class="primary" data-action="resume-practice">继续练习 →</button><button class="secondary" data-action="help">查看操作帮助</button><button class="secondary" data-action="quit">退出本场练习</button></section></div>`;}
   private quitPanel(){return `<div class="overlay quit-confirm" role="dialog" aria-modal="true" aria-labelledby="quit-title"><section class="panel"><div class="panel-top"><span>LEAVE THE COURT?</span></div><h2 id="quit-title">确定退出本场${this.net?'比赛':'练习'}？</h2><p>${this.net?'离开会退出房间，比赛中对方可能需要等待断线处理；此时线上比赛仍在进行。':'当前练习已暂停。退出将丢弃本场进度，不保存挑战最佳；已完成的新手引导不会丢失。'}</p><button class="primary" data-action="cancel-quit">留在球场 →</button><button class="secondary" data-action="confirm-quit">确定退出</button></section></div>`;}
   private helpPanel(){const state=this.remote??this.local.state;return this.panel(`<div class="panel-top"><span>JUST THREE MOVES</span><button class="icon-button" data-action="close-help" aria-label="关闭帮助">×</button></div><h2>好球，从这一拍开始。</h2><p>${this.net?'线上对局仍在进行，请尽快回到球场。':this.practicePaused?'练习仍暂停，关闭帮助后可继续。':'练习已暂停，关闭帮助后继续。'}</p>
-    <div class="quick-help"><p><strong>轻点球场 · 跑位</strong><span>点想去的位置；接球可以提前滑动。</span></p><p><strong>向上滑动 · 回球 / 发球</strong><span>方向决定球路，距离影响深度，速度影响力量。发球斜划进对角区；接发须先落地。</span></p><p><strong>向下滑动 · 切削</strong><span>出球与滑动方向相反：右下划 → 左上出球。</span></p><p><strong>试试不同球路</strong><span>短而慢地划：短球；按住再划：上旋；右侧“高吊”选择下一拍。</span></p></div>
+    <div class="quick-help"><p><strong>轻点球场 · 跑位</strong><span>点想去的位置；接球可以提前滑动。</span></p><p><strong>向上滑动 · 回球 / 发球</strong><span>方向决定球路，距离影响深度，速度影响力量。发球斜划进对角区；接发须先落地。</span></p><p><strong>向下滑动 · 切削</strong><span>出球与滑动方向相反：右下划 → 左上出球。</span></p><p><strong>试试不同球路</strong><span>短而慢地划：短球；按住再划：上旋；向上划到顶再往回勾一下（∩）：高吊。</span></p><p><strong>击球时机</strong><span>球进入击球区时脚下圆环收紧。来球途中提前划、或球到身边立刻划都算「完美」：球更快、角度更大。</span></p></div>
+    <label class="toggle-row"><input type="checkbox" id="lob-button-toggle" ${this.lobButton?'checked':''}/> 显示「高吊」辅助按钮（点一下，下一拍改为高吊）</label>
     <details class="help-details"><summary>进阶技巧、体力与${state.mode==='doubles'?'双打':'比赛'}规则</summary>
     ${state.mode==='doubles'?'<p><strong>双打规则</strong>：队友分别固定右区和左区接发，不能凌空接发；接发完成后任一队友都可回击，但不能传球给队友。发球仍须落入原对角发球区，回合中双打边廊有效。抢七首人发一分，之后四人各发两分；每六分换边。标准赛每局换发，双方队友交替发球。双打支持近 / 远视角切换；近景尽量放大，四人站位分散时自动退远，远景保留完整双打边线。</p>':''}
     <div class="tutorial-steps"><div class="tutorial-step"><b>1</b><div><strong>轻点球场，移动到位</strong><span>发球前可以点按调整站位，发球者限当前半区底线后，开始抛球后锁定位置。普通球员优先接落地球，伊内丝主动上前截击。本分消耗按20%折算到总体力，一分最多扣总体力20%；分末按角色返还部分消耗，最多90%。下一分以恢复后的总体力作为本分初始值，不再回满100%；二发不重置。跑动和击球使用“本分×总体”的有效体力，跳接概率只看总体力。</span></div></div>
     <div class="tutorial-step"><b>2</b><div><strong>向上滑动，把球打回去</strong><span>短而慢地滑动可放小球：显示“放小球”，落在网后约1～2米、低弹跳。普通及中慢速回球有落点辅助，接近边线时柔和收回，并保留底线余量；越快越用力，辅助越少，强力球和暴击球更容易出界。球场中央的小幅方向不改，边缘辅助会有意收敛角度，不再要求慢球与原始手势完全同角度。发球仍需主动斜划进对角发球区，不自动纠正发球方向。手指按住再划是上旋，右侧按钮可选高吊；近远景不改变规则。跑动时可提前滑动，保存最后一次方向和球质。</span></div></div>
     <div class="tutorial-step"><b>3</b><div><strong>认颜色，控制速度与深度</strong><span>绿普通、蓝快速、橙强力、玫红暴击、青绿上旋、金色高压、冰白切削、紫色高吊。长按蓄力上旋，下划反向切削，右侧按钮选择高吊。不必先滑动：预测普通跑动接不到、侧扑来得及时，角色会自动尝试飞身。总体力满时90%，1/3及以下10%，中间平滑变化；每记来球只抽一次。已提前滑动就直接回球；未滑动则在球拍真正够到球时，双方人物和球一起定格最多0.5秒，显示“滑动回击”。窗口内滑动立即击球，超时球继续原轨迹，不自动击中或倒带。救球保留减速和深浅波动；切削落地后仍有侧偏，接发仍须落地，出界或二跳后不能救。</span></div></div></div>
     <p>右下角“近景 / 远景”切换镜头距离；瞄准和触球定格期间不切镜头。侧扑最多横移3.5米，但受速度、加速与来球时间限制，来不及就不会瞬移补接。横移不超过1.2米使用侧身小跳，在跳出的位置脚落地后立即可移动、击球，不趴地也没有起身惩罚；更远的救球使用大跳，在落点倒地并保留0.5秒起身惩罚。两种救球都不自动跑回起跳位置；起跳后新点的移动目标在恢复后执行。触球补滑的0.5秒定格与起身惩罚独立，定格期间双方都不能移动或恢复体力。</p>
-    </details><details class="help-details"><summary>画面与网络状态</summary><p id="performance-stats" class="small-note"></p><p id="performance-sync" class="small-note"></p></details><button class="primary" data-action="close-help">${this.practicePaused?'返回暂停页':'知道了，上场 →'}</button><p class="small-note">${state.scoring?.format==='standard'?'标准一盘 · 六局领先两局，六平抢七':'先到 7 分且领先 2 分获胜'} · 发球限时 12 秒</p>`);}
+    </details><details class="help-details"><summary>画面与网络状态</summary><p id="performance-stats" class="small-note"></p><p id="performance-sync" class="small-note"></p></details><button class="primary" data-action="close-help">${this.practicePaused?'返回暂停页':'知道了，上场 →'}</button><p class="small-note">${ruleLabel(state.scoring?.format==='standard')} · 发球限时 12 秒</p>`);}
   private result(){
     const s=this.remote??this.local.state,won=s.winner===teamOf(this.seat);
     const me=this.teamName(teamOf(this.seat)),them=this.teamName(other(this.seat));
     const ready=this.room?.seats[this.seat]?.ready;
     const winner=s.winner===null?null:s.players[s.winner],winnerName=won?me:them;
-    const guided=this.tutorial?.completed&&won;
-    return `<div class="victory-overlay"><div class="victory-title"><span>${s.mode==='doubles'?'WINNING TEAM':'MATCH WINNER'}</span><h2>${escape(winnerName)}${s.mode==='doubles'?'':` · ${winner?getCharacter(winner.characterId).name:''}`}</h2><p>${won?'你赢了！':'获胜方庆祝中'} · 持拍庆祝</p></div><section class="panel victory-panel"><div class="result-body"><div class="panel-top"><span>${guided?'TUTORIAL COMPLETE · 新手引导完成':'THAT WAS A GOOD RALLY'}</span></div><h2>${guided?'你赢了，新手引导完成！':won?'好球，这场属于你。':'再来一场，找回手感。'}</h2>${guided?'<p>发球站位、发球、2 次普通接球、跑动回位和切削全部成功。现在可以自由对打。</p>':''}
-      <div class="result-score">${(s.scoring?.format==='standard'?s.scoring.games:s.score)[teamOf(this.seat)]} <span style="color:#a4af98">:</span> ${(s.scoring?.format==='standard'?s.scoring.games:s.score)[other(this.seat)]}</div><div class="result-names">${escape(me)} &nbsp; / &nbsp; ${escape(them)}</div>
-      <div class="result-stats"><div><strong>${s.maxRally}</strong>最长回合</div><div><strong>${Math.floor((s.endedAt??s.time)/60)}:${String(Math.floor((s.endedAt??s.time)%60)).padStart(2,'0')}</strong>对局时间</div></div>
-      ${!this.net&&this.practiceReview?`<details class="result-review"><summary>查看本场练习复盘${this.practiceReview.goal==='free'?'':` · ${this.practiceReview.complete?'✓ 目标达成':'继续挑战'}`}</summary>${practiceReviewPanel(this.practiceReview,this.practiceBest,this.practiceSaved)}</details>`:''}
-      </div><div class="result-actions"><button class="primary" data-action="${guided?'finish-tutorial':'rematch'}" ${ready?'disabled':''}>${guided?'继续和机器人对打 →':ready?'已准备，等待朋友…':'再来一场 ↗'}</button>${this.net?'<button class="secondary" data-action="return-lobby">返回房间 · 调整队伍 / 场地</button>':''}<button class="secondary" data-action="back">回到首页</button></div></section></div>`;
+    const guided=!!this.tutorial?.completed&&won;
+    const review=!this.net?this.practiceReview:null;
+    const head=resultHeadline({won,guided,maxRally:s.maxRally,legal:review?.players[0].legal,newBest:this.rallyRecord});
+    const scores=(s.scoring?.format==='standard'?s.scoring.games:s.score);
+    const record=this.net?roomRecord(this.room,teamOf(this.seat)):'';
+    // Bot and practice names already carry the character; never print it twice.
+    const withCharacter=(name:string)=>{const c=winner?getCharacter(winner.characterId).name:'';return s.mode==='doubles'||!c||name.endsWith(c)?name:`${name} · ${c}`;};
+    // U5: the local player is the subject; a loss shows progress, not the opponent's celebration.
+    return `<div class="victory-overlay"><div class="victory-title ${won?'':'quiet'}"><span>${won?(s.mode==='doubles'?'WINNING TEAM':'MATCH WINNER'):'本场结束'}</span><h2>${won?escape(withCharacter(winnerName)):`${escape(withCharacter(them))} 赢下本场`}</h2>${won?'<p>你赢了！</p>':''}</div><section class="panel victory-panel"><div class="result-body"><div class="panel-top"><span>${head.eyebrow}</span></div><h2>${head.title}</h2><p class="result-detail">${head.detail}</p>
+      <div class="result-score">${scores[teamOf(this.seat)]} <span style="color:#a4af98">:</span> ${scores[other(this.seat)]}</div><div class="result-names">${escape(me)} &nbsp; / &nbsp; ${escape(them)}</div>
+      <div class="result-stats"><div><strong>${s.maxRally}${this.rallyRecord?'<em class="new-best">新纪录</em>':''}</strong>最长回合</div><div><strong>${Math.floor((s.endedAt??s.time)/60)}:${String(Math.floor((s.endedAt??s.time)%60)).padStart(2,'0')}</strong>对局时间</div></div>
+      ${record?`<p class="room-record">${record}</p>`:''}${this.net&&this.room&&!this.room.matchedBot?emoteBar():''}
+      ${review?`<details class="result-review" open><summary>本场练习复盘${review.goal==='free'?'':` · ${review.complete?'✓ 目标达成':'继续挑战'}`}</summary>${practiceReviewPanel(review,this.practiceBest,this.practiceSaved)}</details>`:''}
+      ${!this.net&&!guided&&this.difficulty==='relaxed'&&recentPracticeResults().slice(-3).length===3&&recentPracticeResults().slice(-3).every(Boolean)?'<p class="level-up">连赢 3 场！下一场试试「认真对打」。</p>':''}
+      </div><div class="result-actions"><button class="primary" data-action="${guided?'finish-tutorial':'rematch'}" ${ready?'disabled':''}>${guided?'继续和陪练对打 →':ready?'已准备，等待朋友…':'再来一场 ↗'}</button>${this.net?'<button class="secondary" data-action="return-lobby">返回房间 · 调整队伍 / 场地</button>':''}<button class="secondary" data-action="back">回到首页</button></div></section></div>`;
   }
   private teamName(team:0|1){
     const s=this.remote??this.local.state;
     if(s.mode==='doubles')return (this.room?.seats??[]).flatMap((p,i)=>p&&i%2===team?[p.name]:[]).join(' / ')||`${team===0?'A':'B'} 队`;
-    return this.room?.seats[team]?.name??(team===0?this.name:'练习搭档');
+    return this.room?.seats[team]?.name??(team===0?this.name:`陪练 · ${getCharacter(this.local.state.players[1]?.characterId??this.opponentId).name}`);
   }
   private renderScreen(characterTarget?:'detail'|'list'){
     const characterScroll=characterTarget?this.ui.querySelector('.character-panel')?.scrollTop:undefined;
@@ -530,7 +613,7 @@ export class App {
     else if(this.screen==='matching')this.ui.innerHTML=this.matchingPanel();
     else if(this.screen==='room')this.ui.innerHTML=this.roomPanel();
     else if(this.screen==='join')this.ui.innerHTML=this.panel(`<div class="panel-top"><span>YOUR FRIEND IS WAITING</span>${close}</div><h2>加入朋友的球场。</h2><p>输入 6 位房间号，下一场好球等你来。</p><label class="name-label" for="nickname">昵称<input id="nickname" value="${escape(this.name)}" maxlength="16"/></label><button class="secondary" data-action="characters">球员 · ${getCharacter(this.characterId).name} / 更换</button><input id="room-input" class="code-input" aria-label="六位房间号" placeholder="000000" maxlength="6" inputmode="numeric" pattern="[0-9]{6}" value="${escape(this.code)}"/><button class="primary" data-action="join-submit" ${this.busy?'disabled':''}>${this.busy?'正在加入…':'加入球场 →'}</button><div class="status-line">${escape(this.status)}</div>`);
-    else if(this.screen==='setup')this.ui.innerHTML=this.panel(`<div class="panel-top"><span>SINGLE PLAYER · 单人练习</span>${close}</div><div class="panel-heading">Warm up.</div><h2>选一种节奏，和搭档上场。</h2><div class="select-row practice-levels" role="group" aria-label="单人练习难度"><button class="${this.tutorialRequired?'selected':''}" data-action="practice-tutorial" aria-pressed="${this.tutorialRequired}">新手引导<small>手势教学</small></button><button class="${!this.tutorialRequired&&this.difficulty==='relaxed'?'selected':''}" data-action="relaxed" aria-pressed="${!this.tutorialRequired&&this.difficulty==='relaxed'}">轻松对打<small>舒缓陪练</small></button><button class="${!this.tutorialRequired&&this.difficulty==='standard'?'selected':''}" data-action="standard" aria-pressed="${!this.tutorialRequired&&this.difficulty==='standard'}">认真对打<small>进阶挑战</small></button></div><p>${this.tutorialRequired?'跟着手势动画完成发球站位、发球、普通接球、跑动回位、第二次普通接球和切削，最后赢下陪练。接球失误只重试这一球，不用重新发球。':this.difficulty==='standard'?'搭档会更积极进攻，来球更快、更有挑战。没有引导暂停，检验你的跑位和控球。':'搭档会放慢节奏，轻松找回击球手感。没有引导暂停，可以自由移动和回球。'}</p><div class="character-matchup"><button class="secondary" data-action="characters">你 · ${getCharacter(this.characterId).name}</button><button class="secondary" data-action="opponent-characters">人机搭档 · ${getCharacter(this.opponentId).name}</button></div><button class="primary" data-action="start-practice">${this.tutorialRequired?'开始新手引导':this.difficulty==='standard'?'开始认真对打':'开始轻松对打'} →</button><p class="small-note">${this.tutorialRequired?'普通接球成功 2 次 · 接球失败原地重试':'点按移动 · 滑动击球 · 7 分制'}</p>`);
+    else if(this.screen==='setup')this.ui.innerHTML=this.panel(`<div class="panel-top"><span>SINGLE PLAYER · 单人练习</span>${close}</div><div class="panel-heading">Warm up.</div><h2>选一种节奏，和陪练上场。</h2><div class="select-row practice-levels" role="group" aria-label="单人练习难度"><button class="${this.tutorialRequired?'selected':''}" data-action="practice-tutorial" aria-pressed="${this.tutorialRequired}">新手引导<small>手势教学</small></button><button class="${!this.tutorialRequired&&this.difficulty==='relaxed'?'selected':''}" data-action="relaxed" aria-pressed="${!this.tutorialRequired&&this.difficulty==='relaxed'}">轻松对打<small>舒缓陪练</small></button><button class="${!this.tutorialRequired&&this.difficulty==='standard'?'selected':''}" data-action="standard" aria-pressed="${!this.tutorialRequired&&this.difficulty==='standard'}">认真对打<small>进阶挑战</small></button></div><p>${this.tutorialRequired?'跟着手势完成发球、接球、回位和切削，最后和放慢的陪练真打，赢下一分就通过。失误只重试当前这一球。':this.difficulty==='standard'?'陪练会更积极进攻，来球更快、更有挑战。检验你的跑位和控球。':`陪练放慢节奏，还会不时回出可以进攻的短球。${this.relaxedNote()}`}</p><div class="character-matchup"><button class="secondary" data-action="characters">你 · ${getCharacter(this.characterId).name}</button><button class="secondary" data-action="opponent-characters">陪练 · ${getCharacter(this.opponentId).name}</button></div><button class="primary" data-action="start-practice">${this.tutorialRequired?'开始新手引导':this.difficulty==='standard'?'开始认真对打':'开始轻松对打'} →</button><p class="small-note">${this.tutorialRequired?'约 2 分钟 · 失误原地重试':`点按移动 · 滑动击球 · ${ruleLabel(false)}`}</p>`);
     else if(this.screen==='playing'){
       const modal=this.quitConfirm||this.help||this.practicePaused;
       this.ui.innerHTML=`<div class="play-hud" ${modal?'inert':''}>${this.playing()}${this.tutorial?'<div id="tutorial-slot"></div>':''}</div>`+
@@ -570,23 +653,23 @@ export class App {
     text('name-me',`${teamOf(s.server)===teamOf(me)?'● ':''}${this.teamName(teamOf(me))}`);
     text('name-them',`${teamOf(s.server)===them?'● ':''}${this.teamName(them)}`);
     text('score-me',pointLabel(s.score,teamOf(me),s.scoring));text('score-them',pointLabel(s.score,them,s.scoring));
-    document.getElementById('stamina-me')!.style.width=`${s.players[me].stamina*100}%`;
-    document.getElementById('stamina-them')!.style.width=`${s.players[them].stamina*100}%`;
     for(const [label,seat] of [['me',me],['them',them]] as const){
-      const p=s.players[seat],labels=staminaLabels(p);
-      text(`stamina-label-${label}`,labels.point);
-      text(`total-stamina-label-${label}`,labels.total);
-      document.getElementById(`total-stamina-${label}`)!.style.width=`${(p.totalStamina??1)*100}%`;
-      document.getElementById(`stamina-label-${label}`)!.title=`${getCharacter(p.characterId).name} · ${labels.effective}`;
+      const p=s.players[seat],labels=staminaLabels(p),width=staminaWidths(p);
+      document.getElementById(`stamina-${label}`)!.style.width=`${width.effective}%`;
+      document.getElementById(`total-stamina-${label}`)!.style.width=`${width.total}%`;
+      const row=document.getElementById(`stamina-label-${label}`)!,aria=`体力 · ${labels.point} · ${labels.total}`;
+      if(row.getAttribute('aria-label')!==aria){row.setAttribute('aria-label',aria);row.title=`${getCharacter(p.characterId).name} · ${labels.effective}`;}
+      row.classList.toggle('low',(p.totalStamina??1)<.35);
     }
     text('lob-mode',this.controls.lobMode?'取消高吊':'高吊');
+    document.getElementById('lob-mode')!.hidden=!this.lobButton||!!this.tutorial;
     document.getElementById('lob-mode')!.setAttribute('aria-pressed',String(this.controls.lobMode));
     const sync=this.playback.stats(performance.now());
     text('performance-sync',this.net?`同步 ${sync.hz||'—'} 次/秒 · 抖动 ${sync.jitterMs} ms · 最近一包 ${sync.gapMs} ms前`:'');
     text('performance-stats',`画面 ${this.view.fps||'测量中'} FPS · 自动${this.view.qualityLabel}${this.net?` · 网络 ${this.latency||'—'} ms`:''}`);
     text('connection',this.net?`${this.latency||'—'} ms`:'单人练习');
     if(this.practiceReview)text('practice-progress',this.practiceReview.progress);
-    text('rally-count',s.rally>1?`${s.rally} 拍回合`:'抢七 · 先到7且领先2分');
+    text('rally-count',s.rally>1?`${s.rally} 拍回合`:ruleLabel(false));
     text('match-hint',s.phase==='serve'?(s.server===me?(s.fault?'二发 · 轻一点，滑进对角发球区':s.players[me].preparation?.stroke==='serve'?'抛球、举拍，准备发出':'轮到你发球 · 向上斜划'):'对手发球 · 准备接球'):s.phase==='point'?`${s.event} · ${s.lastPoint===me?'你得分':'下一分加油'}`:s.players[me].shotQueued?'已预设击球 · 自动追球，到位后按滑动回击':s.ball.skill==='slice'?(s.ball.hitter===me?'切削球 · 注意下一拍':'对手切削 · 小心低弹跳和侧偏'):s.ball.skill==='smash'?(s.ball.hitter===me?'高压球！准备下一拍':'对手高压球 · 提前滑动接球'):s.ball.skill==='volley'?(s.ball.hitter===me?'截击成功 · 注意下一拍':'对手截击 · 提前滑动接球'):s.ball.rescue?(s.ball.hitter===me?'极限救球！回球变慢，尽快恢复站位':'对手极限救球 · 注意偏移后的落点'):s.players[me].rescue?'跳步救球中…':s.ball.hitter===me?(s.ball.critical?'暴击球！准备下一拍':'好球！轻点球场，调整下一拍站位'):s.ball.critical?'对手暴击球！提前滑动准备回击':s.players[me].shotQueued?'滑动已收到 · 到触球位置自动回击':'来球了，可以提前向上滑动');
     if(s.players[me].shotQueued&&s.phase==='rally')text('match-hint','击球已准备 · 到位后自动回击');
     text('match-subhint',playSubhint(s,me,this.controls.lobMode));
@@ -596,6 +679,14 @@ export class App {
       if(!jump&&!this.controls.lobMode&&s.ball.hitter===me&&(s.ball.placementAssist??0)>0)
         text('match-subhint','慢球辅助留边 · 越快越需要控制角度和长度');
     }
+    if(s.phase==='rally'&&!this.tutorial&&s.mode!=='doubles'){
+      const hint=document.getElementById('rally-hint')!,strong=document.getElementById('match-hint')!,small=document.getElementById('match-subhint')!;
+      const gate=(this.hints??=new HintGate()).decide(hintKey(s,me,this.controls.lobMode),strong.textContent??'',small.textContent??'',s.score[0]+s.score[1],performance.now());
+      hint.hidden=!gate.visible;if(gate.visible){text('match-hint',gate.text);text('match-subhint',gate.sub);}
+    }
+    this.timingFeedback(s,me);
+    const zone=this.practiceReview?.drill?.zone(s);
+    this.view?.setTargetZone?.(zone??null);
     const phaseKey=`${s.phase}-${s.eventId}`;
     if(this.lastPhase!==phaseKey){
       const banner=pointBanner(s,me);
@@ -604,7 +695,7 @@ export class App {
     const reconnect=document.getElementById('reconnect-slot')!;
     const warning=this.paused?'朋友暂时断线 · 比赛已暂停，等待重连':!this.connected?'网络暂时断开 · 正在恢复连接':'';
     if(reconnect.textContent!==warning)reconnect.innerHTML=warning?`<div class="reconnect-banner">${warning}</div>`:'';
-    if(s.scoring?.format==='standard')text('rally-count',`局 ${s.scoring.games[teamOf(me)]} : ${s.scoring.games[them]} · ${s.scoring.tiebreak?'抢七':`${s.rally} 拍`}`);
+    if(s.scoring?.format==='standard')text('rally-count',`局 ${s.scoring.games[teamOf(me)]} : ${s.scoring.games[them]} · ${s.scoring.tiebreak?'决胜局':`${s.rally} 拍`}`);
     if(s.mode==='doubles'){
       const mate=partner(me),mateName=this.room?.seats[mate]?.name??'队友',serverName=this.room?.seats[s.server]?.name??'球员';
       const theirMate=partner(them),theirMateName=this.room?.seats[theirMate]?.name??'对手';
@@ -626,14 +717,30 @@ export class App {
       const slot=document.getElementById('tutorial-slot'),key=JSON.stringify([coach.progress,prompt]);
       if(slot&&this.tutorialHudKey!==key){
         this.tutorialHudKey=key;
-        slot.innerHTML=`<section class="tutorial-coach" aria-label="新手实操引导"><div class="tutorial-progress">${TUTORIAL_STEPS.map((step,i)=>`<span class="${i<coach.progress?'done':i===coach.progress?'current':''}">${i<coach.progress?'✓':i+1} ${step}</span>`).join('')}</div><div class="tutorial-instruction" role="status" aria-live="polite" aria-atomic="true"><b class="tutorial-gesture" aria-hidden="true">${prompt.gesture}</b><div><strong>${prompt.title}</strong><p>${prompt.detail}</p></div></div></section><div id="tutorial-hand-slot">${coach.held(this.local)?tutorialGesture(prompt.gesture):''}</div>`;
+        const step=Math.min(coach.progress,TUTORIAL_STEPS.length-1),pct=Math.round(Math.min(coach.progress,TUTORIAL_STEPS.length)/TUTORIAL_STEPS.length*100);
+        const more=prompt.more?`<details class="tutorial-why" ${coach.paceOpen?'open':''}><summary>为什么？</summary><p>${prompt.more}</p></details>`:'';
+        slot.innerHTML=`<section class="tutorial-coach" aria-label="新手实操引导"><div class="tutorial-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${TUTORIAL_STEPS.length}" aria-valuenow="${Math.min(coach.progress,TUTORIAL_STEPS.length)}" aria-label="教学进度"><span class="tutorial-step-label">${Math.min(coach.progress+1,TUTORIAL_STEPS.length)}/${TUTORIAL_STEPS.length} · ${TUTORIAL_STEPS[step]}</span><i class="tutorial-bar"><b style="width:${pct}%"></b></i></div><div class="tutorial-instruction" role="status" aria-live="polite" aria-atomic="true"><b class="tutorial-gesture" aria-hidden="true">${prompt.gesture}</b><div><strong>${prompt.title}</strong><p>${prompt.detail}</p>${more}</div></div></section><div id="tutorial-hand-slot">${coach.held(this.local)||coach.stage==='move'||coach.stage==='recover'?tutorialGesture(prompt.gesture):''}</div>`;
       }
       serveNotice.hidden=true;document.getElementById('rally-hint')!.hidden=true;
       document.getElementById('lob-mode')!.hidden=true;
-      text('connection','新手人机陪练');
-      text('rally-count',`操作入门 · ${Math.min(coach.progress,7)} / 7 · 普通接球 ${coach.normalReturns}/2`);
+      text('connection','新手教学');
+      text('rally-count',coach.stage==='finish'?`赢下一分 · 本轮已失 ${coach.finishLost} 分`:`操作入门 · 第 ${Math.min(coach.progress+1,7)} 步`);
+      const miss=coach.retryNoticeShown&&coach.lastMiss?coach.lastMiss:null;
+      this.view?.showMissMarker?.(miss);
+      // While showing a miss, the coach card moves to the bottom so the far court (and the red ring) stays visible.
+      document.querySelector('.tutorial-coach')?.classList.toggle('docked-low',!!miss);
+      if(coach.stage==='finish'){serveNotice.hidden=s.phase!=='serve';document.getElementById('lob-mode')!.hidden=true;}
       this.controls.enabled=!coach.completed&&!this.help&&!this.intro&&!this.practicePaused&&!this.quitConfirm;
     }
+  }
+  /** G2: a short, coloured grade bubble per graded local stroke; once per flight. */
+  private timingFeedback(s:MatchState,me:Seat){
+    const b=s.ball,el=document.getElementById('timing-bubble');
+    if(!el||s.phase!=='rally'||b.hitter!==me||!b.timing||s.rally===this.lastTiming)return;
+    this.lastTiming=s.rally;
+    el.textContent=TIMING_LABEL[b.timing];el.dataset.grade=b.timing;
+    el.classList.remove('visible');void el.offsetWidth;el.classList.add('visible');
+    if(b.timing==='perfect')this.audio.play('perfect');
   }
   private frame=(now:number)=>this.advanceFrame(now);
   private advanceFrame(now:number){
@@ -652,7 +759,7 @@ export class App {
             if(this.tutorial.completed){this.completeTutorial();break;}
             continue;
           }
-          if(this.screen!=='result')driveAI(this.local,1,training?this.difficulty:'standard');
+          if(this.screen!=='result')driveAI(this.local,1,training?this.difficulty:'standard',{openness:training?this.openness:0});
           if(training)this.practiceReview?.observe(this.local.state);
           this.local.step(1/60);this.accumulator-=1/60;
           if(training)this.practiceReview?.observe(this.local.state);
@@ -667,6 +774,11 @@ export class App {
           const key=practiceBestKey(this.surface,this.difficulty,this.characterId,this.opponentId,this.practiceReview.goal);
           this.practiceSaved=savePracticeBest(key,this.practiceReview.value);
           this.practiceBest=Math.max(readPracticeBest(key),this.practiceReview.value);
+        }
+        if(this.practiceReview){
+          const won=this.local.state.winner===0;
+          if(this.difficulty==='relaxed')recordPracticeResult(won);
+          this.rallyRecord=saveRallyBest(rallyBestKey(this.surface,this.difficulty,this.characterId,this.opponentId),this.local.state.maxRally);
         }
         this.screen='result';this.help=false;this.quitConfirm=false;this.practicePaused=false;this.renderScreen();
       }
@@ -708,14 +820,14 @@ export class App {
   }
   private introPanel(){return `<div class="overlay intro-overlay" role="dialog" aria-modal="true" aria-labelledby="intro-title"><section class="panel intro-panel">
     <div class="panel-top"><span>FIRST TIME ON COURT · 操作入门</span><button class="icon-button" data-action="close-intro" aria-label="进入人机实操">×</button></div>
-    <h2 id="intro-title">跟着手势，赢下第一场。</h2><p>先调整发球站位并发球，再普通接球、跑动回位、接第二球，最后学习切削。</p>
+    <h2 id="intro-title">跟着手势，赢下第一分。</h2><p>先调整发球站位并发球，再普通接球、跑动回位、接第二球，最后学习切削。</p>
     <div class="intro-gestures">
       <div class="intro-gesture"><div class="gesture-visual tap-visual" aria-hidden="true"><i></i><b>点</b></div><div><strong>轻点球场 · 移动</strong><span>点一下想去的位置，球员会自动跑过去。发球抛球后站位会锁定。</span></div></div>
       <div class="intro-gesture"><div class="gesture-visual swipe-visual" aria-hidden="true"><b>↑</b></div><div><strong>向上滑动 · 回球</strong><span>普通回球和发球：滑动方向就是出球方向。向左上划，球就向左上飞。</span></div></div>
       <div class="intro-gesture"><div class="gesture-visual swipe-visual" aria-hidden="true"><b>↓</b></div><div><strong>向下滑动 · 切削</strong><span>切削：出球方向与滑动方向相反！向下划，球向上飞；向右下划，球向左上飞。不需要长按。</span></div></div>
     </div>
     <p class="intro-note"><b>距离与速度</b>：${TUTORIAL_PACE_HINT}</p>
-    <p class="intro-note">球场上会有手指动画示范点按和滑动。接球失败就重试当前来球，不回到发球。普通接球成功 2 次并完成切削后，人机会认输，展示你的获胜庆祝，再通过引导。</p>
-    <button class="primary" data-action="close-intro">选人机搭档，开始实操 →</button>
+    <p class="intro-note">球场上会有手指动画示范点按和滑动。接球失败就重试当前来球，不回到发球。完成切削后和放慢的陪练真打，赢下一分即通过。</p>
+    <button class="primary" data-action="close-intro">选陪练，开始实操 →</button>
   </section></div>`;}
 }

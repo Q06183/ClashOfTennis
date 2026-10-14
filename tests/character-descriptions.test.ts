@@ -17,11 +17,16 @@ test('every player visibly describes the same shared-scale effects before expand
   wuming:['+46.8%','+97.5%','-78%','+78%'],
  };
  for(const c of CHARACTERS)for(const opponent of [false,true]){
-  const html=characterPicker(c.id,opponent,true),visible=html.split('<details>')[0];
+  const html=characterPicker(c.id,opponent,true),[visible,folded='']=html.split('<details>');
   assert.ok(visible.includes(c.strength)&&visible.includes(c.weakness),`${c.id} descriptions`);
-  assert.ok(visible.includes('实际效果'),`${c.id} should not hide effects behind disclosure`);
-  for(const pct of percentages[c.id])assert.ok(visible.includes(pct),`${c.id} ${pct}`);
-  for(const value of Object.values(c.stats))assert.ok(visible.includes(`value="${value}"`));
+  // Designer review U4: visible area shows differences from the 60 average; exact coefficients are folded.
+  assert.ok(!visible.includes('实际效果'),`${c.id} coefficients belong in the disclosure`);
+  assert.ok(folded.includes('实际效果'),`${c.id} effects remain available`);
+  for(const pct of percentages[c.id])assert.ok(folded.includes(pct),`${c.id} ${pct}`);
+  for(const value of Object.values(c.stats)){
+    assert.ok(visible.includes(`value="${value}"`));
+    assert.ok(visible.includes(`<b>${value>60?'+':''}${value-60}</b>`),`${c.id} delta ${value}`);
+  }
   assert.doesNotMatch(html,/×\s*10|乘\s*10|10\s*倍/);
  }
 });
