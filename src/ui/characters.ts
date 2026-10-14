@@ -9,7 +9,13 @@ const pickerScrollerOf=(root:HTMLElement):HTMLElement=>{
 /** The whole home scrolls, not the inner panel; capture the real scroller around re-renders. */
 export function characterScrollState(root:HTMLElement){const el=pickerScrollerOf(root);return {el,top:el.scrollTop};}
 export function restoreCharacterScroll(root:HTMLElement,state:{el:HTMLElement;top:number}){
- const current=pickerScrollerOf(root);if(current===state.el)current.scrollTop=state.top;
+ const el=pickerScrollerOf(root);
+ // The picker DOM is rebuilt on every pick, so the freshly inserted content may
+ // not be laid out yet: assigning scrollTop before that clamps it to 0. Force
+ // layout, assign, and re-apply on the next frame once images/styles settle.
+ const apply=()=>{el.scrollTop=state.top;};
+ void el.clientHeight;apply();
+ if(el.scrollTop!==state.top&&typeof requestAnimationFrame==='function')requestAnimationFrame(()=>{el.scrollTop=state.top;if(el.scrollTop!==state.top)requestAnimationFrame(apply);});
 }
 /**
  * After a re-render. Picking a card keeps the scroll position and never jumps
