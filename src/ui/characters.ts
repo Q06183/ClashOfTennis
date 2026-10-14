@@ -1,13 +1,31 @@
 import {CHARACTERS,getCharacter,characterEffects,isCharacterAvailable} from '../simulation/characters.js';
 import {pointRecoveryRate} from '../simulation/stamina.js';
 
-/** Run after rendering so focus and scrolling target the newly selected player. */
+const pickerScrollerOf=(root:HTMLElement):HTMLElement=>{
+ const home=root.querySelector<HTMLElement>('.home');
+ if(home&&home.scrollHeight>home.clientHeight+2)return home;
+ return root.querySelector<HTMLElement>('.character-panel')??root;
+};
+/** The whole home scrolls, not the inner panel; capture the real scroller around re-renders. */
+export function characterScrollState(root:HTMLElement){const el=pickerScrollerOf(root);return {el,top:el.scrollTop};}
+export function restoreCharacterScroll(root:HTMLElement,state:{el:HTMLElement;top:number}){
+ const current=pickerScrollerOf(root);if(current===state.el)current.scrollTop=state.top;
+}
+/**
+ * After a re-render. Picking a card keeps the scroll position and never jumps
+ * the selected card out of view; a plain modal picker only nudges nearest.
+ * Returning to the list centers the selected card.
+ */
 export function revealCharacterPicker(root:HTMLElement,target:'detail'|'list'){
- const element=root.querySelector<HTMLElement>(target==='detail'?'.character-detail':'.character-card.selected');
- if(!element)return;
- const reducedMotion=root.ownerDocument.defaultView?.matchMedia('(prefers-reduced-motion: reduce)').matches;
- element.focus({preventScroll:true});
- element.scrollIntoView({behavior:reducedMotion?'instant':'smooth',block:target==='detail'?'start':'center',inline:'nearest'});
+ const reduced=root.ownerDocument.defaultView?.matchMedia('(prefers-reduced-motion: reduce)').matches;
+ const behavior=reduced?'instant':'smooth';
+ if(target==='detail'){
+  root.querySelector<HTMLElement>('.character-detail')?.focus({preventScroll:true});
+  if(!root.querySelector('.home'))root.querySelector<HTMLElement>('.character-card.selected')?.scrollIntoView({behavior,block:'nearest',inline:'nearest'});
+ }else{
+  const card=root.querySelector<HTMLElement>('.character-card.selected');
+  if(card){card.focus({preventScroll:true});card.scrollIntoView({behavior,block:'center',inline:'nearest'});}
+ }
 }
 
 const gripBadge=(x:{handedness:string;backhandStyle:string})=>`${x.handedness==='left'?'左':'右'}${x.backhandStyle==='one-handed'?'¹':'²'}`;

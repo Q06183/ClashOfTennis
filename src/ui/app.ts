@@ -1,5 +1,5 @@
 import {getCharacter,isCharacterAvailable} from '../simulation/characters.js';
-import {characterPicker,revealCharacterPicker} from './characters.js';
+import {characterPicker,revealCharacterPicker,characterScrollState,restoreCharacterScroll} from './characters.js';
 import {HiddenCharacterUnlock} from './hidden-character.js';
 import {readPreference,writePreference} from './preferences.js';
 import {PracticeTutorial,TUTORIAL_STEPS,TUTORIAL_VERSION,TUTORIAL_PACE_HINT,TUTORIAL_TAP_SLOP} from './practice-tutorial.js';
@@ -601,7 +601,7 @@ export class App {
     return this.room?.seats[team]?.name??(team===0?this.name:`陪练 · ${getCharacter(this.local.state.players[1]?.characterId??this.opponentId).name}`);
   }
   private renderScreen(characterTarget?:'detail'|'list'){
-    const characterScroll=characterTarget?this.ui.querySelector('.character-panel')?.scrollTop:undefined;
+    const characterScroll=characterTarget?characterScrollState(this.ui):null;
     this.view.setMode(this.screen==='result'?'result':this.screen==='playing'?'match':'home',this.seat);
     this.controls.enabled=this.screen==='playing'&&!this.help&&!this.intro&&!this.practicePaused&&!this.quitConfirm;
     if(this.screen==='characters'){
@@ -633,9 +633,8 @@ export class App {
       this.ui.querySelector<HTMLButtonElement>('.friends-panel [data-action="create"]')?.focus();
     }
     if(this.surfaceOpen)this.ui.insertAdjacentHTML('beforeend',`<div class="overlay surface-overlay" role="dialog" aria-modal="true" aria-label="选择球场"><section class="panel"><div class="panel-top"><span>CHOOSE YOUR COURT</span><button class="icon-button" data-action="close-surfaces" aria-label="关闭场地选择">×</button></div><h2>换一片球场，换一种节奏。</h2><p>场地改变反弹、旋转与跑动制动；开赛后锁定。</p><div class="surface-options">${surfaceChoices(this.room?.surface??this.surface)}</div><button class="secondary" data-action="close-surfaces">返回</button></section></div>`);
-    if(this.screen==='characters'&&characterTarget){
-      const panel=this.ui.querySelector('.character-panel');
-      if(panel&&characterScroll!==undefined)panel.scrollTop=characterScroll;
+    if(this.screen==='characters'&&characterTarget&&characterScroll){
+      restoreCharacterScroll(this.ui,characterScroll);
       revealCharacterPicker(this.ui,characterTarget);
     }
     if(this.intro)this.ui.insertAdjacentHTML('beforeend',this.introPanel());

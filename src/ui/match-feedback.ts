@@ -92,4 +92,4 @@ export function staminaWidths(p:{stamina:number;totalStamina?:number}){
   const total=clamp(p.totalStamina??1,0,1),effective=clamp(p.stamina,0,1)*total;
   return {total:total*100,effective:effective*100};
 }
-export const TIMING_LABEL={perfect:'PERFECT',good:'好球',early:'早了一点',late:'晚了一点'} as const;
+export const TIMING_LABEL={perfect:'PERFECT',good:'GOOD',early:'早了一点',late:'晚了一点'} as const;

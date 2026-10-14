@@ -86,3 +86,7 @@
 /* U3 · while a miss marker is shown, dock the coach card above the bottom controls */
 .tutorial-coach.docked-low{top:auto!important;bottom:calc(max(22px,env(safe-area-inset-bottom)) + 120px);transform:translateX(-50%)}
 @media(max-height:500px) and (orientation:landscape){.tutorial-coach.docked-low{bottom:70px;transform:none}}
+
+/* Picking a card never scrolls it under the bottom attribute sheet. */
+.home-player-tab .character-card{scroll-margin-block-end:56dvh}
+@media(min-width:701px){.home-player-tab .character-card{scroll-margin-block-end:8px}}
