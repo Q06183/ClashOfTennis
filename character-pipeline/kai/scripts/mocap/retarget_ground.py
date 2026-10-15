@@ -192,8 +192,35 @@ def build_stroke(name, cfg):
             set_world3(nn, qp.slerp(qc,u).to_matrix() @ REST[nn]); bpy.context.view_layer.update()
         qh = (frame(hd_up, shline) @ UPRIGHT.inverted()).to_quaternion()
         if qh.dot(qc) < 0: qh = -qh
-        set_world3("neck_01", qc.slerp(qh,0.5).to_matrix() @ REST["neck_01"]); bpy.context.view_layer.update()
-        set_world3("head", qh.to_matrix() @ REST["head"]); bpy.context.view_layer.update()
+        # ---- stylisation pass: extra trunk yaw about world +Z (hips/feet keep the mocap stance).
+        # forehand: MORE coil AWAY from the ball during the takeback (-Z yaw turns the right shoulder
+        #           further back), fully unwound by contact;
+        # backhand: OPEN the stance through contact so the chest points crosscourt (+X), not at the rear
+        #           fence (+Z yaw), easing back after follow-through.
+        def seg(x, a, b, va, vb):
+            if x <= a: return va
+            if x >= b: return vb
+            t = (x-a)/(b-a); t = t*t*(3-2*t)
+            return va + (vb-va)*t
+        if not cfg["twohanded"]:
+            yaw = (seg(f, C-34, C-14, 0.0, math.radians(-16))
+                   + seg(f, C-14, C-4, math.radians(-16), 0.0)
+                   + seg(f, C-4, C+30, 0.0, 0.0))
+        else:
+            # coil in the backswing, then OPEN so at contact the chest points down the target line
+            # (~40 deg off net toward the hitter's left), clearly showing the front of the torso, not the
+            # back; ease to neutral during the wrap-around finish.
+            yaw = (seg(f, C-30, C-14, 0.0, math.radians(-12))
+                   + seg(f, C-14, C-2, math.radians(-12), math.radians(8))
+                   + seg(f, C-2, C+6, math.radians(8), math.radians(6))
+                   + seg(f, C+6, C+34, math.radians(6), 0.0))
+        Qy = Quaternion(Vector((0,0,1)), yaw)
+        ymul = {"pelvis":0.35, "spine_01":0.55, "spine_02":0.8, "spine_03":1.0, "neck_01":0.9, "head":0.7}
+        for nn, u in (("pelvis",0.0),("spine_01",0.33),("spine_02",0.66),("spine_03",1.0)):
+            qb = qp.slerp(qc,u)
+            set_world3(nn, (Qy**ymul[nn]).to_matrix() @ qb.to_matrix() @ REST[nn]); bpy.context.view_layer.update()
+        set_world3("neck_01", (Qy**ymul["neck_01"]).to_matrix() @ qc.slerp(qh,0.5).to_matrix() @ REST["neck_01"]); bpy.context.view_layer.update()
+        set_world3("head", (Qy**ymul["head"]).to_matrix() @ qh.to_matrix() @ REST["head"]); bpy.context.view_layer.update()
         for nn, a, bn in (("clavicle_l","LeftCollar","LeftShoulder"),("clavicle_r","RightCollar","RightShoulder")):
             d = P(w,bn)-P(w,a); rest_d = REST[nn] @ Vector((0,1,0))
             el = math.asin(max(-1,min(1,d.normalized().z))); el0 = math.asin(max(-1,min(1,rest_d.normalized().z)))
@@ -207,6 +234,32 @@ def build_stroke(name, cfg):
                       P(w,s_+"Elbow")-P(w,s_+"Shoulder"), P(w,s_+"Wrist")-P(w,s_+"Elbow"), FWD)
             aim_hinge("thigh_"+side,"calf_"+side,
                       P(w,s_+"Knee")-P(w,s_+"Hip"), P(w,s_+"Ankle")-P(w,s_+"Knee"), BACK)
+        # ---- takeback amplification: analytic IK stretches the hitting arm FURTHER BACK/UP ----
+        # mocap takeback is compact (hand close to torso); a game-read forehand needs a visible loop.
+        # Re-solve the right arm to an authored wrist target: behind the chest (+Y, away from the net),
+        # raised to shoulder height. Window is smooth; mocap poses untouched outside [C-34, C-2].
+        tb_a, tb_b, tb_deep, tb_c = C-34, C-13, C-6, C-2
+        amp = 0.0
+        if f < tb_c:
+            if f > tb_a:
+                if f < tb_b:
+                    t=(f-tb_a)/(tb_b-tb_a); amp=t*t*(3-2*t)
+                elif f <= tb_deep: amp = 1.0
+                else:
+                    t=(f-tb_deep)/(tb_c-tb_deep); amp=1.0-(t*t*(3-2*t))
+        if amp > 0.001 and not cfg["twohanded"]:
+            bpy.context.view_layer.update()
+            wrist0 = world_head(rig, "hand_r")
+            # chest backward = +Y (net is -Y); raise to shoulder line; bias slightly across the body
+            target = wrist0 + Vector((-0.03*amp, 0.24*amp, 0.12*amp))
+            # pole: elbow bends outward to the player's right-front
+            hip_r = world_head(rig, "thigh_r")
+            two_bone_ik(rig, "upperarm_r", "lowerarm_r", target, hip_r + Vector((-0.55, -0.25, 0.35)))
+            # counter arm reaches forward across the chest
+            pb = rig.pose.bones["clavicle_l"]
+            set_world3("clavicle_l",
+                       Quaternion(Vector((0,0,1)), math.radians(-10*amp)).to_matrix() @ pb.matrix.to_3x3())
+            bpy.context.view_layer.update()
         for s, side in (("l","Left"),("r","Right")):
             d = (P(w,side+"Ankle_End")-P(w,side+"Ankle")).normalized()
             heading = Vector((d.x,d.y,0)).normalized()
@@ -319,7 +372,8 @@ def finish_stroke(name, Rn):
     u_ready0 = (world_tail(rig, "lowerarm_r") - world_head(rig, "lowerarm_r")).normalized()
     ready_lat = -0.35 if not two else 0.0       # forehand: ready racket clear on the hitter's own side
     u_ready = (fwd*0.62 + Vector((0,0,1))*0.55 + lat*ready_lat*0.4).normalized()
-    u_takeback = (fwd*(-0.82) + Vector((0,0,1))*0.30 + lat*lat_sign*0.30).normalized()
+    u_takeback = (fwd*(-0.95) + Vector((0,0,1))*0.34 + lat*lat_sign*0.34).normalized() if not two \
+                 else (fwd*(-0.70) + Vector((0,0,1))*0.62 + lat*lat_sign*0.20).normalized()
     u_deep    = (fwd*(-0.90) + Vector((0,0,1))*(-0.34) + lat*lat_sign*0.16).normalized()
     # contact: aim the sweet spot at an explicit waist-height point in front of the grip (built from the
     # real grip path so contact geometry is exact regardless of the mocap wrist height)
@@ -327,7 +381,7 @@ def finish_stroke(name, Rn):
     fwd_d = 0.46 if not two else 0.36
     target_sweet = GP[C] + fwd*fwd_d + Vector((0,0, z_sweet - GP[C].z)) + lat*((-0.05) if not two else 0.03)
     u_contact = (target_sweet - GP[C]).normalized()
-    f_raise = C - 30; f_tb = C - 15; f_deep = C - 6; f_follow = C + 12
+    f_raise = C - 30; f_tb = C - 16; f_deep = C - 6; f_follow = C + 12
     u_finish_key = FORE[min(nF, f_follow)].normalized()
 
     def shaft_raw(f):

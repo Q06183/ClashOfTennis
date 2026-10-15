@@ -8,7 +8,7 @@
       "frame": 11
      },
      "r": {
-      "max_slide_per_frame_mm": 2.5,
+      "max_slide_per_frame_mm": 2.3,
       "frame": 80
      }
     },
@@ -19,8 +19,8 @@
     "pass": true
    },
    "com_smoothness": {
-    "max_vertical_accel_m_s2": 12.2,
-    "min": -12.7,
+    "max_vertical_accel_m_s2": 10.2,
+    "min": -12.0,
     "pass": true
    },
    "kinetic_chain": {
@@ -797,8 +797,8 @@
     "pass": true
    },
    "com_smoothness": {
-    "max_vertical_accel_m_s2": 21.3,
-    "min": -16.3,
+    "max_vertical_accel_m_s2": 21.1,
+    "min": -16.5,
     "pass": true
    },
    "kinetic_chain": {
