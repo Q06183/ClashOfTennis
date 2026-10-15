@@ -1,29 +1,41 @@
 {
  "file": "export/kai.glb",
- "bytes": 1756580,
+ "bytes": 2836920,
  "bones": 57,
  "meshes": 16,
- "skinned_meshes": [
-  "Kai_Body",
-  "Kai_Brows",
-  "Kai_Eye_L",
-  "Kai_Eye_R",
-  "Kai_Hair",
-  "Kai_Headband",
-  "Kai_Shirt",
-  "Kai_Shoes",
-  "Kai_Shorts",
-  "Kai_Socks",
-  "Kai_Wristband_L",
-  "Kai_Wristband_R"
- ],
  "triangles": 44410,
  "actions": [
+  "Backhand",
+  "Backhand_Ball",
+  "Forehand",
+  "Forehand_Ball",
   "Serve",
   "Serve_Ball"
  ],
- "frames": [
-  61,
-  61
- ]
+ "frame_ranges": {
+  "Backhand": [
+   0,
+   53
+  ],
+  "Backhand_Ball": [
+   0,
+   53
+  ],
+  "Forehand": [
+   0,
+   53
+  ],
+  "Forehand_Ball": [
+   0,
+   53
+  ],
+  "Serve": [
+   0,
+   60
+  ],
+  "Serve_Ball": [
+   0,
+   60
+  ]
+ }
 }
