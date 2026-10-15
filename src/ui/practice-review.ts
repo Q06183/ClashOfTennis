@@ -1,19 +1,21 @@
 import type {MatchState, Team} from '../simulation/types.js';
 import {readPreference,writePreference} from './preferences.js';
+import {TargetDrill,TARGET_DRILL} from './target-drill.js';
 
 export const PRACTICE_GOALS={
   free:{title:'自由对打',detail:'没有额外目标，按自己的节奏练习。',target:0},
   control:{title:'稳健回球',detail:'本场自己累计 5 次合法落地回球；发球不计。',target:5},
   rally:{title:'长回合',detail:'双方打出 6 拍回合，含发球；比赛照常继续。',target:6},
-  variety:{title:'多样球路',detail:'自己 3 类回球各至少一次合法落地。',target:3}
+  variety:{title:'多样球路',detail:'自己 3 类回球各至少一次合法落地。',target:3},
+  target:{title:'目标区',detail:`对方场地的角落会亮起目标区，回球落进去得 1 星，集满 ${TARGET_DRILL.stars} 星。`,target:TARGET_DRILL.stars}
 } as const;
 export type PracticeGoal=keyof typeof PRACTICE_GOALS;
 export const isPracticeGoal=(value:string):value is PracticeGoal=>Object.hasOwn(PRACTICE_GOALS,value);
 export type PracticeNumbers={
   returns:number;legal:number;out:number;net:number;missed:number;doubleFault:number;timeout:number;
-  styles:Set<string>;
+  styles:Set<string>;perfect:number;winners:number;
 };
-const empty=():PracticeNumbers=>({returns:0,legal:0,out:0,net:0,missed:0,doubleFault:0,timeout:0,styles:new Set()});
+const empty=():PracticeNumbers=>({returns:0,legal:0,out:0,net:0,missed:0,doubleFault:0,timeout:0,styles:new Set(),perfect:0,winners:0});
 
 /** Advice names an observable outcome, never guesses "unforced" errors or intent. */
 export function pointAdvice(reason:string){
@@ -43,7 +45,8 @@ export class PracticeReview {
   private rally=0;
   private points=-1;
   private flight:{hitter:Team;style:string;legal:boolean}|null=null;
-  constructor(readonly goal:PracticeGoal='free'){}
+  readonly drill:TargetDrill|null;
+  constructor(readonly goal:PracticeGoal='free'){this.drill=goal==='target'?new TargetDrill():null;}
   observe(s:MatchState){
     const points=s.score[0]+s.score[1];
     if(points!==this.points||s.rally<this.rally){
@@ -52,9 +55,10 @@ export class PracticeReview {
     this.maxRally=Math.max(this.maxRally,s.rally);
     if(s.phase==='rally'&&s.rally>this.rally){
       this.flight=s.rally>1?{hitter:(s.ball.hitter%2) as Team,style:styleOf(s),legal:false}:null;
-      if(this.flight)this.players[this.flight.hitter].returns++;
+      if(this.flight){this.players[this.flight.hitter].returns++;if(s.ball.timing==='perfect')this.players[this.flight.hitter].perfect++;}
     }
     this.rally=s.rally;
+    this.drill?.observe(s);
     if(this.flight&&!this.flight.legal&&s.phase==='rally'&&s.ball.bounces===1){
       this.flight.legal=true;
       const p=this.players[this.flight.hitter];p.legal++;p.styles.add(this.flight.style);
@@ -68,25 +72,28 @@ export class PracticeReview {
     const loser=(1-s.lastPoint) as Team,p=this.players[loser];
     if(reason==='双误')p.doubleFault++;
     else if(reason==='发球超时')p.timeout++;
-    else if(reason==='二跳'||reason==='未接到球')p.missed++;
+    else if(reason==='二跳'||reason==='未接到球'){p.missed++;if(s.rally>1&&hitter===s.lastPoint)this.players[hitter].winners++;}
     else if(s.rally>1&&reason==='出界')this.players[hitter].out++;
     else if(s.rally>1&&reason==='下网')this.players[hitter].net++;
   }
   get value(){
     const p=this.players[0];
-    return this.goal==='control'?p.legal:this.goal==='rally'?this.maxRally:this.goal==='variety'?p.styles.size:0;
+    return this.goal==='control'?p.legal:this.goal==='rally'?this.maxRally:this.goal==='variety'?p.styles.size:this.goal==='target'?this.drill!.stars:0;
   }
   get complete(){return this.goal!=='free'&&this.value>=PRACTICE_GOALS[this.goal].target;}
   get progress(){
     const g=PRACTICE_GOALS[this.goal];
+    if(this.drill)return `${g.title} · ${this.drill.label}${this.complete?' · ✓ 已达成':''}`;
     return `${g.title} · ${Math.min(this.value,g.target)} / ${g.target}${this.complete?' · ✓ 已达成':''}`;
   }
-  get advice(){
+  /** Most frequent observable error for the learner, or null when there were none. */
+  get mainIssue(){
     const p=this.players[0];
-    const choices:[number,string][]=[[p.timeout,'发球超时'],[p.doubleFault,'双误'],[p.out,'出界'],[p.net,'下网'],[p.missed,'未接到球']];
+    const choices:[number,string,string][]=[[p.timeout,'发球超时','发球超时'],[p.doubleFault,'双误','双误'],[p.out,'出界','回球出界'],[p.net,'下网','回球下网'],[p.missed,'未接到球','漏接']];
     const worst=choices.sort((a,b)=>b[0]-a[0])[0];
-    return pointAdvice(worst[0]?worst[1]:'');
+    return worst[0]?{count:worst[0],reason:worst[1],label:worst[2]}:null;
   }
+  get advice(){return pointAdvice(this.mainIssue?.reason??'');}
 }
 
 export function practiceGoalChoices(goal:PracticeGoal){
@@ -105,6 +112,8 @@ export function savePracticeBest(key:string,value:number){
   return value<=readPracticeBest(key)||writePreference(key,String(value));
 }
 export function practiceReviewPanel(review:PracticeReview,best:number,saved:boolean){
-  const p=review.players[0];
-  return `<section class="practice-review" aria-label="本场练习复盘"><h3>本场练习复盘 · 你的回球</h3><div class="review-grid"><div><b>${p.returns} / ${p.legal}</b><span>实际回球 / 合法落地</span></div><div><b>${p.out} / ${p.net}</b><span>回球出界 / 下网</span></div><div><b>${p.missed}</b><span>漏接失分</span></div><div><b>${p.doubleFault} / ${p.timeout}</b><span>双误 / 发球超时</span></div></div><p>下一场：${review.advice}</p><small>合法落地不含发球；对手落地前截击不计，也不算失误。</small>${review.goal==='free'?'':`<div class="goal-result"><strong>${review.progress}</strong><small>本机同场地、难度及球员组合最佳：${best}${saved?'':' · 本次无法保存'}${review.goal==='variety'?'<br/>本场球路：'+([...p.styles].join('、')||'暂无合法落地回球'):''}</small></div>`}</section>`;
+  const p=review.players[0],issue=review.mainIssue;
+  const rate=p.returns?Math.round(p.legal/p.returns*100):0;
+  const cell=(value:number|string,label:string,tone='')=>`<div class="${tone}"><b>${value}</b><span>${label}</span></div>`;
+  return `<section class="practice-review" aria-label="本场练习复盘"><p class="review-lead">${issue?`本场最多的失误：<strong>${issue.label} ×${issue.count}</strong><br/>下一场：${review.advice}`:`本场没有明显失误。下一场：${review.advice}`}</p><div class="review-grid">${cell(p.returns,'回球')}${cell(`${p.legal}${p.returns?`<small>${rate}%</small>`:''}`,'合法落地','good')}${cell(p.perfect,'完美击球','good')}${cell(p.winners,'制胜球','good')}${cell(p.out,'出界','bad')}${cell(p.net,'下网','bad')}${cell(p.missed,'漏接','bad')}${cell(p.doubleFault+p.timeout,'双误/超时','bad')}</div><small>合法落地不含发球；对手落地前截击不计，也不算失误。制胜球：对方没碰到或二跳的回球。</small>${review.goal==='free'?'':`<div class="goal-result"><strong>${review.progress}</strong><small>本机同场地、难度及球员组合最佳：${best}${saved?'':' · 本次无法保存'}${review.goal==='variety'?'<br/>本场球路：'+([...p.styles].join('、')||'暂无合法落地回球'):''}</small></div>`}</section>`;
 }

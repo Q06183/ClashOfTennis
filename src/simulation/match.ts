@@ -18,7 +18,15 @@ import { COURT, MOVEMENT_HALF_WIDTH, courtHalfWidth, isInCourt, isInServiceBox, 
 import {createScoring,scorePoint,matchServer,type ScoringFormat} from './scoring.js';
 import {assistedReceiver,supportPosition} from './team-play.js';
 import {bodyContactTime} from './body-contact.js';
-import { clamp, other, side, teamOf, partner, seatsFor, type MatchMode, type BallState, type Input, type MatchState, type PlayerState, type Seat, type Shot } from './types.js';
+import { clamp, other, side, teamOf, partner, seatsFor, type MatchMode, type BallState, type Input, type MatchState, type PlayerState, type Seat, type Shot, type ShotTiming } from './types.js';
+
+/** Timing windows (seconds). A queued swipe is graded by its lead before contact;
+ * a swipe at the ball by how long the contact had already been reachable. */
+export const TIMING={queuedPerfect:.45,queuedGood:1,latePerfect:.12,lateGood:.3,perfectSpeed:1.1,perfectAssist:.6,offSpeed:.94} as const;
+export function gradeTiming(queued:boolean,seconds:number):ShotTiming{
+  if(queued)return seconds<=TIMING.queuedPerfect?'perfect':seconds<=TIMING.queuedGood?'good':'early';
+  return seconds<=TIMING.latePerfect?'perfect':seconds<=TIMING.lateGood?'good':'late';
+}
 
 const player = (seat: Seat, characterId: string): PlayerState => ({characterId:getCharacter(characterId).id,x:0,z:side(seat)*10,tx:0,tz:side(seat)*10,stamina:1,totalStamina:1,swing:0,stroke:'forehand',moving:false});
 export class Match {
@@ -38,6 +46,12 @@ export class Match {
     this.rescueCounted.set(id,this.state.rally);this.rescueDiagnostics[key]++;
   }
   private manualUntil = [0,0];
+  private reachableSince=[0,0,0,0];
+  private reachFlight=[-1,-1,-1,-1];
+  private queuedAt=[0,0,0,0];
+  /** Opt-in per human seat; computer seats keep their tuned, ungraded pace. */
+  private graded=[false,false,false,false];
+  setTimingGrade(seat:Seat,enabled:boolean){if(this.graded[seat]!==undefined)this.graded[seat]=enabled;}
   private returnPlanners = Array.from({length:4},()=>new ReturnPlanner());
   private serveElapsed = 0;
   private serveMotion:{shot:Shot;elapsed:number}|null=null;
@@ -48,9 +62,12 @@ export class Match {
   private serviceLet = false;
   private practiceGroundReceiver:Seat|null=null;
   private impact: {x:number;z:number}|null = null;
-  constructor(characters:readonly string[]=['lin','lin'],private random:()=>number=Math.random,options:{surface?:SurfaceId;mode?:MatchMode;format?:ScoringFormat}={}) {
+  private serveOffset=0;
+  constructor(characters:readonly string[]=['lin','lin'],private random:()=>number=Math.random,options:{surface?:SurfaceId;mode?:MatchMode;format?:ScoringFormat;firstServer?:Seat}={}) {
     const surface=surfaceProfile(options.surface).id;
     const mode=options.mode??'singles';
+    // Rematches alternate who opens; the rotation order itself is unchanged.
+    this.serveOffset=Number.isInteger(options.firstServer)?(options.firstServer!%seatsFor(mode).length):0;
     this.physics=new BallPhysics(surface,{enclosure:true});
     this.state = {surface,mode,ends:0,scoring:createScoring(options.format),time:0,phase:'serve',score:[0,0],players:seatsFor(mode).map(i=>({...player(i,characters[i]??'lin'),surface,ends:0})),
       ball:{surface,mode,ends:0,x:0,y:2.5,z:11.8,vx:0,vy:0,vz:0,bounces:0,hitter:0,targetX:0,targetZ:-5},
@@ -66,15 +83,17 @@ export class Match {
     this.state.rescueWindow=undefined;
     if(!preserveRescue)for(const p of this.state.players)p.rescue=undefined;
     for(const p of this.state.players){p.preparation=undefined;p.shotQueued=false;}
+    this.reachFlight=[-1,-1,-1,-1];
   }
   private resetPoint() {
     this.rescueCounted.clear();this.rescuePlans=[null,null,null,null];this.nextRescueApproach=[0,0,0,0];
     for(const planner of this.returnPlanners)planner.clear();
+    this.reachFlight=[-1,-1,-1,-1];
     const s=this.state, total=s.score[0]+s.score[1];
     s.rescueWindow=undefined;
     this.recentContact=null;this.rescueAttempt=[-1,-1,-1,-1];for(const p of s.players)p.rescue=undefined;
     s.ends=s.scoring?.ends??0;
-    s.phase='serve'; s.server=matchServer(s.score,s.mode,s.scoring); s.receiver=receiverForPoint(s.server,total,s.mode);s.rally=0; s.pointTimer=0;
+    s.phase='serve'; s.server=((matchServer(s.score,s.mode,s.scoring)+this.serveOffset)%seatsFor(s.mode).length) as Seat; s.receiver=receiverForPoint(s.server,total,s.mode);s.rally=0; s.pointTimer=0;
     this.pending=[null,null,null,null]; this.manualUntil=[0,0,0,0]; this.serveElapsed=0; this.serviceFlight=false;this.serviceLet=false;this.impact=null;this.serveMotion=null;this.bouncePoint=null;
     const serveSide=side(s.server,s)*(total%2===0?1:-1);
     s.players.forEach((p,i) => {
@@ -91,7 +110,7 @@ export class Match {
     });
     const p=s.players[s.server];
     this.physics.place({x:p.x,y:1.25,z:p.z-.25*side(s.server,s)});
-    Object.assign(s.ball,this.physics.read(),{ends:s.ends,bounces:0,hitter:s.server,targetX:-serveSide*2,targetZ:-side(s.server,s)*4.8,placementAssist:0,aimOrigin:undefined,critical:false,tier:undefined,rescue:false,topspin:0,slice:false,drop:0,skill:undefined});
+    Object.assign(s.ball,this.physics.read(),{ends:s.ends,bounces:0,hitter:s.server,targetX:-serveSide*2,targetZ:-side(s.server,s)*4.8,placementAssist:0,aimOrigin:undefined,critical:false,tier:undefined,rescue:false,topspin:0,slice:false,drop:0,skill:undefined,timing:undefined});
     this.announce(s.fault?'二发 · 稳一点':'滑动发球');
     this.faultReset=false;
   }
@@ -155,7 +174,7 @@ export class Match {
       Object.assign(s.ball,recent.ball);this.hit(seat,shot);return;
     }
     // Only a gesture that cannot hit now becomes a future-contact instruction.
-    this.pending[seat]={shot,flight:s.rally,airRequested:s.ball.bounces===0&&canReturnNormally(s.ball,p,seat,!!shot.slice)};p.shotQueued=true;p.strokeSpin=shot.topspin??0;
+    this.pending[seat]={shot,flight:s.rally,airRequested:s.ball.bounces===0&&canReturnNormally(s.ball,p,seat,!!shot.slice)};this.queuedAt[seat]=s.time;p.shotQueued=true;p.strokeSpin=shot.topspin??0;
     this.tryRescue(seat);
   }
   private tryRescue(seat:Seat){
@@ -234,6 +253,7 @@ export class Match {
     const state=structuredClone(this.state),pending=structuredClone(this.pending);
     const recentContact=structuredClone(this.recentContact),rescuePlans=structuredClone(this.rescuePlans);
     const manualUntil=[...this.manualUntil],rescueAttempt=[...this.rescueAttempt],nextApproach=[...this.nextRescueApproach];
+    const timingMarks={reachableSince:[...this.reachableSince],reachFlight:[...this.reachFlight],queuedAt:[...this.queuedAt]};
     const planners=this.returnPlanners.map(p=>p.clone()),counted=new Map(this.rescueCounted);
     const diagnostics={...this.rescueDiagnostics};
     const internal={serveElapsed:this.serveElapsed,serveMotion:structuredClone(this.serveMotion),
@@ -245,11 +265,21 @@ export class Match {
       this.state.deadBalls=this.deadBalls.states;
       this.recentContact=structuredClone(recentContact);this.rescuePlans=structuredClone(rescuePlans);
       this.manualUntil=[...manualUntil];this.rescueAttempt=[...rescueAttempt];this.nextRescueApproach=[...nextApproach];
+      this.reachableSince=[...timingMarks.reachableSince];this.reachFlight=[...timingMarks.reachFlight];this.queuedAt=[...timingMarks.queuedAt];
       this.returnPlanners=planners.map(p=>p.clone());this.rescueCounted=new Map(counted);
       Object.assign(this.rescueDiagnostics,diagnostics);Object.assign(this,structuredClone(internal));
       const b=this.state.ball;
       this.physics.place(b,{x:b.vx,y:b.vy,z:b.vz},b.topspin);
     };
+  }
+  /** Local lessons only: start a fresh 0:0 game in place, learner serving. */
+  practiceRestart(){
+    const s=this.state;
+    if(s.mode!=='singles')throw Error('Practice restart is singles-only');
+    this.deadBalls.clear();this.clearPreparation();
+    s.score=[0,0];s.fault=0;s.winner=null;s.lastPoint=null;s.endedAt=undefined;s.maxRally=Math.max(s.maxRally,s.rally);
+    if(s.scoring)Object.assign(s.scoring,createScoring(s.scoring.format));
+    this.faultReset=false;this.resetPoint();
   }
   /** A gentle bot feed for isolated local lessons; ordinary bounce/contact rules still apply. */
   practiceFeed(){
@@ -265,10 +295,10 @@ export class Match {
     const target={x:sign*2.2,z:sign*7.6},flight=1.45,gravity=flightGravity({});
     this.physics.place(start,{x:(target.x-start.x)/flight,y:(.12-start.y+gravity*flight*flight/2)/flight,z:(target.z-start.z)/flight});
     Object.assign(s.ball,this.physics.read(),{hitter:1,bounces:0,targetX:target.x,targetZ:target.z,
-      tier:'normal',critical:false,rescue:false,topspin:0,slice:false,drop:0,skill:undefined,placementAssist:0,aimOrigin:undefined});
+      tier:'normal',critical:false,rescue:false,topspin:0,slice:false,drop:0,skill:undefined,placementAssist:0,aimOrigin:undefined,timing:undefined});
     bot.swing=.44;bot.stroke='forehand';bot.contact=start;
     for(const p of s.players){p.rescue=undefined;p.preparation=undefined;p.shotQueued=false;}
-    this.announce('搭档送球');
+    this.announce('陪练送球');
   }
   private hit(seat: Seat, shot: Shot, serve=false) {
     this.practiceGroundReceiver=null;
@@ -280,6 +310,9 @@ export class Match {
     const drop=serve?0:dropStrength(shot);
     const rescue=!serve&&!!p.rescue&&!p.rescue.hit;
     if(rescue)this.rescueMetric('contact',seat);
+    const queued=this.pending[seat]?.shot===shot&&this.pending[seat]?.flight===s.rally;
+    const timing:ShotTiming|undefined=serve||rescue||!this.graded[seat]?undefined:gradeTiming(queued,queued?s.time-this.queuedAt[seat]:
+      (this.reachFlight[seat]===s.rally?Math.max(0,s.time-this.reachableSince[seat]):0));
     const smash=!serve&&!rescue&&canSmash(b,p,seat),volley=!serve&&!rescue&&!smash&&b.bounces===0;
     // Preserve the latest swipe's intended depth, heading, spin and pace tier.
     // Rescue still applies its physical slowdown, never directional scatter.
@@ -291,7 +324,7 @@ export class Match {
     let targetZ=-sign*shotDepth(shot,serve);
     // Service-box direction remains deliberate (no automatic diagonal serve).
     // Rally assistance follows requested pace, not the character's raw stats.
-    const assist=!serve&&shot.swipeAim?.elevation?placementAssist(intendedPower):0;
+    const assist=(!serve&&shot.swipeAim?.elevation?placementAssist(intendedPower):0)*(timing==='perfect'?TIMING.perfectAssist:1);
     if(serve) {
       targetX=-serveSide*1.75+shot.aim*2.25*sign;
     }
@@ -303,7 +336,8 @@ export class Match {
     const critical=tier==='critical';
     const backhand=(b.x-p.x)*sign*handedness(p.characterId)<0;
     const attribute=serve||smash?'serve':volley?'volley':backhand?'backhand':'forehand';
-    const effects=characterEffects(p.characterId),strokeSpeed=effects[attribute]+(Math.min(effects[attribute],1)-effects[attribute])*drop;
+    const effects=characterEffects(p.characterId),timingSpeed=timing==='perfect'?TIMING.perfectSpeed:timing==='early'||timing==='late'?TIMING.offSpeed:1;
+    const strokeSpeed=(effects[attribute]+(Math.min(effects[attribute],1)-effects[attribute])*drop)*(drop>.5?1:timingSpeed);
     const slowdown=(volley?1+.32*volleyDifficulty(b,p):1)*(slice?1.15:1)*(rescue?RESCUE.slowdown:1);
     const flightAt=(x:number)=>flightTime(start,{x,y:.12,z:targetZ},power,strokeSpeed,gravity,{smash:smash&&drop===0,critical,lob:shot.lob})*slowdown;
     let flight:number;
@@ -325,7 +359,7 @@ export class Match {
     }
     const velocity={x:(targetX-start.x)/flight,y:(.12-start.y+(gravity/2)*flight*flight)/flight,z:(targetZ-start.z)/flight};
     this.physics.place(start,velocity,topspin);
-    Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ,placementAssist:assist,aimOrigin:{x:p.x,y:1.1,z:p.z},critical,tier,rescue,topspin,slice,drop,skill:smash?'smash':slice?'slice':volley?'volley':undefined});
+    Object.assign(b,this.physics.read(),{hitter:seat,bounces:0,targetX,targetZ,placementAssist:assist,aimOrigin:{x:p.x,y:1.1,z:p.z},critical,tier,rescue,topspin,slice,drop,skill:smash?'smash':slice?'slice':volley?'volley':undefined,timing});
     s.phase='rally';s.rally++;s.maxRally=Math.max(s.maxRally,s.rally);
     p.swing=serve?SERVE_RECOVERY:.44;p.strokeSpin=topspin;p.backhand=(b.x-p.x)*sign*handedness(p.characterId)<0;
     p.stroke=serve?'serve':smash?'smash':slice?(p.backhand?'slice-backhand':'slice-forehand'):volley?'volley':shot.lob?'lob':p.backhand?'backhand':'forehand';
@@ -531,7 +565,10 @@ export class Match {
       if(p.moving)spendStamina(p,.013*endurance.drain*dt);
       else recoverPointStamina(p,STAMINA.idleRecovery*endurance.recovery*dt);
       const legal=this.returnLegal(seat),reachable=legal&&this.returnReachable(seat);
-      if(reachable&&!p.rescue)this.recentContact={at:s.time,flight:s.rally,seat,ball:{...b}};
+      if(reachable&&!p.rescue){
+        this.recentContact={at:s.time,flight:s.rally,seat,ball:{...b}};
+        if(this.reachFlight[seat]!==s.rally){this.reachFlight[seat]=s.rally;this.reachableSince[seat]=s.time;}
+      }
       if(this.rescueContact(seat))break;
       const pending=this.pending[seat];
       if(pending&&pending.flight!==s.rally){this.pending[seat]=null;p.shotQueued=false;}

@@ -26,6 +26,7 @@ function fixture(reducedMotion=false){
   }}},
   querySelector(selector:string){
    if(selector==='.character-panel')return panel;
+   if(selector==='.home')return null;
    if(selector==='.character-detail')return detail;
    if(selector==='.character-card.selected')return card;
    return null;
@@ -51,7 +52,10 @@ test('selecting self, opponent or bot renders the selected attributes before foc
   assert.match(app.ui.innerHTML,/aria-label="空野的属性介绍"/);
   assert.deepEqual(events.slice(0,2),['render',['restore-scroll',280]],'keep the previous position instead of jumping to the top');
   assert.deepEqual(events[2],['detail','focus',{preventScroll:true},app.ui.innerHTML]);
-  assert.deepEqual(events[3],['detail','scroll',{behavior:'smooth',block:'start',inline:'nearest'}]);
+  // Modal pickers restore their own panel scroll and nudge the card only when
+  // covered by the sheet (nearest); they never jump the detail to the top.
+  assert.deepEqual(events[3],['card','scroll',{behavior:'smooth',block:'nearest',inline:'nearest'}]);
+  assert.equal(events.length,4);
   assert.equal(app.characterId,mode==='self'?'sora':'lin');
   assert.equal(app.opponentId,mode==='opponent'?'sora':'mei');
   assert.deepEqual(saved,mode==='bot'?[]:[[mode==='self'?'rally-character':'rally-opponent','sora']]);
@@ -59,10 +63,11 @@ test('selecting self, opponent or bot renders the selected attributes before foc
  }
 });
 
-test('reselecting the current player still reveals attributes and reduced-motion skips animation',async()=>{
+test('reselecting the current player still reveals attributes without scrolling',async()=>{
  const {app,events}=fixture(true);
  await app.action('pick-character-lin');
- assert.deepEqual(events.at(-1),['detail','scroll',{behavior:'instant',block:'start',inline:'nearest'}]);
+ assert.deepEqual(events.at(-2),['detail','focus',{preventScroll:true},app.ui.innerHTML]);
+ assert.deepEqual(events.at(-1),['card','scroll',{behavior:'instant',block:'nearest',inline:'nearest'}]);
 });
 
 test('return to list reveals and focuses the selected card without rerendering or changing selections',async()=>{
@@ -87,13 +92,14 @@ test('opening or refreshing the picker does not force scrolling; invalid and loc
  app.screen='characters';app.hiddenMaster.unlocked=true;
  await app.action('pick-character-wuming');
  assert.match(app.ui.innerHTML,/aria-label="无名的属性介绍"/);
- assert.deepEqual(events.at(-1),['detail','scroll',{behavior:'smooth',block:'start',inline:'nearest'}]);
+ assert.deepEqual(events.at(-2),['detail','focus',{preventScroll:true},app.ui.innerHTML]);
+ assert.deepEqual(events.at(-1),['card','scroll',{behavior:'smooth',block:'nearest',inline:'nearest'}]);
 });
 
 test('attribute region is focusable and contains a return action for all picker contexts',()=>{
  for(const args of [['lin',false,false],['mei',true,false],['leo',false,false,3],['wuming',false,true]] as const){
   const html=characterPicker(args[0],args[1],args[2],args.length===4?args[3]:undefined);
-  assert.match(html,/class="character-detail"[^>]*tabindex="-1"[^>]*role="region"[^>]*aria-label="[^"]+的属性介绍"/);
+  assert.match(html,/class="character-detail[^"]*"[^>]*tabindex="-1"[^>]*role="region"[^>]*aria-label="[^"]+的属性介绍"/);
   assert.match(html,/data-action="character-list">↑ 返回球员列表/);
  }
  const {ui,events}=fixture();

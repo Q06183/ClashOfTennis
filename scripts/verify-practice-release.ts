@@ -45,7 +45,8 @@ clients.forEach((ws,seat)=>{
         assert.deepEqual(state.score,[7,0]);first=[...state.score];
         if(round===0){round=1;send(0,{type:'ready'});send(1,{type:'ready'});}
       }else if(round===1){
-        assert.deepEqual(state.score,[0,0]);assert.equal(state.server,0);assert.equal(state.phase,'serve');
+        // G7: consecutive matches in one room alternate the opening server.
+        assert.deepEqual(state.score,[0,0]);assert.equal(state.server,1,'rematch: the other side opens');assert.equal(state.phase,'serve');
         assert.ok(shared>10);void finish();
       }else if(state.phase==='serve'&&state.server===seat&&!state.players[seat].preparation&&state.eventId!==lastServe[seat]){
         lastServe[seat]=state.eventId;

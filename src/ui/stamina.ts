@@ -1,9 +1,13 @@
 import {effectiveStamina} from '../simulation/stamina.js';
 import type {PlayerState} from '../simulation/types.js';
 
+/**
+ * One slim bar per player. The solid fill is this point's usable strength
+ * (point × match); the pale buffer behind it is the remaining match reserve.
+ * Exact percentages remain available to assistive tech and as a tooltip.
+ */
 export function staminaBars(side:'me'|'them'){
- return `<div class="stamina-row"><span id="stamina-label-${side}">本分 100%</span><div class="stamina"><i id="stamina-${side}"></i></div></div>
- <div class="stamina-row total"><span id="total-stamina-label-${side}">总体 100%</span><div class="stamina"><i id="total-stamina-${side}"></i></div></div>`;
+ return `<div class="stamina-row combined" id="stamina-label-${side}" role="img" aria-label="体力 · 本分 100% · 总体 100%"><div class="stamina"><b id="total-stamina-${side}" class="stamina-reserve"></b><i id="stamina-${side}"></i></div></div>`;
 }
 export function staminaLabels(p:Pick<PlayerState,'stamina'|'totalStamina'>){
  return {

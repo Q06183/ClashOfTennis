@@ -19,6 +19,8 @@ import {BallTrail} from './ball-trail.js';
 import {ServeTarget} from './serve-target.js';
 import {DeadBallView} from './dead-balls.js';
 import {frameHomePractice} from './home-practice.js';
+import {CourtCues} from './court-cues.js';
+import type {TargetZone} from '../ui/target-drill.js';
 export class CourtView {
   readonly renderer:T.WebGLRenderer;
   readonly camera=new T.PerspectiveCamera(43,1,.1,130);
@@ -62,6 +64,7 @@ export class CourtView {
   private contactShadows:T.Mesh[]=[];
   private playerMarkers:T.Mesh[]=[];
   private selfMarker=new SelfMarker();
+  private cues=new CourtCues();
   get fps(){return this.quality.fps;}
   get qualityLabel(){return QUALITY[this.quality.level].label;}
   constructor(private container:HTMLElement,onContext:(lost:boolean)=>void){
@@ -76,7 +79,7 @@ export class CourtView {
     this.scene.add(new T.HemisphereLight(0xfff8df,0x405e64,1.8));
     const sun=this.sun;sun.position.set(-10,24,8);sun.castShadow=true;
     sun.shadow.mapSize.setScalar(QUALITY[this.quality.level].shadowSize);sun.shadow.camera.left=-16;sun.shadow.camera.right=16;sun.shadow.camera.top=18;sun.shadow.camera.bottom=-18;sun.shadow.bias=-.001;
-    this.scene.add(sun,this.flight.root,this.selfMarker.root,this.serveTarget.root,this.deadBallView.root);this.stadiumEnds=makeCourt(this.scene);
+    this.scene.add(sun,this.flight.root,this.selfMarker.root,this.serveTarget.root,this.deadBallView.root,this.cues.root);this.stadiumEnds=makeCourt(this.scene);
     for(const a of this.athletes)this.scene.add(a.root);
     for(let i=0;i<4;i++){
       const shadow=new T.Mesh(new T.CircleGeometry(.38,20),new T.MeshBasicMaterial({color:0x17352c,transparent:true,opacity:.2,depthWrite:false}));
@@ -158,6 +161,13 @@ export class CourtView {
   setAiming(active:boolean){this.aimCamera.pointer(active);}
   showMoveTarget(x:number,z:number){this.moveFeedback={x,z,remaining:.9};}
   clearMoveTarget(){this.moveFeedback=null;}
+  setTargetZone(zone:TargetZone|null){this.cues?.setZone(zone);}
+  showMissMarker(point:{x:number;z:number}|null){
+    this.cues?.setMiss(point);
+    // Exposed for automated layout checks only; no gameplay reads this.
+    const p=point&&this.screenPoint(point.x,point.z),data=this.renderer?.domElement?.dataset;
+    if(data){if(p)data.missMarker=`${Math.round(p.x)},${Math.round(p.y)}`;else delete data.missMarker;}
+  }
   setCameraDistance(distance:CameraDistance){this.cameraDistance=distance;}
   private updateCamera(state:MatchState,dt:number){
     if(state.rescueWindow)return;
@@ -245,6 +255,8 @@ export class CourtView {
     this.target.visible=false;
     const localPlayer=state.players[this.seat];
     this.selfMarker?.update(state,this.seat,this.camera,this.size.h,this.mode==='match');
+    this.cues?.update(state,this.seat,this.mode==='match',state.rescueWindow?0:dt);
+    if(this.mode!=='match'){this.cues?.setZone(null);this.cues?.setMiss(null);}
     const feedback=this.moveFeedback;
     if(feedback){
       feedback.remaining=Math.max(0,feedback.remaining-dt);

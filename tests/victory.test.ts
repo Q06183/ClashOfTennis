@@ -140,7 +140,7 @@ test('result overlay names the actual winning opponent rather than always presen
  const state={phase:'over',winner:1,players:[{characterId:'lin'},{characterId:'mei'}],score:[3,7],maxRally:12,time:85,event:'二跳'} as MatchState;
  const app=Object.assign(Object.create(App.prototype),{remote:state,seat:0,name:'玩家A',room:{seats:[{name:'玩家A'},{name:'赢家B'}]}});
  const html=(App.prototype as any).result.call(app);
- assert.match(html,/赢家B · 梅岚/);assert.match(html,/持拍庆祝/);assert.match(html,/victory-panel/);
+ assert.match(html,/赢家B · 梅岚/);assert.doesNotMatch(html,/持拍庆祝/,'animation names are not player-facing');assert.match(html,/victory-panel/);
  assert.match(html,/data-action="rematch"/);assert.match(html,/data-action="back"/);
 });
 test('the actual result renderer animates only the server winner on either client and never mutates state',()=>{
