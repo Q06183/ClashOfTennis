@@ -1,0 +1,6 @@
+# Render output and diagnostic images (regenerable via scripts; ~200 MB)
+kai/renders/
+# QA diagnostic renders - the machine-readable reports (*.json) are kept
+kai/qa/*.png
+# Browser self-check screenshots
+kai/serve-viewer/_shots/

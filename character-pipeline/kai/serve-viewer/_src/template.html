@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kai 发球动作预览</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23d9f03a'/%3E%3Cpath d='M6 8c5 3 5 13 0 16M26 8c-5 3-5 13 0 16' stroke='%23f3edce' stroke-width='2.4' fill='none'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+:root{
+  --ink:#0f2a2c; --ink2:#163a3c; --ink3:#1d4648; --rule:#2c5557;
+  --cream:#f3edce; --muted:#a9bfb7; --dim:#7f9a93;
+  --coral:#ff6a3d; --ball:#d9f03a; --court:#266c81;
+  --num:"Barlow Condensed","Noto Sans SC","PingFang SC","Helvetica Neue",Arial,sans-serif;
+  --txt:"Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--ink);color:var(--cream);font-family:var(--txt);font-size:15px;line-height:1.55}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:focus-visible,.track:focus-visible{outline:2px solid var(--coral);outline-offset:2px}
+
+/* ===== 布局：窄屏优先 ===== */
+.topbar{padding:14px 16px 10px;display:flex;flex-direction:column;gap:2px}
+.topbar h1{font-family:var(--num);font-weight:700;font-size:28px;letter-spacing:.01em;line-height:1.1}
+.topbar h1 span{color:var(--coral)}
+.topbar p{color:var(--muted);font-size:14px}
+.layout{display:flex;flex-direction:column}
+.stage{display:flex;flex-direction:column;min-width:0}
+.viewport{position:relative;height:58vh;min-height:340px;background:linear-gradient(180deg,#c9d8d0 0%,#e4e8d8 62%,#dfe3d2 100%);overflow:hidden}
+.viewport canvas{display:block;width:100%;height:100%;touch-action:none}
+.badge{position:absolute;left:14px;top:12px;pointer-events:none;color:var(--ink)}
+.badge .ph{font-family:var(--num);font-weight:700;font-size:34px;line-height:1}
+.badge .rel{font-family:var(--num);font-weight:600;font-size:18px;color:#3b5e5b;margin-top:2px}
+.badge .air{display:inline-block;margin-top:6px;font-size:13px;font-weight:500;padding:2px 8px;border-radius:3px;background:var(--coral);color:#fff;visibility:hidden}
+.badge .air.on{visibility:visible}
+.hint{position:absolute;right:12px;bottom:10px;font-size:13px;color:#4b6b67;pointer-events:none}
+.loading,.fallback{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--ink);font-size:15px;text-align:center;padding:16px}
+.fallback{display:none;background:#e4e8d8}
+.fallback img{max-width:100%;max-height:70%;object-fit:contain}
+
+.transport{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;align-items:center;border-bottom:1px solid var(--rule)}
+.btn{min-width:44px;height:44px;padding:0 12px;border-radius:6px;background:var(--ink2);display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:15px}
+.btn:hover{background:var(--ink3)}
+.btn svg{width:20px;height:20px;fill:var(--cream)}
+.btn.play{background:var(--coral);color:#fff;min-width:88px;font-weight:500}
+.btn.play svg{fill:#fff}
+.seg{display:inline-flex;background:var(--ink2);border-radius:6px;padding:3px;gap:2px}
+.seg button{height:38px;min-width:44px;padding:0 10px;border-radius:4px;font-size:14px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--cream);color:var(--ink);font-weight:500}
+.seg-label{font-size:13px;color:var(--dim);margin:0 2px 0 6px}
+.grp{display:inline-flex;align-items:center;gap:4px}
+
+.timeline{padding:12px 16px 4px}
+.track{position:relative;height:44px;cursor:pointer;touch-action:none}
+.track .bar{position:absolute;left:0;right:0;top:18px;height:8px;border-radius:4px;background:var(--ink3)}
+.track .air-zone{position:absolute;top:18px;height:8px;background:rgba(255,106,61,.35)}
+.track .fill{position:absolute;left:0;top:18px;height:8px;border-radius:4px 0 0 4px;background:var(--cream)}
+.track .tick{position:absolute;top:12px;width:2px;height:20px;margin-left:-1px;background:var(--muted)}
+.track .tick.c{background:var(--coral);height:26px;top:9px}
+.track .head{position:absolute;top:10px;width:24px;height:24px;margin-left:-12px;border-radius:50%;background:var(--coral);border:3px solid var(--cream)}
+.tick-labels{position:relative;height:20px;display:none;font-size:12px;color:var(--muted)}
+.tick-labels span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.tick-labels span.c{color:var(--coral);font-weight:500}
+
+.chart{padding:4px 16px 14px}
+.chart-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.chart-head .note{font-size:13px;color:var(--dim)}
+.chart canvas{display:block;width:100%;height:120px}
+
+.panel{padding:6px 16px 28px;display:flex;flex-direction:column;gap:22px;border-top:1px solid var(--rule)}
+.panel h2{font-family:var(--num);font-weight:600;font-size:21px;margin-bottom:8px;letter-spacing:.01em}
+.phases{list-style:none;display:grid;grid-template-columns:28px 1fr;row-gap:0}
+.phases li{display:contents}
+.phases .rail{position:relative;display:flex;justify-content:center}
+.phases .rail::before{content:"";position:absolute;top:0;bottom:0;left:50%;width:2px;margin-left:-1px;background:var(--rule)}
+.phases li:first-child .rail::before{top:22px}
+.phases li:last-child .rail::before{bottom:calc(100% - 22px)}
+.phases .dot{position:relative;margin-top:16px;width:12px;height:12px;border-radius:50%;background:var(--ink);border:2px solid var(--muted)}
+.phases li.on .dot{background:var(--coral);border-color:var(--coral)}
+.phases li.c .dot{border-color:var(--coral)}
+.phases button{display:block;width:100%;text-align:left;padding:8px 8px 10px;border-radius:6px;min-height:44px}
+.phases button:hover{background:var(--ink2)}
+.phases li.on button{background:var(--ink2)}
+.phases .t{display:flex;align-items:baseline;gap:8px}
+.phases .t b{font-weight:500;font-size:15px}
+.phases .t i{font-style:normal;font-family:var(--num);font-size:15px;color:var(--dim)}
+.phases .d{font-size:14px;color:var(--muted);margin-top:2px}
+
+.readout{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+.readout div{background:var(--ink);padding:9px 12px}
+.readout .k{font-size:13px;color:var(--dim)}
+.readout .v{font-family:var(--num);font-weight:600;font-size:24px;line-height:1.15;font-variant-numeric:tabular-nums}
+.readout .v small{font-size:15px;font-weight:500;color:var(--muted);margin-left:2px}
+
+.qa{list-style:none;display:flex;flex-direction:column}
+.qa li{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:start;padding:8px 0;border-bottom:1px solid var(--rule)}
+.qa li:last-child{border-bottom:0}
+.qa svg{width:18px;height:18px;margin-top:2px;fill:none;stroke:var(--ball);stroke-width:2.6}
+.qa .n{font-size:14px}
+.qa .m{font-family:var(--num);font-size:16px;color:var(--cream);text-align:right;white-space:nowrap}
+.qa-sum{font-size:14px;color:var(--muted);margin-bottom:6px}
+.qa-sum b{color:var(--ball);font-family:var(--num);font-size:18px}
+.foot{font-size:13px;color:var(--dim);line-height:1.6}
+
+/* ===== 桌面 ===== */
+@media (min-width:768px){
+  .tick-labels{display:block}
+}
+@media (min-width:1080px){
+  .topbar{flex-direction:row;align-items:baseline;gap:16px;padding:14px 20px 10px}
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 380px;height:calc(100vh - 58px)}
+  .stage{height:100%}
+  .viewport{flex:1;height:auto;min-height:0}
+  .panel{border-top:0;border-left:1px solid var(--rule);overflow-y:auto;padding:4px 20px 24px}
+  .timeline{padding:12px 20px 2px}
+  .chart{padding:4px 20px 12px}
+  .chart canvas{height:104px}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>Kai 的<span>平击一发</span></h1>
+  <p>右手持拍，平分区发球，60 帧/秒，全程 2.50 秒，基于真人动作捕捉数据重定向。拖动画面可以自由转视角。</p>
+</header>
+
+<main class="layout">
+<!-- ===== 视图：3D 舞台 ===== -->
+<section class="stage">
+  <div class="viewport" id="viewport">
+    <div class="badge" aria-live="polite">
+      <div class="ph" id="bPhase">击球</div>
+      <div class="rel" id="bRel">击球瞬间</div>
+      <span class="air" id="bAir">双脚离地</span>
+    </div>
+    <div class="hint" id="hint">拖动旋转，滚轮或双指缩放</div>
+    <div class="loading" id="loading">正在载入模型</div>
+    <div class="fallback" id="fallback">
+      <img src="__FALLBACK_SRC__" alt="Kai 发球 8 个关键姿态">
+      <p id="fallbackMsg">当前浏览器无法运行 3D 预览，这里显示的是发球关键姿态图。</p>
+    </div>
+  </div>
+
+  <div class="transport">
+    <button class="btn play" id="btnPlay" aria-label="播放或暂停（空格键）"><svg viewBox="0 0 24 24" id="icoPlay"><path d="M7 5v14l12-7z"/></svg><span id="lblPlay">播放</span></button>
+    <button class="btn" id="btnPrev" aria-label="后退一帧（左方向键）"><svg viewBox="0 0 24 24"><path d="M15 6 9 12l6 6"/><path d="M15 6 9 12l6 6" fill="none" stroke="#f3edce" stroke-width="2.4"/></svg></button>
+    <button class="btn" id="btnNext" aria-label="前进一帧（右方向键）"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6" fill="none" stroke="#f3edce" stroke-width="2.4"/></svg></button>
+    <span class="grp"><span class="seg-label">速度</span>
+      <span class="seg" id="segSpeed">
+        <button data-v="1" aria-pressed="false">1×</button>
+        <button data-v="0.5" aria-pressed="true">0.5×</button>
+        <button data-v="0.25" aria-pressed="false">0.25×</button>
+      </span></span>
+    <span class="grp"><span class="seg-label">镜头</span>
+      <span class="seg" id="segCam">
+        <button data-v="side" aria-pressed="false">侧面</button>
+        <button data-v="front" aria-pressed="true">斜前</button>
+        <button data-v="back" aria-pressed="false">身后</button>
+        <button data-v="court" aria-pressed="false">全场</button>
+      </span></span>
+  </div>
+
+  <div class="timeline">
+    <div class="track" id="track" tabindex="0" role="slider" aria-label="动画进度" aria-valuemin="1" aria-valuemax="140" aria-valuenow="78">
+      <div class="bar"></div>
+      <div class="air-zone" id="airZone"></div>
+      <div class="fill" id="fill"></div>
+      <!-- ticks injected -->
+      <div class="head" id="head"></div>
+    </div>
+    <div class="tick-labels" id="tickLabels"></div>
+  </div>
+
+  <div class="chart">
+    <div class="chart-head">
+      <span class="seg" id="segChart">
+        <button data-v="speed" aria-pressed="true">拍头速度</button>
+        <button data-v="joint" aria-pressed="false">膝肘角度</button>
+      </span>
+      <span class="note" id="chartNote">峰值 39.7 m/s，正好落在击球帧</span>
+    </div>
+    <canvas id="chart"></canvas>
+  </div>
+</section>
+
+<!-- ===== 视图：右侧面板 ===== -->
+<aside class="panel">
+  <section>
+    <h2>发球 8 个阶段</h2>
+    <ol class="phases" id="phases"></ol>
+  </section>
+  <section>
+    <h2>当前帧数据</h2>
+    <div class="readout">
+      <div><div class="k">帧 / 时间</div><div class="v" id="rFrame">78<small>帧</small></div></div>
+      <div><div class="k">拍头速度</div><div class="v" id="rSpeed">39.7<small>m/s</small></div></div>
+      <div><div class="k">左膝屈曲</div><div class="v" id="rKnee">57<small>°</small></div></div>
+      <div><div class="k">右肘屈曲</div><div class="v" id="rElbow">4<small>°</small></div></div>
+      <div><div class="k">骨盆高度</div><div class="v" id="rPel">1.25<small>m</small></div></div>
+      <div><div class="k">双脚</div><div class="v" id="rFeet">离地</div></div>
+    </div>
+  </section>
+  <section>
+    <h2>物理检查</h2>
+    <p class="qa-sum"><b>9 / 9</b> 项通过，按每一帧的骨骼和网格数据计算</p>
+    <ul class="qa" id="qa"></ul>
+  </section>
+  <p class="foot" id="foot"></p>
+</aside>
+</main>
+
+<script type="text/plain" id="kai-glb">__GLB_B64__</script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/environments/RoomEnvironment.js"></script>
+<script>
+/* <!-- app-script-anchor --> */
+</script>
+</body>
+</html>

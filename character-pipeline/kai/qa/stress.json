@@ -1,0 +1,277 @@
+{
+ "trophy": {
+  "angles": {
+   "elbow_r": 67.2,
+   "knee_l": 65.7,
+   "knee_r": 64.4
+  },
+  "Kai_Body": {
+   "hands": {
+    "p01": 0.487,
+    "p99": 1.316,
+    "min": 0.118,
+    "max": 2.536,
+    "edges_over_1_6": 13,
+    "edges_under_0_4": 26,
+    "n": 6408
+   },
+   "rest": {
+    "p01": 0.718,
+    "p99": 1.428,
+    "min": 0.211,
+    "max": 3.14,
+    "edges_over_1_6": 72,
+    "edges_under_0_4": 13,
+    "n": 12731
+   },
+   "collapsed_faces_lt25pct": {
+    "hands": 25,
+    "rest": 10
+   },
+   "min_area_ratio": {
+    "hands": 0.028,
+    "rest": 0.079
+   }
+  },
+  "Kai_Shirt": {
+   "rest": {
+    "p01": 0.46,
+    "p99": 2.472,
+    "min": 0.147,
+    "max": 23.513,
+    "edges_over_1_6": 282,
+    "edges_under_0_4": 43,
+    "n": 8292
+   },
+   "collapsed_faces_lt25pct": {
+    "hands": 0,
+    "rest": 33
+   },
+   "min_area_ratio": {
+    "hands": 1.0,
+    "rest": 0.003
+   }
+  },
+  "angle_ok": true
+ },
+ "racket_drop": {
+  "angles": {
+   "elbow_r": 102.0,
+   "knee_l": 6.5,
+   "knee_r": 6.5
+  },
+  "Kai_Body": {
+   "hands": {
+    "p01": 0.487,
+    "p99": 1.321,
+    "min": 0.118,
+    "max": 2.536,
+    "edges_over_1_6": 13,
+    "edges_under_0_4": 25,
+    "n": 6408
+   },
+   "rest": {
+    "p01": 0.842,
+    "p99": 1.213,
+    "min": 0.315,
+    "max": 3.049,
+    "edges_over_1_6": 30,
+    "edges_under_0_4": 5,
+    "n": 12731
+   },
+   "collapsed_faces_lt25pct": {
+    "hands": 25,
+    "rest": 6
+   },
+   "min_area_ratio": {
+    "hands": 0.028,
+    "rest": 0.047
+   }
+  },
+  "Kai_Shirt": {
+   "rest": {
+    "p01": 0.661,
+    "p99": 1.769,
+    "min": 0.335,
+    "max": 12.038,
+    "edges_over_1_6": 128,
+    "edges_under_0_4": 11,
+    "n": 8292
+   },
+   "collapsed_faces_lt25pct": {
+    "hands": 0,
+    "rest": 2
+   },
+   "min_area_ratio": {
+    "hands": 1.0,
+    "rest": 0.238
+   }
+  },
+  "angle_ok": true
+ },
+ "contact": {
+  "angles": {
+   "elbow_r": 10.0,
+   "knee_l": 6.5,
+   "knee_r": 6.5
+  },
+  "Kai_Body": {
+   "hands": {
+    "p01": 0.487,
+    "p99": 1.316,
+    "min": 0.118,
+    "max": 2.536,
+    "edges_over_1_6": 13,
+    "edges_under_0_4": 26,
+    "n": 6408
+   },
+   "rest": {
+    "p01": 0.888,
+    "p99": 1.259,
+    "min": 0.183,
+    "max": 2.889,
+    "edges_over_1_6": 53,
+    "edges_under_0_4": 13,
+    "n": 12731
+   },
+   "collapsed_faces_lt25pct": {
+    "hands": 25,
+    "rest": 6
+   },
+   "min_area_ratio": {
+    "hands": 0.028,
+    "rest": 0.091
+   }
+  },
+  "Kai_Shirt": {
+   "rest": {
+    "p01": 0.523,
+    "p99": 2.203,
+    "min": 0.232,
+    "max": 24.134,
+    "edges_over_1_6": 186,
+    "edges_under_0_4": 26,
+    "n": 8292
+   },
+   "collapsed_faces_lt25pct": {
+    "hands": 0,
+    "rest": 23
+   },
+   "min_area_ratio": {
+    "hands": 1.0,
+    "rest": 0.021
+   }
+  },
+  "angle_ok": true
+ },
+ "deep_lunge": {
+  "angles": {
+   "elbow_r": 24.5,
+   "knee_l": 75.9,
+   "knee_r": 110.6
+  },
+  "Kai_Body": {
+   "hands": {
+    "p01": 0.487,
+    "p99": 1.316,
+    "min": 0.118,
+    "max": 2.536,
+    "edges_over_1_6": 13,
+    "edges_under_0_4": 26,
+    "n": 6408
+   },
+   "rest": {
+    "p01": 0.811,
+    "p99": 1.186,
+    "min": 0.189,
+    "max": 1.975,
+    "edges_over_1_6": 12,
+    "edges_under_0_4": 9,
+    "n": 12731
+   },
+   "collapsed_faces_lt25pct": {
+    "hands": 25,
+    "rest": 7
+   },
+   "min_area_ratio": {
+    "hands": 0.028,
+    "rest": 0.09
+   }
+  },
+  "Kai_Shirt": {
+   "rest": {
+    "p01": 0.593,
+    "p99": 1.889,
+    "min": 0.234,
+    "max": 12.73,
+    "edges_over_1_6": 115,
+    "edges_under_0_4": 20,
+    "n": 8292
+   },
+   "collapsed_faces_lt25pct": {
+    "hands": 0,
+    "rest": 15
+   },
+   "min_area_ratio": {
+    "hands": 1.0,
+    "rest": 0.106
+   }
+  },
+  "angle_ok": true
+ },
+ "trunk_twist": {
+  "angles": {
+   "elbow_r": 41.0,
+   "knee_l": 6.5,
+   "knee_r": 6.5
+  },
+  "Kai_Body": {
+   "hands": {
+    "p01": 0.487,
+    "p99": 1.316,
+    "min": 0.118,
+    "max": 2.536,
+    "edges_over_1_6": 13,
+    "edges_under_0_4": 26,
+    "n": 6408
+   },
+   "rest": {
+    "p01": 0.819,
+    "p99": 1.395,
+    "min": 0.324,
+    "max": 2.985,
+    "edges_over_1_6": 76,
+    "edges_under_0_4": 2,
+    "n": 12731
+   },
+   "collapsed_faces_lt25pct": {
+    "hands": 25,
+    "rest": 3
+   },
+   "min_area_ratio": {
+    "hands": 0.028,
+    "rest": 0.167
+   }
+  },
+  "Kai_Shirt": {
+   "rest": {
+    "p01": 0.618,
+    "p99": 2.398,
+    "min": 0.093,
+    "max": 22.247,
+    "edges_over_1_6": 272,
+    "edges_under_0_4": 14,
+    "n": 8292
+   },
+   "collapsed_faces_lt25pct": {
+    "hands": 0,
+    "rest": 18
+   },
+   "min_area_ratio": {
+    "hands": 1.0,
+    "rest": 0.124
+   }
+  },
+  "angle_ok": true
+ }
+}
