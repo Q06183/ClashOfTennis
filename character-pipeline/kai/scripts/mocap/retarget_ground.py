@@ -189,20 +189,24 @@ def build_stroke(name, cfg):
             while h - prev_h < -180: h += 360
         HU[1 + kk_] = h; prev_h = h
     def sm(x): x = max(0.0, min(1.0, x)); return x*x*(3-2*x)
-    BH_COIL_MAX, BH_CONTACT, BH_FOLLOW = 112.0, 40.0, 30.0
+    # Takeback chest faces the hitter's LEFT but still opens toward the NET (~70 deg off net, not the
+    # 110+ closed coil); contact opens to 40 deg off net (a 50 deg open stance facing the target line).
+    BH_READY_CAP, BH_COIL_MAX, BH_CONTACT, BH_FOLLOW = 78.0, 70.0, 40.0, 30.0
     def bh_target(f):
         hu = HU[f]; coil = min(hu, BH_COIL_MAX)
-        if f <= C-40: return hu
-        if f <= C-24: return hu + (coil - hu) * sm((f-(C-40))/16.0)
-        # trunk opens EARLY (C-15..C-4) so its angular-speed peak leads the arm (proximal-to-distal)
+        if f <= C-40: return min(hu, BH_READY_CAP)
+        if f <= C-24:
+            h0 = min(hu, BH_READY_CAP)
+            return h0 + (coil - h0) * sm((f-(C-40))/16.0)
+        # trunk opens EARLY (C-13..C-2) so its angular-speed peak leads the arm (proximal-to-distal)
         if f <= C-13: return coil
         if f <= C-2:
             c0 = min(HU[C-13], BH_COIL_MAX)
             return c0 + (BH_CONTACT - c0) * sm((f-(C-13))/11.0)
         if f <= C: return BH_CONTACT
         if f <= C+10: return BH_CONTACT + (BH_FOLLOW - BH_CONTACT) * sm((f-C)/10.0)
-        if f <= C+40: return BH_FOLLOW + (hu - BH_FOLLOW) * sm((f-(C+10))/30.0)
-        return hu
+        if f <= C+40: return BH_FOLLOW + (min(hu, BH_READY_CAP) - BH_FOLLOW) * sm((f-(C+10))/30.0)
+        return min(hu, BH_READY_CAP)
     if cfg["twohanded"]:
         print(f"[{name}] HEADING mocap@contact {HU[C]:.0f} -> {bh_target(C):.0f}; takeback max "
               f"{max(HU[f] for f in range(C-30, C-4)):.0f} -> {max(bh_target(f) for f in range(C-30, C-4)):.0f}")
@@ -250,7 +254,9 @@ def build_stroke(name, cfg):
             return Quaternion(q.axis, q.angle * k)
         Qy = Quaternion(Vector((0,0,1)), yaw)
         bpy.context.view_layer.update()
-        UPB = (("spine_02",0.139),("spine_03",0.216),("head",0.081),("clavicle_l",0.05),("clavicle_r",0.05))
+        UPB = (("spine_02",0.139),("spine_03",0.216),("head",0.081),("clavicle_l",0.05),("clavicle_r",0.05),
+               ("upperarm_l",0.028),("upperarm_r",0.028),("lowerarm_l",0.016),("lowerarm_r",0.016),
+               ("hand_l",0.006),("hand_r",0.006))
         upb_before = sum((world_head(rig,nn)*m for nn,m in UPB), Vector()) * (1.0/sum(m for _,m in UPB))
         ymul = {"pelvis":0.35, "spine_01":0.55, "spine_02":0.8, "spine_03":1.0, "neck_01":0.9, "head":0.7}
         for nn, u in (("pelvis",0.0),("spine_01",0.33),("spine_02",0.66),("spine_03",1.0)):
@@ -258,9 +264,11 @@ def build_stroke(name, cfg):
             set_world3(nn, qpow(Qy, ymul[nn]).to_matrix() @ qb.to_matrix() @ REST[nn]); bpy.context.view_layer.update()
         set_world3("neck_01", qpow(Qy, ymul["neck_01"]).to_matrix() @ qc.slerp(qh,0.5).to_matrix() @ REST["neck_01"]); bpy.context.view_layer.update()
         set_world3("head", qpow(Qy, ymul["head"]).to_matrix() @ qh.to_matrix() @ REST["head"]); bpy.context.view_layer.update()
-        if cfg["twohanded"]:
+        if cfg["twohanded"] and f <= C + 8:
+            # compensate the yaw CoM shift only in the planted coil->contact window; the follow-through is
+            # a natural single-lean pose where root shifts would fight the foot lock.
             upb_after = sum((world_head(rig,nn)*m for nn,m in UPB), Vector()) * (1.0/sum(m for _,m in UPB))
-            dcom = (upb_after - upb_before) * 0.9          # upper body + arms ~62% of body mass
+            dcom = (upb_after - upb_before) * 0.9
             root.location.x -= dcom.x; root.location.y -= dcom.y
             bpy.context.view_layer.update()
         for nn, a, bn in (("clavicle_l","LeftCollar","LeftShoulder"),("clavicle_r","RightCollar","RightShoulder")):
