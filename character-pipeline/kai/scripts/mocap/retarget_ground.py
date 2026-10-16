@@ -191,7 +191,7 @@ def build_stroke(name, cfg):
     def sm(x): x = max(0.0, min(1.0, x)); return x*x*(3-2*x)
     # Takeback chest faces the hitter's LEFT but still opens toward the NET (~70 deg off net, not the
     # 110+ closed coil); contact opens to 40 deg off net (a 50 deg open stance facing the target line).
-    BH_READY_CAP, BH_COIL_MAX, BH_CONTACT, BH_FOLLOW = 78.0, 70.0, 40.0, 30.0
+    BH_READY_CAP, BH_COIL_MAX, BH_CONTACT, BH_FOLLOW = 55.0, 45.0, 40.0, 30.0
     def bh_target(f):
         hu = HU[f]; coil = min(hu, BH_COIL_MAX)
         if f <= C-40: return min(hu, BH_READY_CAP)
@@ -284,6 +284,37 @@ def build_stroke(name, cfg):
                       P(w,s_+"Elbow")-P(w,s_+"Shoulder"), P(w,s_+"Wrist")-P(w,s_+"Elbow"), FWD)
             aim_hinge("thigh_"+side,"calf_"+side,
                       P(w,s_+"Knee")-P(w,s_+"Hip"), P(w,s_+"Ankle")-P(w,s_+"Knee"), BACK)
+        # ---- two-hander takeback arm clearance. Move BOTH held hands to a reachable, clear point on the
+        # hitter's left/behind at chest height. Targets BLEND from the live mocap wrist (first frame identical
+        # -> no speed spike) and are clamped to 82% of arm reach (no elbow hyperextension).
+        def bh_window():
+            a, b = C-36, C-3
+            if f <= a or f >= b: return 0.0
+            if f < C-24:
+                t=(f-a)/12.0; return t*t*(3-2*t)
+            if f <= C-9: return 1.0
+            t=(f-(C-9))/6.0; return 1.0-(t*t*(3-2*t))
+        bamp = bh_window() if cfg["twohanded"] else 0.0
+        if bamp > 0.001:
+            bpy.context.view_layer.update()
+            sh_l = world_head(rig, "upperarm_l"); sh_r = world_head(rig, "upperarm_r")
+            L_u = (world_tail(rig,"upperarm_l")-world_head(rig,"upperarm_l")).length \
+                + (world_tail(rig,"lowerarm_l")-world_head(rig,"lowerarm_l")).length
+            L_r = (world_tail(rig,"upperarm_r")-world_head(rig,"upperarm_r")).length \
+                + (world_tail(rig,"lowerarm_r")-world_head(rig,"lowerarm_r")).length
+            wl0 = world_head(rig, "hand_l"); wr0 = world_head(rig, "hand_r")
+            chest_c = (world_head(rig,"clavicle_l") + world_head(rig,"clavicle_r")) * 0.5
+            tl_auth = chest_c + Vector((0.24, 0.17, -0.09))
+            tr_auth = tl_auth  + Vector((0.01, -0.17, -0.05))
+            tl = wl0.lerp(tl_auth, bamp); tr = wr0.lerp(tr_auth, bamp)
+            def clamp_reach(sh, t, L):
+                d = t - sh; dd = d.length; mx = 0.82 * L
+                return sh + d * (mx/dd) if dd > mx else t
+            tl = clamp_reach(sh_l, tl, L_u); tr = clamp_reach(sh_r, tr, L_r)
+            pole_l = (world_tail(rig,"upperarm_l")-sh_l).normalized().lerp(Vector((0.55,0.25,-0.15)), bamp)
+            pole_r = (world_tail(rig,"upperarm_r")-sh_r).normalized().lerp(Vector((0.45,-0.30,-0.10)), bamp)
+            two_bone_ik(rig, "upperarm_l", "lowerarm_l", tl, pole_l); bpy.context.view_layer.update()
+            two_bone_ik(rig, "upperarm_r", "lowerarm_r", tr, pole_r); bpy.context.view_layer.update()
         # ---- takeback amplification: analytic IK stretches the hitting arm FURTHER BACK/UP ----
         # mocap takeback is compact (hand close to torso); a game-read forehand needs a visible loop.
         # Re-solve the right arm to an authored wrist target: behind the chest (+Y, away from the net),
@@ -315,14 +346,32 @@ def build_stroke(name, cfg):
             set_world3("clavicle_l",
                        Quaternion(Vector((0,0,1)), math.radians(-10*amp)).to_matrix() @ pb.matrix.to_3x3())
             bpy.context.view_layer.update()
-        for s, side in (("l","Left"),("r","Right")):
-            d = (P(w,side+"Ankle_End")-P(w,side+"Ankle")).normalized()
+        for s, side in ((("l","Left"),("r","Right")) if not cfg["twohanded"] else (("r","Right"),)):
+            # two-hander: keep BOTH feet from rotating into a closed stance; the stance is authored by the
+            # root/hips heading already, so feet stay pointed ~toward the sideline, not 160 deg away.
+            d = (P(w,side+"Ankle_End")-P(w,side+"Ankle_End" if False else side+"Ankle")).normalized()
             heading = Vector((d.x,d.y,0)).normalized()
+            if cfg["twohanded"]:
+                # rotate the mocap foot heading back toward +X (sideline): cap its yaw at 60 deg off net
+                hy = math.atan2(heading.x, -heading.y)
+                hyc = max(-1.05, min(1.05, hy))
+                heading = Vector((math.sin(hyc), -math.cos(hyc), 0))
             pitch_src = math.asin(max(-1,min(1,d.z))) - math.asin(max(-1,min(1,foot_rest_src[side].z)))
             p = -math.radians(26.8) + pitch_src
             fd = heading*math.cos(p) + Vector((0,0,1))*math.sin(p)
             aim("foot_"+s, fd); bpy.context.view_layer.update()
             aim("ball_"+s, Vector((heading.x,heading.y,0.07+max(0,pitch_src)*0.3))); bpy.context.view_layer.update()
+        if cfg["twohanded"]:
+            for s, side in (("l","Left"),):
+                d = (P(w,side+"Ankle_End")-P(w,side+"Ankle")).normalized()
+                heading = Vector((d.x,d.y,0)).normalized()
+                hy = math.atan2(heading.x, -heading.y); hyc = max(-1.05, min(1.05, hy))
+                heading = Vector((math.sin(hyc), -math.cos(hyc), 0))
+                pitch_src = math.asin(max(-1,min(1,d.z))) - math.asin(max(-1,min(1,foot_rest_src[side].z)))
+                p = -math.radians(26.8) + pitch_src
+                fd = heading*math.cos(p) + Vector((0,0,1))*math.sin(p)
+                aim("foot_"+s, fd); bpy.context.view_layer.update()
+                aim("ball_"+s, Vector((heading.x,heading.y,0.07+max(0,pitch_src)*0.3))); bpy.context.view_layer.update()
         # planted root vertical: keep soles on the floor
         _, per = kai_sole_clear()
         root.location.z += -min(per)
