@@ -172,6 +172,41 @@ def build_stroke(name, cfg):
         return o
     hipsy_s = lp(hipsy)
 
+    # ---- backhand chest-heading targets (deg). 0 = chest faces the net (-Y); +90 = side-on (chest to the
+    # hitter's left, +X); 180 = chest to the back fence (back to the net). The mocap two-hander coils to
+    # ~210 (back fully to the net) - the "closed / facing backward" look. Target: coil no further than
+    # side-on+20 (110), then at contact the chest is OPENED 50 deg from side-on toward the net (40).
+    def chest_heading(wq):
+        lat_ = P(wq, "LeftShoulder") - P(wq, "RightShoulder")
+        upv = P(wq, "Neck") - P(wq, "Hips")
+        fwv = lat_.normalized().cross(upv.normalized()); fwv.z = 0
+        return math.degrees(math.atan2(fwv.x, -fwv.y))
+    HU = {}; prev_h = None
+    for kk_ in range(nF):
+        h = chest_heading(sample(kk_ / FPS))
+        if prev_h is not None:
+            while h - prev_h > 180: h -= 360
+            while h - prev_h < -180: h += 360
+        HU[1 + kk_] = h; prev_h = h
+    def sm(x): x = max(0.0, min(1.0, x)); return x*x*(3-2*x)
+    BH_COIL_MAX, BH_CONTACT, BH_FOLLOW = 112.0, 40.0, 30.0
+    def bh_target(f):
+        hu = HU[f]; coil = min(hu, BH_COIL_MAX)
+        if f <= C-40: return hu
+        if f <= C-24: return hu + (coil - hu) * sm((f-(C-40))/16.0)
+        # trunk opens EARLY (C-15..C-4) so its angular-speed peak leads the arm (proximal-to-distal)
+        if f <= C-13: return coil
+        if f <= C-2:
+            c0 = min(HU[C-13], BH_COIL_MAX)
+            return c0 + (BH_CONTACT - c0) * sm((f-(C-13))/11.0)
+        if f <= C: return BH_CONTACT
+        if f <= C+10: return BH_CONTACT + (BH_FOLLOW - BH_CONTACT) * sm((f-C)/10.0)
+        if f <= C+40: return BH_FOLLOW + (hu - BH_FOLLOW) * sm((f-(C+10))/30.0)
+        return hu
+    if cfg["twohanded"]:
+        print(f"[{name}] HEADING mocap@contact {HU[C]:.0f} -> {bh_target(C):.0f}; takeback max "
+              f"{max(HU[f] for f in range(C-30, C-4)):.0f} -> {max(bh_target(f) for f in range(C-30, C-4)):.0f}")
+
     for k in range(nF):
         f = 1 + k; t = k / FPS
         sc.frame_set(f); reset(rig)
@@ -207,20 +242,27 @@ def build_stroke(name, cfg):
                    + seg(f, C-14, C-4, math.radians(-16), 0.0)
                    + seg(f, C-4, C+30, 0.0, 0.0))
         else:
-            # coil in the backswing, then OPEN so at contact the chest points down the target line
-            # (~40 deg off net toward the hitter's left), clearly showing the front of the torso, not the
-            # back; ease to neutral during the wrap-around finish.
-            yaw = (seg(f, C-30, C-14, 0.0, math.radians(-12))
-                   + seg(f, C-14, C-2, math.radians(-12), math.radians(8))
-                   + seg(f, C-2, C+6, math.radians(8), math.radians(6))
-                   + seg(f, C+6, C+34, math.radians(6), 0.0))
+            # heading-targeted (see bh_target): correction = target - mocap chest heading
+            yaw = math.radians(bh_target(f) - HU[f])
+        def qpow(q, k):
+            """fraction k of rotation q (mathutils.Quaternion has no ** operator)"""
+            if abs(q.angle) < 1e-9: return Quaternion()
+            return Quaternion(q.axis, q.angle * k)
         Qy = Quaternion(Vector((0,0,1)), yaw)
+        bpy.context.view_layer.update()
+        UPB = (("spine_02",0.139),("spine_03",0.216),("head",0.081),("clavicle_l",0.05),("clavicle_r",0.05))
+        upb_before = sum((world_head(rig,nn)*m for nn,m in UPB), Vector()) * (1.0/sum(m for _,m in UPB))
         ymul = {"pelvis":0.35, "spine_01":0.55, "spine_02":0.8, "spine_03":1.0, "neck_01":0.9, "head":0.7}
         for nn, u in (("pelvis",0.0),("spine_01",0.33),("spine_02",0.66),("spine_03",1.0)):
             qb = qp.slerp(qc,u)
-            set_world3(nn, (Qy**ymul[nn]).to_matrix() @ qb.to_matrix() @ REST[nn]); bpy.context.view_layer.update()
-        set_world3("neck_01", (Qy**ymul["neck_01"]).to_matrix() @ qc.slerp(qh,0.5).to_matrix() @ REST["neck_01"]); bpy.context.view_layer.update()
-        set_world3("head", (Qy**ymul["head"]).to_matrix() @ qh.to_matrix() @ REST["head"]); bpy.context.view_layer.update()
+            set_world3(nn, qpow(Qy, ymul[nn]).to_matrix() @ qb.to_matrix() @ REST[nn]); bpy.context.view_layer.update()
+        set_world3("neck_01", qpow(Qy, ymul["neck_01"]).to_matrix() @ qc.slerp(qh,0.5).to_matrix() @ REST["neck_01"]); bpy.context.view_layer.update()
+        set_world3("head", qpow(Qy, ymul["head"]).to_matrix() @ qh.to_matrix() @ REST["head"]); bpy.context.view_layer.update()
+        if cfg["twohanded"]:
+            upb_after = sum((world_head(rig,nn)*m for nn,m in UPB), Vector()) * (1.0/sum(m for _,m in UPB))
+            dcom = (upb_after - upb_before) * 0.9          # upper body + arms ~62% of body mass
+            root.location.x -= dcom.x; root.location.y -= dcom.y
+            bpy.context.view_layer.update()
         for nn, a, bn in (("clavicle_l","LeftCollar","LeftShoulder"),("clavicle_r","RightCollar","RightShoulder")):
             d = P(w,bn)-P(w,a); rest_d = REST[nn] @ Vector((0,1,0))
             el = math.asin(max(-1,min(1,d.normalized().z))); el0 = math.asin(max(-1,min(1,rest_d.normalized().z)))
@@ -252,9 +294,14 @@ def build_stroke(name, cfg):
             wrist0 = world_head(rig, "hand_r")
             # chest backward = +Y (net is -Y); raise to shoulder line; bias slightly across the body
             target = wrist0 + Vector((-0.03*amp, 0.24*amp, 0.12*amp))
-            # pole: elbow bends outward to the player's right-front
-            hip_r = world_head(rig, "thigh_r")
-            two_bone_ik(rig, "upperarm_r", "lowerarm_r", target, hip_r + Vector((-0.55, -0.25, 0.35)))
+            # pole: two_bone_ik takes a DIRECTION (projected off the shoulder->target line), not a point.
+            # Blend from the current mocap elbow direction toward the authored outward direction by amp,
+            # so the first IK frame keeps the mocap bend plane (no single-frame arm flip).
+            sh_r = world_head(rig, "upperarm_r")
+            dir_now = world_tail(rig, "upperarm_r") - sh_r
+            dir_auth = Vector((-0.55, -0.25, -0.10))
+            pole_dir = dir_now.normalized().lerp(dir_auth.normalized(), amp)
+            two_bone_ik(rig, "upperarm_r", "lowerarm_r", target, pole_dir)
             # counter arm reaches forward across the chest
             pb = rig.pose.bones["clavicle_l"]
             set_world3("clavicle_l",
@@ -374,7 +421,8 @@ def finish_stroke(name, Rn):
     u_ready = (fwd*0.62 + Vector((0,0,1))*0.55 + lat*ready_lat*0.4).normalized()
     u_takeback = (fwd*(-0.95) + Vector((0,0,1))*0.34 + lat*lat_sign*0.34).normalized() if not two \
                  else (fwd*(-0.70) + Vector((0,0,1))*0.62 + lat*lat_sign*0.20).normalized()
-    u_deep    = (fwd*(-0.90) + Vector((0,0,1))*(-0.34) + lat*lat_sign*0.16).normalized()
+    u_deep    = (fwd*(-0.90) + Vector((0,0,1))*(-0.34) + lat*lat_sign*0.16).normalized() if not two \
+                else (fwd*(-0.97) + Vector((0,0,1))*(0.02) + lat*0.42).normalized()   # two-hander lag: head back, high and wide of the left thigh
     # contact: aim the sweet spot at an explicit waist-height point in front of the grip (built from the
     # real grip path so contact geometry is exact regardless of the mocap wrist height)
     z_sweet = 0.95 if not two else 1.00
@@ -407,10 +455,13 @@ def finish_stroke(name, Rn):
         u_auth = shaft_raw(f)
         if f >= f_raise:
             return u_auth
+        # idle: racket held up in front (half-way between the forearm and the ready shaft), never hanging
+        # along the forearm into the thigh
+        idle = slerp_dirs(FORE[f].normalized(), u_ready, 0.5)
         if f <= f_unit:
-            return FORE[f].normalized()
+            return idle
         w = (f-f_unit)/((f_raise-f_unit) or 1); w = w*w*(3-2*w)
-        return slerp_dirs(FORE[f].normalized(), u_auth, w)
+        return slerp_dirs(idle, u_auth, w)
 
     # face normal keys
     n_contact = out_dir.normalized()

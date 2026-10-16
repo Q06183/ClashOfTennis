@@ -49,7 +49,7 @@ for name in ("Forehand", "Backhand"):
     for f in range(1, nF+1):
         sc.frame_set(f)
         for side in ("l", "r"):
-            for _ in range(3):
+            for _ in range(6):
                 zmin, c = patch(shoe_pts(side))
                 if zmin >= PLANT_Z:
                     lock[side] = None; break
